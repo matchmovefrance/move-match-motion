@@ -89,8 +89,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 company_name: undefined
               });
             } else {
-              // For other users, try to fetch profile
-              await fetchUserProfile(session.user.id);
+              // For other users, try to fetch profile multiple times
+              await fetchUserProfileWithRetry(session.user.id);
             }
           }
           
@@ -124,8 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               company_name: undefined
             });
           } else {
-            // For other users, try to fetch profile
-            await fetchUserProfile(session.user.id);
+            // For other users, try to fetch profile with retry
+            await fetchUserProfileWithRetry(session.user.id);
           }
         } else {
           setProfile(null);
@@ -143,13 +143,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfileWithRetry = async (userId: string, maxAttempts: number = 5) => {
     try {
       console.log('Fetching profile for user:', userId);
       
-      // Try multiple times with a small delay to account for profile creation lag
       let attempts = 0;
-      const maxAttempts = 3;
       
       while (attempts < maxAttempts) {
         const { data, error } = await supabase
@@ -170,14 +168,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         attempts++;
         if (attempts < maxAttempts) {
-          console.log(`Profile fetch attempt ${attempts} failed, retrying...`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          console.log(`Profile fetch attempt ${attempts} failed, retrying in 2 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
         }
       }
       
       console.warn('Profile fetch failed after all attempts:', userId);
     } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
+      console.error('Error in fetchUserProfileWithRetry:', error);
     }
   };
 

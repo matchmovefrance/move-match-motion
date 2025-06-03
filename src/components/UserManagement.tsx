@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Trash2, Users, AlertCircle, RefreshCw, Copy, Check } from 'lucide-react';
@@ -217,6 +216,20 @@ const UserManagement = () => {
       // Generate a new temporary password
       const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
       
+      console.log('Resetting password for user:', userId, userEmail);
+      
+      // Use Supabase Admin API to update the user's password
+      const { data, error } = await supabase.auth.admin.updateUserById(userId, {
+        password: tempPassword
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        throw error;
+      }
+
+      console.log('Password updated successfully:', data);
+      
       // Show the password in a dialog for copying
       setPasswordDialog({
         show: true,
@@ -235,6 +248,11 @@ const UserManagement = () => {
       } catch (emailError) {
         console.warn('Email notification failed:', emailError);
       }
+
+      toast({
+        title: "Succès",
+        description: `Mot de passe réinitialisé pour ${userEmail}`,
+      });
 
     } catch (error: any) {
       console.error('Error resetting password:', error);
@@ -375,7 +393,7 @@ const UserManagement = () => {
               </Button>
             </div>
             <p className="text-sm text-gray-600">
-              Partagez ce mot de passe avec l'utilisateur. Il devra le changer lors de sa prochaine connexion.
+              Partagez ce mot de passe avec l'utilisateur. Il pourra maintenant se connecter avec ce nouveau mot de passe.
             </p>
           </div>
         </DialogContent>
@@ -479,7 +497,7 @@ const UserManagement = () => {
                           <AlertDialogTitle>Réinitialiser le mot de passe</AlertDialogTitle>
                           <AlertDialogDescription>
                             Êtes-vous sûr de vouloir réinitialiser le mot de passe de {userItem.email} ? 
-                            Un nouveau mot de passe temporaire sera généré et affiché pour que vous puissiez le copier.
+                            Un nouveau mot de passe temporaire sera généré et mis à jour dans le système.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
