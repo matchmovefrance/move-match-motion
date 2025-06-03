@@ -54,6 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -61,46 +62,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
+        
         // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-          if (mounted) setLoading(false);
+          if (mounted) {
+            setLoading(false);
+            setInitialized(true);
+          }
           return;
         }
 
-        console.log('Initial session check:', session?.user?.email);
+        console.log('Initial session:', session?.user?.email || 'No session');
+        
         if (mounted) {
           setSession(session);
           setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            // Set a default admin profile for the admin user to prevent blocking
+            if (session.user.email === 'contact@matchmove.fr') {
+              setProfile({
+                id: session.user.id,
+                email: session.user.email,
+                role: 'admin',
+                company_name: undefined
+              });
+            }
+          }
+          
+          setLoading(false);
+          setInitialized(true);
         }
-        
-        if (session?.user && mounted) {
-          await handleUserProfile(session.user);
-        }
-        
-        if (mounted) setLoading(false);
       } catch (error) {
         console.error('Auth initialization error:', error);
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setInitialized(true);
+        }
       }
     };
 
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
+      (event, session) => {
+        if (!mounted || !initialized) return;
         
         console.log('Auth state changed:', event, session?.user?.email);
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await handleUserProfile(session.user);
+          // For admin user, set default profile immediately
+          if (session.user.email === 'contact@matchmove.fr') {
+            setProfile({
+              id: session.user.id,
+              email: session.user.email,
+              role: 'admin',
+              company_name: undefined
+            });
+          } else {
+            // For other users, try to fetch profile but don't block the app
+            setTimeout(() => {
+              fetchUserProfile(session.user.id);
+            }, 100);
+          }
         } else {
           setProfile(null);
         }
-        
-        if (mounted) setLoading(false);
       }
     );
 
@@ -112,27 +144,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const handleUserProfile = async (user: User) => {
+  const fetchUserProfile = async (userId: string) => {
     try {
-      console.log('Fetching profile for user:', user.id);
+      console.log('Fetching profile for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
       if (error) {
         console.warn('Profile fetch failed:', error);
-        // For admin user, create default profile
-        if (user.email === 'contact@matchmove.fr') {
-          console.log('Setting default admin profile');
-          setProfile({
-            id: user.id,
-            email: user.email,
-            role: 'admin',
-            company_name: undefined
-          });
-        }
         return;
       }
 
@@ -143,16 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Profile set successfully:', sanitizedProfile);
       }
     } catch (error) {
-      console.error('Error in handleUserProfile:', error);
-      // For admin user, set default profile even on error
-      if (user.email === 'contact@matchmove.fr') {
-        setProfile({
-          id: user.id,
-          email: user.email,
-          role: 'admin',
-          company_name: undefined
-        });
-      }
+      console.error('Error in fetchUserProfile:', error);
     }
   };
 

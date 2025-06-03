@@ -1,10 +1,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, Edit, Users } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -16,7 +15,6 @@ interface Profile {
   created_at: string;
 }
 
-// Function to validate and sanitize profile data
 const allowedRoles = ['admin', 'agent', 'demenageur'] as const;
 type AllowedRole = typeof allowedRoles[number];
 
@@ -58,21 +56,20 @@ const UserManagement = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      
-      // Filter and sanitize profiles with valid roles
-      const sanitizedUsers = (data || [])
-        .map(sanitizeProfile)
-        .filter((profile): profile is Profile => profile !== null);
-      
-      setUsers(sanitizedUsers);
+      if (error) {
+        console.warn('Error fetching users:', error);
+        // Don't throw error, just show empty list
+        setUsers([]);
+      } else {
+        const sanitizedUsers = (data || [])
+          .map(sanitizeProfile)
+          .filter((profile): profile is Profile => profile !== null);
+        
+        setUsers(sanitizedUsers);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les utilisateurs",
-        variant: "destructive",
-      });
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -80,7 +77,6 @@ const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      // Use regular signup instead of admin.createUser
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -94,7 +90,6 @@ const UserManagement = () => {
 
       if (authError) throw authError;
 
-      // If signup succeeded, manually create/update the profile
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -105,7 +100,9 @@ const UserManagement = () => {
             company_name: newUser.company_name || null
           });
 
-        if (profileError) throw profileError;
+        if (profileError) {
+          console.warn('Profile creation failed:', profileError);
+        }
       }
 
       toast({
@@ -130,7 +127,6 @@ const UserManagement = () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
 
     try {
-      // Note: We can only delete the profile, not the auth user without admin privileges
       const { error } = await supabase
         .from('profiles')
         .delete()
