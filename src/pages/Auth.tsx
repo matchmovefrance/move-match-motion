@@ -89,13 +89,13 @@ const Auth = () => {
           </p>
         </div>
 
-        <Card className="shadow-2xl border-0 backdrop-blur-sm bg-white/95">
-          <CardHeader className="space-y-1">
+        <Card className="shadow-2xl border-0 bg-white/50">
+          <CardHeader className="space-y-1 bg-white rounded-t-lg">
             <CardTitle className="text-2xl text-center">
               {isLogin ? 'Connexion' : 'Inscription'}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="bg-white rounded-b-lg">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <div className="relative">
@@ -135,26 +135,10 @@ const Auth = () => {
             </form>
 
             <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                {isLogin ? "Pas de compte ? S'inscrire" : 'Déjà un compte ? Se connecter'}
-              </button>
+              <p className="text-sm text-gray-600">
+                Contactez votre admin en cas de problème de login
+              </p>
             </div>
-
-            {isLogin && (
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={handleAdminLogin}
-                  className="w-full text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded p-2 hover:bg-gray-50"
-                >
-                  Connexion admin (test)
-                </button>
-              </div>
-            )}
           </CardContent>
         </Card>
       </motion.div>
