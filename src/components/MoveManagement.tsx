@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro } from 'lucide-react';
@@ -135,13 +134,12 @@ const MoveManagement = () => {
           description: "Déménagement mis à jour avec succès",
         });
       } else {
+        // Supprimer les champs mover_id et truck_id qui causent la contrainte de clé étrangère
         const { error } = await supabase
           .from('confirmed_moves')
           .insert({
             ...processedData,
-            created_by: user?.id,
-            mover_id: Math.floor(Math.random() * 1000),
-            truck_id: Math.floor(Math.random() * 1000)
+            created_by: user?.id
           });
 
         if (error) throw error;

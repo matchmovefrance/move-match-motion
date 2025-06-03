@@ -1,9 +1,9 @@
-
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, Users, Truck, DollarSign, MapPin, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import DateFilter from './DateFilter';
 
 interface AnalyticsData {
   totalClients: number;
@@ -48,6 +48,10 @@ const Analytics = () => {
     volumeData: []
   });
   const [loading, setLoading] = useState(true);
+  const [filteredClients, setFilteredClients] = useState<any[]>([]);
+  const [filteredMoves, setFilteredMoves] = useState<any[]>([]);
+  const [allClients, setAllClients] = useState<any[]>([]);
+  const [allMoves, setAllMoves] = useState<any[]>([]);
 
   useEffect(() => {
     fetchAnalyticsData();
@@ -80,116 +84,141 @@ const Analytics = () => {
       const moves = confirmedMoves || [];
       const matchData = matches || [];
 
-      // Calculer les totaux
-      const totalRevenue = moves.reduce((sum, move) => sum + (move.total_price || 0), 0);
-      const pendingRequests = clients.filter(c => c.status === 'pending').length;
-      const confirmedMovesCount = moves.filter(m => m.status === 'confirmed').length;
+      // Stocker toutes les données pour le filtrage
+      setAllClients(clients);
+      setAllMoves(moves);
+      setFilteredClients(clients);
+      setFilteredMoves(moves);
 
-      // Données mensuelles
-      const monthlyStats = new Map();
-      const now = new Date();
-      
-      // Initialiser les 6 derniers mois
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
-        monthlyStats.set(monthKey, { month: monthKey, clients: 0, moves: 0, revenue: 0 });
-      }
-
-      // Compter les clients par mois
-      clients.forEach(client => {
-        const date = new Date(client.created_at);
-        const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
-        if (monthlyStats.has(monthKey)) {
-          monthlyStats.get(monthKey).clients++;
-        }
-      });
-
-      // Compter les déménagements et revenus par mois
-      moves.forEach(move => {
-        const date = new Date(move.created_at);
-        const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
-        if (monthlyStats.has(monthKey)) {
-          monthlyStats.get(monthKey).moves++;
-          monthlyStats.get(monthKey).revenue += move.total_price || 0;
-        }
-      });
-
-      // Données de statut
-      const statusCounts = {
-        pending: clients.filter(c => c.status === 'pending').length,
-        confirmed: clients.filter(c => c.status === 'confirmed').length,
-        rejected: clients.filter(c => c.status === 'rejected').length
-      };
-
-      const statusData = [
-        { name: 'En attente', value: statusCounts.pending, color: '#fbbf24' },
-        { name: 'Confirmé', value: statusCounts.confirmed, color: '#10b981' },
-        { name: 'Rejeté', value: statusCounts.rejected, color: '#ef4444' }
-      ];
-
-      // Données par ville
-      const cityStats = new Map();
-      
-      clients.forEach(client => {
-        const city = client.departure_city;
-        if (!cityStats.has(city)) {
-          cityStats.set(city, { city, requests: 0, moves: 0 });
-        }
-        cityStats.get(city).requests++;
-      });
-
-      moves.forEach(move => {
-        const city = move.departure_city;
-        if (!cityStats.has(city)) {
-          cityStats.set(city, { city, requests: 0, moves: 0 });
-        }
-        cityStats.get(city).moves++;
-      });
-
-      const cityData = Array.from(cityStats.values())
-        .sort((a, b) => (b.requests + b.moves) - (a.requests + a.moves))
-        .slice(0, 10);
-
-      // Données de volume
-      const volumeRanges = [
-        { range: '0-5m³', min: 0, max: 5, count: 0 },
-        { range: '5-10m³', min: 5, max: 10, count: 0 },
-        { range: '10-20m³', min: 10, max: 20, count: 0 },
-        { range: '20-30m³', min: 20, max: 30, count: 0 },
-        { range: '30m³+', min: 30, max: Infinity, count: 0 }
-      ];
-
-      clients.forEach(client => {
-        const volume = client.estimated_volume || 0;
-        const range = volumeRanges.find(r => volume >= r.min && volume < r.max);
-        if (range) range.count++;
-      });
-
-      moves.forEach(move => {
-        const volume = move.max_volume || 0;
-        const range = volumeRanges.find(r => volume >= r.min && volume < r.max);
-        if (range) range.count++;
-      });
-
-      setData({
-        totalClients: clients.length,
-        totalMoves: moves.length,
-        totalMatches: matchData.length,
-        totalRevenue,
-        pendingRequests,
-        confirmedMoves: confirmedMovesCount,
-        monthlyData: Array.from(monthlyStats.values()),
-        statusData: statusData.filter(s => s.value > 0),
-        cityData,
-        volumeData: volumeRanges.filter(r => r.count > 0)
-      });
+      // Calculer les données initiales
+      calculateAnalyticsData(clients, moves, matchData);
 
     } catch (error) {
       console.error('Error fetching analytics data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateAnalyticsData = (clients: any[], moves: any[], matchData: any[]) => {
+    // Calculer les totaux
+    const totalRevenue = moves.reduce((sum, move) => sum + (move.total_price || 0), 0);
+    const pendingRequests = clients.filter(c => c.status === 'pending').length;
+    const confirmedMovesCount = moves.filter(m => m.status === 'confirmed').length;
+
+    // Données mensuelles
+    const monthlyStats = new Map();
+    const now = new Date();
+    
+    // Initialiser les 6 derniers mois
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+      monthlyStats.set(monthKey, { month: monthKey, clients: 0, moves: 0, revenue: 0 });
+    }
+
+    // Compter les clients par mois
+    clients.forEach(client => {
+      const date = new Date(client.created_at);
+      const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+      if (monthlyStats.has(monthKey)) {
+        monthlyStats.get(monthKey).clients++;
+      }
+    });
+
+    // Compter les déménagements et revenus par mois
+    moves.forEach(move => {
+      const date = new Date(move.created_at);
+      const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+      if (monthlyStats.has(monthKey)) {
+        monthlyStats.get(monthKey).moves++;
+        monthlyStats.get(monthKey).revenue += move.total_price || 0;
+      }
+    });
+
+    // Données de statut
+    const statusCounts = {
+      pending: clients.filter(c => c.status === 'pending').length,
+      confirmed: clients.filter(c => c.status === 'confirmed').length,
+      rejected: clients.filter(c => c.status === 'rejected').length
+    };
+
+    const statusData = [
+      { name: 'En attente', value: statusCounts.pending, color: '#fbbf24' },
+      { name: 'Confirmé', value: statusCounts.confirmed, color: '#10b981' },
+      { name: 'Rejeté', value: statusCounts.rejected, color: '#ef4444' }
+    ];
+
+    // Données par ville
+    const cityStats = new Map();
+    
+    clients.forEach(client => {
+      const city = client.departure_city;
+      if (!cityStats.has(city)) {
+        cityStats.set(city, { city, requests: 0, moves: 0 });
+      }
+      cityStats.get(city).requests++;
+    });
+
+    moves.forEach(move => {
+      const city = move.departure_city;
+      if (!cityStats.has(city)) {
+        cityStats.set(city, { city, requests: 0, moves: 0 });
+      }
+      cityStats.get(city).moves++;
+    });
+
+    const cityData = Array.from(cityStats.values())
+      .sort((a, b) => (b.requests + b.moves) - (a.requests + a.moves))
+      .slice(0, 10);
+
+    // Données de volume
+    const volumeRanges = [
+      { range: '0-5m³', min: 0, max: 5, count: 0 },
+      { range: '5-10m³', min: 5, max: 10, count: 0 },
+      { range: '10-20m³', min: 10, max: 20, count: 0 },
+      { range: '20-30m³', min: 20, max: 30, count: 0 },
+      { range: '30m³+', min: 30, max: Infinity, count: 0 }
+    ];
+
+    clients.forEach(client => {
+      const volume = client.estimated_volume || 0;
+      const range = volumeRanges.find(r => volume >= r.min && volume < r.max);
+      if (range) range.count++;
+    });
+
+    moves.forEach(move => {
+      const volume = move.max_volume || 0;
+      const range = volumeRanges.find(r => volume >= r.min && volume < r.max);
+      if (range) range.count++;
+    });
+
+    setData({
+      totalClients: clients.length,
+      totalMoves: moves.length,
+      totalMatches: matchData.length,
+      totalRevenue,
+      pendingRequests,
+      confirmedMoves: confirmedMovesCount,
+      monthlyData: Array.from(monthlyStats.values()),
+      statusData: statusData.filter(s => s.value > 0),
+      cityData,
+      volumeData: volumeRanges.filter(r => r.count > 0)
+    });
+  };
+
+  const handleClientDateFilter = (filteredData: any[]) => {
+    setFilteredClients(filteredData);
+    // Recalculer les analytics avec les données filtrées
+    const matchData = []; // On garde les matches vides pour le moment
+    calculateAnalyticsData(filteredData, filteredMoves, matchData);
+  };
+
+  const handleMoveeDateFilter = (filteredData: any[]) => {
+    setFilteredMoves(filteredData);
+    // Recalculer les analytics avec les données filtrées
+    const matchData = []; // On garde les matches vides pour le moment
+    calculateAnalyticsData(filteredClients, filteredData, matchData);
   };
 
   if (loading) {
@@ -205,6 +234,22 @@ const Analytics = () => {
       <div className="flex items-center space-x-3">
         <TrendingUp className="h-6 w-6 text-blue-600" />
         <h2 className="text-2xl font-bold text-gray-800">Analytics</h2>
+      </div>
+
+      {/* Filtres de date */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DateFilter 
+          data={allClients} 
+          onFilter={handleClientDateFilter}
+          dateField="created_at"
+          label="Filtrer les demandes clients par date"
+        />
+        <DateFilter 
+          data={allMoves} 
+          onFilter={handleMoveeDateFilter}
+          dateField="departure_date"
+          label="Filtrer les déménagements par date de départ"
+        />
       </div>
 
       {/* Métriques principales */}
