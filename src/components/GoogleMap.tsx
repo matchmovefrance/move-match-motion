@@ -1,24 +1,26 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { GoogleMap, LoadScript, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
 import { supabase } from '@/integrations/supabase/client';
-import { RefreshCw, MapPin, Truck } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
+// Types pour TypeScript
 interface Move {
-  id: string;
+  id: number;
   departure_city: string;
-  arrival_city: string;
   departure_postal_code: string;
+  arrival_city: string;
   arrival_postal_code: string;
+  departure_date: string;
   status: string;
-  pickup_lat?: number;
-  pickup_lng?: number;
-  delivery_lat?: number;
-  delivery_lng?: number;
+  status_custom?: 'en_cours' | 'termine';
+  departure_lat?: number;
+  departure_lng?: number;
+  arrival_lat?: number;
+  arrival_lng?: number;
 }
 
 interface Mover {
-  id: string;
+  id: number;
   name: string;
   company_name: string;
   email: string;
@@ -27,349 +29,213 @@ interface Mover {
   lng?: number;
 }
 
-const GoogleMap = () => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const polylinesRef = useRef<google.maps.Polyline[]>([]);
+const containerStyle = {
+  width: '100%',
+  height: '600px'
+};
+
+const center = {
+  lat: 46.603354, // Centre sur la France
+  lng: 1.888334
+};
+
+const GoogleMapComponent: React.FC = () => {
   const [moves, setMoves] = useState<Move[]>([]);
   const [movers, setMovers] = useState<Mover[]>([]);
+  const [selectedMove, setSelectedMove] = useState<Move | null>(null);
+  const [selectedMover, setSelectedMover] = useState<Mover | null>(null);
   const [loading, setLoading] = useState(true);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
 
-  useEffect(() => {
-    loadGoogleMapsScript();
-  }, []);
-
-  const loadGoogleMapsScript = () => {
-    if (window.google && window.google.maps) {
-      console.log('Google Maps already loaded');
-      initializeMap();
-      return;
-    }
-
-    console.log('Loading Google Maps script...');
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      console.log('Google Maps script loaded successfully');
-      initializeMap();
-    };
-    script.onerror = () => {
-      console.error('Failed to load Google Maps script');
-      setLoading(false);
-    };
-    document.head.appendChild(script);
-  };
-
-  const initializeMap = () => {
-    if (!mapRef.current || !window.google || !window.google.maps) {
-      console.error('Map container or Google Maps not available');
-      setLoading(false);
-      return;
-    }
-
-    console.log('Initializing Google Maps...');
-    
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 48.8566, lng: 2.3522 }, // Paris
-      zoom: 12,
-      styles: [
-        {
-          featureType: 'poi',
-          elementType: 'labels',
-          stylers: [{ visibility: 'off' }]
-        }
-      ]
-    });
-
-    mapInstanceRef.current = map;
-    setLoading(false);
-    fetchData();
-  };
-
-  const fetchData = async () => {
+  // Fonction pour géocoder un code postal
+  const geocodePostalCode = async (postalCode: string, city: string): Promise<{ lat: number; lng: number }> => {
     try {
-      console.log('Fetching moves and movers...');
+      const geocoder = new window.google.maps.Geocoder();
+      const response = await new Promise<google.maps.GeocoderResponse>((resolve, reject) => {
+        geocoder.geocode({ address: `${postalCode} ${city}, France` }, (results, status) => {
+          if (status === 'OK' && results?.[0]) {
+            resolve(results);
+          } else {
+            reject(new Error('Geocode failed'));
+          }
+        });
+      });
       
-      const [movesResponse, moversResponse] = await Promise.all([
-        supabase.from('confirmed_moves').select('*'),
-        supabase.from('movers').select('*')
-      ]);
+      return {
+        lat: response[0].geometry.location.lat(),
+        lng: response[0].geometry.location.lng()
+      };
+    } catch (error) {
+      console.error('Erreur de géocodage:', error);
+      // Retourne une position par défaut si le géocodage échoue
+      return center;
+    }
+  };
 
-      if (movesResponse.error) {
-        console.error('Error fetching moves:', movesResponse.error);
-      } else {
-        const transformedMoves: Move[] = (movesResponse.data || []).map(move => ({
-          id: move.id.toString(),
-          departure_city: move.departure_city,
-          arrival_city: move.arrival_city,
-          departure_postal_code: move.departure_postal_code,
-          arrival_postal_code: move.arrival_postal_code,
-          status: move.status,
-          pickup_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
-          pickup_lng: 2.3522 + (Math.random() - 0.5) * 0.1,
-          delivery_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
-          delivery_lng: 2.3522 + (Math.random() - 0.5) * 0.1
+  // Charger les données depuis Supabase
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    
+    try {
+      // Récupérer les déménagements
+      const { data: movesData } = await supabase
+        .from('confirmed_moves')
+        .select('id, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, status, status_custom');
+      
+      if (movesData) {
+        // Géocoder les adresses de départ et d'arrivée
+        const movesWithCoords = await Promise.all(movesData.map(async (move) => {
+          const departure = await geocodePostalCode(move.departure_postal_code, move.departure_city);
+          const arrival = await geocodePostalCode(move.arrival_postal_code, move.arrival_city);
+          return {
+            ...move,
+            departure_lat: departure.lat,
+            departure_lng: departure.lng,
+            arrival_lat: arrival.lat,
+            arrival_lng: arrival.lng
+          };
         }));
-        setMoves(transformedMoves);
-        console.log('Moves fetched:', transformedMoves.length);
+        setMoves(movesWithCoords);
       }
 
-      if (moversResponse.error) {
-        console.error('Error fetching movers:', moversResponse.error);
-      } else {
-        const transformedMovers: Mover[] = (moversResponse.data || []).map(mover => ({
-          id: mover.id.toString(),
-          name: mover.name,
-          company_name: mover.company_name,
-          email: mover.email,
-          phone: mover.phone,
-          lat: 48.8566 + (Math.random() - 0.5) * 0.2,
-          lng: 2.3522 + (Math.random() - 0.5) * 0.2
-        }));
-        setMovers(transformedMovers);
-        console.log('Movers fetched:', transformedMovers.length);
-      }
-
-      if (movesResponse.data && moversResponse.data) {
-        const transformedMoves: Move[] = (movesResponse.data || []).map(move => ({
-          id: move.id.toString(),
-          departure_city: move.departure_city,
-          arrival_city: move.arrival_city,
-          departure_postal_code: move.departure_postal_code,
-          arrival_postal_code: move.arrival_postal_code,
-          status: move.status,
-          pickup_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
-          pickup_lng: 2.3522 + (Math.random() - 0.5) * 0.1,
-          delivery_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
-          delivery_lng: 2.3522 + (Math.random() - 0.5) * 0.1
-        }));
-
-        const transformedMovers: Mover[] = (moversResponse.data || []).map(mover => ({
-          id: mover.id.toString(),
-          name: mover.name,
-          company_name: mover.company_name,
-          email: mover.email,
-          phone: mover.phone,
-          lat: 48.8566 + (Math.random() - 0.5) * 0.2,
-          lng: 2.3522 + (Math.random() - 0.5) * 0.2
-        }));
-
-        updateMapMarkers(transformedMoves, transformedMovers);
+      // Récupérer les déménageurs
+      const { data: moversData } = await supabase
+        .from('movers')
+        .select('id, name, company_name, email, phone');
+      
+      if (moversData) {
+        // Pour simplifier, on place les déménageurs au centre de la France
+        // Dans une vraie app, vous voudriez géocoder leurs adresses
+        setMovers(moversData.map(mover => ({
+          ...mover,
+          lat: center.lat + (Math.random() * 2 - 1), // Un peu d'aléatoire pour la démo
+          lng: center.lng + (Math.random() * 2 - 1)
+        })));
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Erreur de chargement des données:', error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const updateMapMarkers = (movesData: Move[], moversData: Mover[]) => {
-    if (!mapInstanceRef.current || !window.google) return;
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-    // Clear existing markers and polylines
-    markersRef.current.forEach(marker => {
-      if (marker && typeof marker.setMap === 'function') {
-        marker.setMap(null);
-      }
-    });
-    polylinesRef.current.forEach(polyline => {
-      if (polyline && typeof polyline.setMap === 'function') {
-        polyline.setMap(null);
-      }
-    });
-    markersRef.current = [];
-    polylinesRef.current = [];
+  // Gérer le chargement de la carte
+  const onLoad = useCallback((mapInstance: google.maps.Map) => {
+    setMap(mapInstance);
+  }, []);
 
-    // Add move markers
-    movesData.forEach((move) => {
-      if (move.pickup_lat && move.pickup_lng) {
-        const pickupMarker = new google.maps.Marker({
-          position: { lat: move.pickup_lat, lng: move.pickup_lng },
-          map: mapInstanceRef.current,
-          title: `Pickup: ${move.departure_city}`,
-          icon: {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="10" cy="10" r="8" fill="#10B981" stroke="white" stroke-width="2"/>
-                <text x="10" y="14" font-family="Arial" font-size="12" fill="white" text-anchor="middle">P</text>
-              </svg>
-            `),
-            scaledSize: new google.maps.Size(20, 20)
-          }
-        });
+  // Gérer la déconnexion de la carte
+  const onUnmount = useCallback(() => {
+    setMap(null);
+  }, []);
 
-        const pickupInfoWindow = new google.maps.InfoWindow({
-          content: `
-            <div class="p-2">
-              <h3 class="font-bold text-green-600">Pickup Point</h3>
-              <p class="text-sm">${move.departure_city}</p>
-              <p class="text-xs text-gray-600">Status: ${move.status}</p>
-            </div>
-          `
-        });
-
-        pickupMarker.addListener('click', () => {
-          pickupInfoWindow.open(mapInstanceRef.current, pickupMarker);
-        });
-
-        markersRef.current.push(pickupMarker);
-      }
-
-      if (move.delivery_lat && move.delivery_lng) {
-        const deliveryMarker = new google.maps.Marker({
-          position: { lat: move.delivery_lat, lng: move.delivery_lng },
-          map: mapInstanceRef.current,
-          title: `Delivery: ${move.arrival_city}`,
-          icon: {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="10" cy="10" r="8" fill="#EF4444" stroke="white" stroke-width="2"/>
-                <text x="10" y="14" font-family="Arial" font-size="12" fill="white" text-anchor="middle">D</text>
-              </svg>
-            `),
-            scaledSize: new google.maps.Size(20, 20)
-          }
-        });
-
-        const deliveryInfoWindow = new google.maps.InfoWindow({
-          content: `
-            <div class="p-2">
-              <h3 class="font-bold text-red-600">Delivery Point</h3>
-              <p class="text-sm">${move.arrival_city}</p>
-              <p class="text-xs text-gray-600">Status: ${move.status}</p>
-            </div>
-          `
-        });
-
-        deliveryMarker.addListener('click', () => {
-          deliveryInfoWindow.open(mapInstanceRef.current, deliveryMarker);
-        });
-
-        markersRef.current.push(deliveryMarker);
-      }
-
-      // Add line between pickup and delivery
-      if (move.pickup_lat && move.pickup_lng && move.delivery_lat && move.delivery_lng) {
-        const path = [
-          { lat: move.pickup_lat, lng: move.pickup_lng },
-          { lat: move.delivery_lat, lng: move.delivery_lng }
-        ];
-
-        const polyline = new google.maps.Polyline({
-          path: path,
-          geodesic: true,
-          strokeColor: '#3B82F6',
-          strokeOpacity: 0.6,
-          strokeWeight: 2,
-          map: mapInstanceRef.current
-        });
-
-        polylinesRef.current.push(polyline);
-      }
-    });
-
-    // Add mover markers
-    moversData.forEach((mover) => {
-      if (mover.lat && mover.lng) {
-        const moverMarker = new google.maps.Marker({
-          position: { lat: mover.lat, lng: mover.lng },
-          map: mapInstanceRef.current,
-          title: `Mover: ${mover.name}`,
-          icon: {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" fill="#8B5CF6" stroke="white" stroke-width="2"/>
-                <path d="M16 8L8 8L8 16L16 16L16 12L20 12L20 10L16 10L16 8Z" fill="white"/>
-              </svg>
-            `),
-            scaledSize: new google.maps.Size(24, 24)
-          }
-        });
-
-        const moverInfoWindow = new google.maps.InfoWindow({
-          content: `
-            <div class="p-3">
-              <h3 class="font-bold text-purple-600 flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                  <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-1-1h-3z"/>
-                </svg>
-                ${mover.name}
-              </h3>
-              <p class="text-sm">${mover.company_name}</p>
-              <p class="text-xs text-gray-600">${mover.email}</p>
-              <p class="text-xs text-gray-600">${mover.phone}</p>
-            </div>
-          `
-        });
-
-        moverMarker.addListener('click', () => {
-          moverInfoWindow.open(mapInstanceRef.current, moverMarker);
-        });
-
-        markersRef.current.push(moverMarker);
-      }
-    });
-
-    console.log(`Added ${markersRef.current.length} markers and ${polylinesRef.current.length} polylines to map`);
-  };
-
-  const handleRefresh = () => {
-    console.log('Refreshing map data...');
-    fetchData();
-  };
+  if (loading) {
+    return <div className="flex justify-center items-center h-64">Chargement de la carte...</div>;
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-          <MapPin className="h-5 w-5 mr-2 text-blue-600" />
-          Carte des Déménagements
-        </h3>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span>Pickup ({moves.filter(m => m.pickup_lat && m.pickup_lng).length})</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <span>Delivery ({moves.filter(m => m.delivery_lat && m.delivery_lng).length})</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Truck className="w-3 h-3 text-purple-600" />
-              <span>Déménageurs ({movers.filter(m => m.lat && m.lng).length})</span>
-            </div>
-          </div>
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            size="sm"
-            className="flex items-center space-x-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            <span>Actualiser</span>
-          </Button>
-        </div>
-      </div>
-      
-      <div className="relative">
-        {loading && (
-          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-gray-600">Chargement de la carte...</span>
-            </div>
-          </div>
-        )}
-        <div
-          ref={mapRef}
-          className="w-full h-96 bg-gray-200 rounded-lg border border-gray-300"
-        />
-      </div>
+    <div className="w-full rounded-lg shadow-lg overflow-hidden">
+      <LoadScript googleMapsApiKey="AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y">
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={center}
+          zoom={6}
+          onLoad={onLoad}
+          onUnmount={onUnmount}
+        >
+          {/* Marqueurs de départ (verts) */}
+          {moves.map((move) => (
+            <React.Fragment key={`departure-${move.id}`}>
+              <Marker
+                position={{ lat: move.departure_lat || 0, lng: move.departure_lng || 0 }}
+                icon={{
+                  url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                  scaledSize: new window.google.maps.Size(32, 32)
+                }}
+                onClick={() => setSelectedMove(move)}
+              />
+              
+              {/* Marqueurs d'arrivée (rouges) */}
+              <Marker
+                position={{ lat: move.arrival_lat || 0, lng: move.arrival_lng || 0 }}
+                icon={{
+                  url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                  scaledSize: new window.google.maps.Size(32, 32)
+                }}
+              />
+              
+              {/* Lignes de trajet (bleues) */}
+              <Polyline
+                path={[
+                  { lat: move.departure_lat || 0, lng: move.departure_lng || 0 },
+                  { lat: move.arrival_lat || 0, lng: move.arrival_lng || 0 }
+                ]}
+                options={{
+                  strokeColor: '#3B82F6',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 3
+                }}
+              />
+            </React.Fragment>
+          ))}
+          
+          {/* Marqueurs des déménageurs (violets) */}
+          {movers.map((mover) => (
+            <Marker
+              key={`mover-${mover.id}`}
+              position={{ lat: mover.lat || 0, lng: mover.lng || 0 }}
+              icon={{
+                url: 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png',
+                scaledSize: new window.google.maps.Size(32, 32)
+              }}
+              onClick={() => setSelectedMover(mover)}
+            />
+          ))}
+          
+          {/* InfoWindow pour les déménagements */}
+          {selectedMove && (
+            <InfoWindow
+              position={{
+                lat: selectedMove.departure_lat || 0,
+                lng: selectedMove.departure_lng || 0
+              }}
+              onCloseClick={() => setSelectedMove(null)}
+            >
+              <div className="p-2">
+                <h3 className="font-bold text-lg">Déménagement #{selectedMove.id}</h3>
+                <p><strong>De:</strong> {selectedMove.departure_postal_code} {selectedMove.departure_city}</p>
+                <p><strong>À:</strong> {selectedMove.arrival_postal_code} {selectedMove.arrival_city}</p>
+                <p><strong>Date:</strong> {new Date(selectedMove.departure_date).toLocaleDateString('fr-FR')}</p>
+                <p><strong>Statut:</strong> {selectedMove.status_custom || selectedMove.status}</p>
+              </div>
+            </InfoWindow>
+          )}
+          
+          {/* InfoWindow pour les déménageurs */}
+          {selectedMover && (
+            <InfoWindow
+              position={{
+                lat: selectedMover.lat || 0,
+                lng: selectedMover.lng || 0
+              }}
+              onCloseClick={() => setSelectedMover(null)}
+            >
+              <div className="p-2">
+                <h3 className="font-bold text-lg">{selectedMover.company_name}</h3>
+                <p><strong>Contact:</strong> {selectedMover.name}</p>
+                <p><strong>Email:</strong> {selectedMover.email}</p>
+                <p><strong>Téléphone:</strong> {selectedMover.phone}</p>
+              </div>
+            </InfoWindow>
+          )}
+        </GoogleMap>
+      </LoadScript>
     </div>
   );
 };
 
-export default GoogleMap;
+export default GoogleMapComponent;
