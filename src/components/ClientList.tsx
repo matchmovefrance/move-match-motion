@@ -114,12 +114,27 @@ const ClientList = () => {
           description: "Demande client mise à jour avec succès",
         });
       } else {
+        // Créer d'abord un client dans la table clients
+        const { data: clientData, error: clientError } = await supabase
+          .from('clients')
+          .insert({
+            name: processedData.name,
+            email: processedData.email,
+            phone: processedData.phone,
+            created_by: user?.id,
+          })
+          .select('id')
+          .single();
+
+        if (clientError) throw clientError;
+
+        // Insérer ensuite la demande client avec le bon client_id
         const { error } = await supabase
           .from('client_requests')
           .insert({
             ...processedData,
             created_by: user?.id,
-            client_id: Math.floor(Math.random() * 1000),
+            client_id: clientData.id,
             estimated_volume_backup: parseFloat(formData.estimated_volume) || 0
           });
 

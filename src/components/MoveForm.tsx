@@ -138,7 +138,19 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
       return;
     }
 
-    onSubmit(formData);
+    // Nettoyer les champs time et date avant soumission
+    const cleanTimeField = (value: string) => {
+      return value && value.trim() !== '' ? value : null;
+    };
+
+    const processedData = {
+      ...formData,
+      departure_time: cleanTimeField(formData.departure_time),
+      estimated_arrival_time: cleanTimeField(formData.estimated_arrival_time),
+      estimated_arrival_date: cleanTimeField(formData.estimated_arrival_date),
+    };
+
+    onSubmit(processedData);
   };
 
   return (
