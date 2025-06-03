@@ -50,31 +50,46 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: 'url(https://www.petites-phrases.com/wp-content/uploads/2023/02/demenagement-urgent.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
+    >
+      {/* Overlay for better readability */}
+      <div className="absolute inset-0 bg-black/40"></div>
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative z-10"
       >
         <div className="text-center mb-8">
           <motion.div 
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring", stiffness: 260, damping: 20 }}
-            className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4"
+            className="mx-auto mb-4"
           >
-            <Truck className="h-8 w-8 text-white" />
+            <img 
+              src="https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png" 
+              alt="MatchMove Logo" 
+              className="h-20 w-auto mx-auto"
+            />
           </motion.div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-white drop-shadow-lg">
             MatchMove.io
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-white/90 mt-2 drop-shadow">
             Plateforme de matching pour déménagements
           </p>
         </div>
 
-        <Card className="shadow-xl border-0">
+        <Card className="shadow-2xl border-0 backdrop-blur-sm bg-white/95">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">
               {isLogin ? 'Connexion' : 'Inscription'}
