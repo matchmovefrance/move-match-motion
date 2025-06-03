@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, Mail, Phone, Edit, Trash2, MapPin, Calendar, Volume2, Euro } from 'lucide-react';
+import { Plus, User, Mail, Phone, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ListView } from '@/components/ui/list-view';
 import {
@@ -18,34 +19,12 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import ClientForm from './ClientForm';
 
 interface Client {
   id: number;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  departure_address: string | null;
-  departure_city: string;
-  departure_postal_code: string;
-  departure_country: string | null;
-  arrival_address: string | null;
-  arrival_city: string;
-  arrival_postal_code: string;
-  arrival_country: string | null;
-  desired_date: string;
-  flexible_dates: boolean | null;
-  date_range_start: string | null;
-  date_range_end: string | null;
-  estimated_volume: number | null;
-  description: string | null;
-  budget_min: number | null;
-  budget_max: number | null;
-  quote_amount: number | null;
-  special_requirements: string | null;
-  access_conditions: string | null;
-  inventory_list: string | null;
-  status: string;
+  name: string;
+  email: string;
+  phone: string;
   created_at: string;
 }
 
@@ -55,6 +34,11 @@ const ClientList = () => {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [newClient, setNewClient] = useState({
+    name: '',
+    email: '',
+    phone: ''
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -64,7 +48,7 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       const { data, error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -77,55 +61,142 @@ const ClientList = () => {
     }
   };
 
-  const handleFormSubmit = async (formData: any) => {
+  const addClient = async () => {
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour ajouter un client",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation des champs obligatoires
+    if (!newClient.name.trim() || !newClient.email.trim() || !newClient.phone.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Tous les champs sont obligatoires",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newClient.email)) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une adresse email valide",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // Convert string values to appropriate types
-      const processedData = {
-        ...formData,
-        estimated_volume: parseFloat(formData.estimated_volume) || 0,
-        budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
-        budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
-        quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
-        flexible_dates: Boolean(formData.flexible_dates)
-      };
+      console.log('Adding client:', newClient);
+      
+      const { data, error } = await supabase
+        .from('clients')
+        .insert({
+          name: newClient.name.trim(),
+          email: newClient.email.trim().toLowerCase(),
+          phone: newClient.phone.trim(),
+          created_by: user.id
+        })
+        .select()
+        .single();
 
-      if (editingClient) {
-        const { error } = await supabase
-          .from('client_requests')
-          .update(processedData)
-          .eq('id', editingClient.id);
-
-        if (error) throw error;
-
-        toast({
-          title: "Succès",
-          description: "Client mis à jour avec succès",
-        });
-      } else {
-        const { error } = await supabase
-          .from('client_requests')
-          .insert({
-            ...processedData,
-            created_by: user?.id,
-            client_id: Math.floor(Math.random() * 1000000) // Temporary client_id
-          });
-
-        if (error) throw error;
-
-        toast({
-          title: "Succès",
-          description: "Client ajouté avec succès",
-        });
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
       }
 
+      console.log('Client added successfully:', data);
+
+      toast({
+        title: "Succès",
+        description: "Client ajouté avec succès",
+      });
+
+      setNewClient({ name: '', email: '', phone: '' });
       setShowAddForm(false);
+      fetchClients();
+    } catch (error: any) {
+      console.error('Error adding client:', error);
+      
+      let errorMessage = "Impossible d'ajouter le client";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un client avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: "Erreur",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateClient = async () => {
+    if (!editingClient) return;
+
+    // Validation des champs obligatoires
+    if (!editingClient.name.trim() || !editingClient.email.trim() || !editingClient.phone.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Tous les champs sont obligatoires",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editingClient.email)) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une adresse email valide",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({
+          name: editingClient.name.trim(),
+          email: editingClient.email.trim().toLowerCase(),
+          phone: editingClient.phone.trim()
+        })
+        .eq('id', editingClient.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Client mis à jour avec succès",
+      });
+
       setEditingClient(null);
       fetchClients();
     } catch (error: any) {
-      console.error('Error saving client:', error);
+      console.error('Error updating client:', error);
+      
+      let errorMessage = "Impossible de mettre à jour le client";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un client avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: "Impossible de sauvegarder le client",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -134,7 +205,7 @@ const ClientList = () => {
   const deleteClient = async (id: number) => {
     try {
       const { error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .delete()
         .eq('id', id);
 
@@ -162,54 +233,22 @@ const ClientList = () => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
     >
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-800 mb-2">{client.name || 'Nom non renseigné'}</h3>
+          <h3 className="font-semibold text-gray-800 mb-2">{client.name}</h3>
           
           <div className="space-y-2 text-sm text-gray-600">
-            {client.email && (
-              <div className="flex items-center space-x-2">
-                <Mail className="h-4 w-4 text-blue-600" />
-                <span>{client.email}</span>
-              </div>
-            )}
-            {client.phone && (
-              <div className="flex items-center space-x-2">
-                <Phone className="h-4 w-4 text-blue-600" />
-                <span>{client.phone}</span>
-              </div>
-            )}
             <div className="flex items-center space-x-2">
-              <MapPin className="h-4 w-4 text-green-600" />
-              <span>{client.departure_postal_code} {client.departure_city} → {client.arrival_postal_code} {client.arrival_city}</span>
+              <Mail className="h-4 w-4 text-blue-600" />
+              <span>{client.email}</span>
             </div>
             <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-purple-600" />
-              <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+              <Phone className="h-4 w-4 text-blue-600" />
+              <span>{client.phone}</span>
             </div>
-            {client.estimated_volume && (
-              <div className="flex items-center space-x-2">
-                <Volume2 className="h-4 w-4 text-orange-600" />
-                <span>{client.estimated_volume}m³</span>
-              </div>
-            )}
-            {client.quote_amount && (
-              <div className="flex items-center space-x-2">
-                <Euro className="h-4 w-4 text-green-600" />
-                <span>{client.quote_amount}€</span>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-3">
-            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-              client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-              client.status === 'matched' ? 'bg-green-100 text-green-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {client.status === 'pending' ? 'En attente' : 
-               client.status === 'matched' ? 'Matché' : client.status}
-            </span>
+            <div className="text-xs text-gray-400 mt-3">
+              Créé le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+            </div>
           </div>
         </div>
         
@@ -235,7 +274,7 @@ const ClientList = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Supprimer le client</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer le client {client.name || client.email} ? 
+                  Êtes-vous sûr de vouloir supprimer le client {client.name} ? 
                   Cette action est irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -260,27 +299,13 @@ const ClientList = () => {
       <div className="flex-1">
         <div className="flex items-center space-x-4">
           <div>
-            <h4 className="font-medium text-gray-800">{client.name || 'Nom non renseigné'}</h4>
-            <p className="text-sm text-gray-600">{client.email || 'Email non renseigné'}</p>
+            <h4 className="font-medium text-gray-800">{client.name}</h4>
           </div>
           <div className="text-sm text-gray-500">
-            <span>{client.departure_city} → {client.arrival_city}</span>
+            <span>{client.email}</span> • <span>{client.phone}</span>
           </div>
-          <div className="text-sm text-gray-500">
-            <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
-          </div>
-          {client.estimated_volume && (
-            <div className="text-sm text-gray-500">
-              <span>{client.estimated_volume}m³</span>
-            </div>
-          )}
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-            client.status === 'matched' ? 'bg-green-100 text-green-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {client.status === 'pending' ? 'En attente' : 
-             client.status === 'matched' ? 'Matché' : client.status}
+          <div className="text-xs text-gray-400">
+            {new Date(client.created_at).toLocaleDateString('fr-FR')}
           </div>
         </div>
       </div>
@@ -306,7 +331,7 @@ const ClientList = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Supprimer le client</AlertDialogTitle>
               <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer le client {client.name || client.email} ? 
+                Êtes-vous sûr de vouloir supprimer le client {client.name} ? 
                 Cette action est irréversible.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -333,47 +358,11 @@ const ClientList = () => {
     );
   }
 
-  if (showAddForm || editingClient) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Users className="h-6 w-6 text-blue-600" />
-            <h2 className="text-2xl font-bold text-gray-800">
-              {editingClient ? 'Modifier le client' : 'Nouveau client'}
-            </h2>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowAddForm(false);
-              setEditingClient(null);
-            }}
-          >
-            Retour à la liste
-          </Button>
-        </div>
-        
-        <ClientForm
-          onSubmit={handleFormSubmit}
-          initialData={editingClient ? {
-            ...editingClient,
-            estimated_volume: editingClient.estimated_volume?.toString() || '',
-            budget_min: editingClient.budget_min?.toString() || '',
-            budget_max: editingClient.budget_max?.toString() || '',
-            quote_amount: editingClient.quote_amount?.toString() || ''
-          } : undefined}
-          isEditing={!!editingClient}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <Users className="h-6 w-6 text-blue-600" />
+          <User className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Clients</h2>
         </div>
         <Button
@@ -385,14 +374,67 @@ const ClientList = () => {
         </Button>
       </div>
 
+      {(showAddForm || editingClient) && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+        >
+          <h3 className="text-lg font-semibold mb-4">
+            {editingClient ? 'Modifier le client' : 'Nouveau client'}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              placeholder="Nom"
+              value={editingClient ? editingClient.name : newClient.name}
+              onChange={(e) => editingClient 
+                ? setEditingClient({...editingClient, name: e.target.value})
+                : setNewClient({...newClient, name: e.target.value})
+              }
+            />
+            <Input
+              placeholder="Email"
+              type="email"
+              value={editingClient ? editingClient.email : newClient.email}
+              onChange={(e) => editingClient 
+                ? setEditingClient({...editingClient, email: e.target.value})
+                : setNewClient({...newClient, email: e.target.value})
+              }
+            />
+            <Input
+              placeholder="Téléphone"
+              value={editingClient ? editingClient.phone : newClient.phone}
+              onChange={(e) => editingClient 
+                ? setEditingClient({...editingClient, phone: e.target.value})
+                : setNewClient({...newClient, phone: e.target.value})
+              }
+            />
+          </div>
+          <div className="flex space-x-2 mt-4">
+            <Button onClick={editingClient ? updateClient : addClient}>
+              {editingClient ? 'Mettre à jour' : 'Ajouter'}
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowAddForm(false);
+                setEditingClient(null);
+              }}
+            >
+              Annuler
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       <ListView
         items={clients}
-        searchFields={['name', 'email', 'phone', 'departure_city', 'arrival_city']}
+        searchFields={['name', 'email', 'phone']}
         renderCard={renderClientCard}
         renderListItem={renderClientListItem}
-        searchPlaceholder="Rechercher par nom, email, téléphone ou ville..."
+        searchPlaceholder="Rechercher par nom, email ou téléphone..."
         emptyStateMessage="Aucun client trouvé"
-        emptyStateIcon={<Users className="h-12 w-12 text-gray-400 mx-auto" />}
+        emptyStateIcon={<User className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
       />
     </div>

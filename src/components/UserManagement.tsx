@@ -68,7 +68,8 @@ const UserManagement = () => {
     email: '',
     password: '',
     role: 'agent' as 'admin' | 'agent' | 'demenageur',
-    company_name: ''
+    company_name: '',
+    skipEmailConfirmation: true
   });
   const { toast } = useToast();
 
@@ -181,22 +182,53 @@ const UserManagement = () => {
 
         if (profileError) {
           console.error('Profile creation error:', profileError);
-          // Don't throw, just warn since the trigger might have created it
           console.warn('Profile creation failed, but user might still be created via trigger');
         } else {
           console.log('Profile created successfully');
         }
 
-        // For admin-created users, we should confirm them automatically if possible
-        console.log('User created successfully. Email confirmation may be required.');
+        // If skip email confirmation is enabled, confirm the user automatically
+        if (newUser.skipEmailConfirmation) {
+          try {
+            const { data, error } = await supabase.functions.invoke('confirm-user-signup', {
+              body: {
+                userEmail: newUser.email
+              }
+            });
+
+            if (error) {
+              console.error('Email confirmation error:', error);
+              toast({
+                title: "Avertissement",
+                description: "Utilisateur créé mais la confirmation automatique a échoué. L'utilisateur devra confirmer son email manuellement.",
+                variant: "destructive",
+              });
+            } else if (data.success) {
+              console.log('Email confirmed automatically');
+              toast({
+                title: "Succès",
+                description: "Utilisateur créé et confirmé automatiquement. Il peut maintenant se connecter.",
+              });
+            }
+          } catch (confirmError) {
+            console.error('Confirmation function error:', confirmError);
+            toast({
+              title: "Avertissement",
+              description: "Utilisateur créé mais la confirmation automatique a échoué.",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Succès",
+            description: "Utilisateur créé avec succès. Un email de confirmation a été envoyé.",
+          });
+        }
+
+        console.log('User created successfully.');
       }
 
-      toast({
-        title: "Succès",
-        description: "Utilisateur créé avec succès.",
-      });
-
-      setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
+      setNewUser({ email: '', password: '', role: 'agent', company_name: '', skipEmailConfirmation: true });
       setShowAddUser(false);
       fetchUsers();
     } catch (error: any) {
@@ -426,6 +458,19 @@ const UserManagement = () => {
                 onChange={(e) => setNewUser({ ...newUser, company_name: e.target.value })}
               />
             )}
+          </div>
+          <div className="mt-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={newUser.skipEmailConfirmation}
+                onChange={(e) => setNewUser({ ...newUser, skipEmailConfirmation: e.target.checked })}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">
+                Activer automatiquement le compte (pas besoin de confirmation email)
+              </span>
+            </label>
           </div>
           <div className="flex space-x-2 mt-4">
             <Button onClick={createUser}>Créer</Button>

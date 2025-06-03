@@ -479,6 +479,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      confirm_user_signup: {
+        Args: { user_email: string }
+        Returns: Json
+      }
       generate_public_link_token: {
         Args: Record<PropertyKey, never>
         Returns: string

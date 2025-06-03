@@ -64,17 +64,57 @@ const MoverList = () => {
   };
 
   const addMover = async () => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour ajouter un déménageur",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation des champs obligatoires
+    if (!newMover.name.trim() || !newMover.company_name.trim() || !newMover.email.trim() || !newMover.phone.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Tous les champs sont obligatoires",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newMover.email)) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une adresse email valide",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      const { error } = await supabase
+      console.log('Adding mover:', newMover);
+      
+      const { data, error } = await supabase
         .from('movers')
         .insert({
-          ...newMover,
+          name: newMover.name.trim(),
+          company_name: newMover.company_name.trim(),
+          email: newMover.email.trim().toLowerCase(),
+          phone: newMover.phone.trim(),
           created_by: user.id
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Mover added successfully:', data);
 
       toast({
         title: "Succès",
@@ -86,9 +126,18 @@ const MoverList = () => {
       fetchMovers();
     } catch (error: any) {
       console.error('Error adding mover:', error);
+      
+      let errorMessage = "Impossible d'ajouter le déménageur";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un déménageur avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: "Impossible d'ajouter le déménageur",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -97,10 +146,36 @@ const MoverList = () => {
   const updateMover = async () => {
     if (!editingMover) return;
 
+    // Validation des champs obligatoires
+    if (!editingMover.name.trim() || !editingMover.company_name.trim() || !editingMover.email.trim() || !editingMover.phone.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Tous les champs sont obligatoires",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editingMover.email)) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une adresse email valide",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('movers')
-        .update(editingMover)
+        .update({
+          name: editingMover.name.trim(),
+          company_name: editingMover.company_name.trim(),
+          email: editingMover.email.trim().toLowerCase(),
+          phone: editingMover.phone.trim()
+        })
         .eq('id', editingMover.id);
 
       if (error) throw error;
@@ -114,9 +189,18 @@ const MoverList = () => {
       fetchMovers();
     } catch (error: any) {
       console.error('Error updating mover:', error);
+      
+      let errorMessage = "Impossible de mettre à jour le déménageur";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un déménageur avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: "Impossible de mettre à jour le déménageur",
+        description: errorMessage,
         variant: "destructive",
       });
     }
