@@ -1,5 +1,7 @@
 
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { MapPin, User, Phone, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Move {
@@ -10,6 +12,13 @@ interface Move {
   arrival_postal_code: string;
   departure_date: string;
   status_custom: string;
+  mover_id: number;
+  movers?: {
+    name: string;
+    company_name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 interface ClientRequest {
@@ -20,6 +29,12 @@ interface ClientRequest {
   arrival_postal_code: string;
   desired_date: string;
   status_custom: string;
+  client_id: number;
+  clients?: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 const GoogleMap = () => {
@@ -27,6 +42,8 @@ const GoogleMap = () => {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [moves, setMoves] = useState<Move[]>([]);
   const [clientRequests, setClientRequests] = useState<ClientRequest[]>([]);
+  const [selectedMover, setSelectedMover] = useState<any>(null);
+  const [showMoverInfo, setShowMoverInfo] = useState(false);
 
   const GOOGLE_MAPS_API_KEY = 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
 
@@ -77,7 +94,15 @@ const GoogleMap = () => {
     try {
       const { data, error } = await supabase
         .from('confirmed_moves')
-        .select('*')
+        .select(`
+          *,
+          movers (
+            name,
+            company_name,
+            email,
+            phone
+          )
+        `)
         .eq('status_custom', 'en_cours');
 
       if (error) throw error;
@@ -91,7 +116,14 @@ const GoogleMap = () => {
     try {
       const { data, error } = await supabase
         .from('client_requests')
-        .select('*')
+        .select(`
+          *,
+          clients (
+            name,
+            email,
+            phone
+          )
+        `)
         .eq('status_custom', 'en_cours');
 
       if (error) throw error;
@@ -125,7 +157,6 @@ const GoogleMap = () => {
   const addMarkers = async () => {
     if (!map) return;
 
-    // Clear existing markers
     // Add markers for confirmed moves (blue)
     for (const move of moves) {
       const departureLocation = await geocodeAddress(
@@ -138,7 +169,7 @@ const GoogleMap = () => {
       );
 
       if (departureLocation) {
-        new google.maps.Marker({
+        const departureMarker = new google.maps.Marker({
           position: departureLocation,
           map: map,
           icon: {
@@ -147,10 +178,16 @@ const GoogleMap = () => {
           },
           title: `Départ: ${move.departure_city} (${new Date(move.departure_date).toLocaleDateString('fr-FR')})`
         });
+
+        // Add click event to show mover info
+        departureMarker.addListener('click', () => {
+          setSelectedMover(move.movers);
+          setShowMoverInfo(true);
+        });
       }
 
       if (arrivalLocation) {
-        new google.maps.Marker({
+        const arrivalMarker = new google.maps.Marker({
           position: arrivalLocation,
           map: map,
           icon: {
@@ -158,6 +195,12 @@ const GoogleMap = () => {
             scaledSize: new google.maps.Size(20, 20)
           },
           title: `Arrivée: ${move.arrival_city}`
+        });
+
+        // Add click event to show mover info
+        arrivalMarker.addListener('click', () => {
+          setSelectedMover(move.movers);
+          setShowMoverInfo(true);
         });
       }
 
@@ -229,14 +272,46 @@ const GoogleMap = () => {
   };
 
   useEffect(() => {
-    if (map && moves.length > 0 && clientRequests.length > 0) {
+    if (map && (moves.length > 0 || clientRequests.length > 0)) {
       addMarkers();
     }
   }, [map, moves, clientRequests]);
 
   return (
-    <div className="w-full h-96 rounded-lg shadow-lg border border-gray-200">
+    <div className="w-full h-96 rounded-lg shadow-lg border border-gray-200 relative">
       <div ref={mapRef} className="w-full h-full rounded-lg" />
+      
+      {/* Mover Info Modal */}
+      {showMoverInfo && selectedMover && (
+        <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 border border-gray-200 z-10 min-w-64">
+          <div className="flex justify-between items-start mb-3">
+            <h3 className="font-semibold text-gray-800">Déménageur</h3>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setShowMoverInfo(false)}
+            >
+              ×
+            </Button>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center space-x-2">
+              <User className="h-4 w-4 text-blue-600" />
+              <span>{selectedMover.name}</span>
+            </div>
+            <div className="text-gray-600">{selectedMover.company_name}</div>
+            <div className="flex items-center space-x-2">
+              <Mail className="h-4 w-4 text-blue-600" />
+              <span>{selectedMover.email}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Phone className="h-4 w-4 text-blue-600" />
+              <span>{selectedMover.phone}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="mt-4 flex justify-center space-x-6 text-sm">
         <div className="flex items-center space-x-2">
           <div className="w-4 h-4 bg-blue-600 rounded-full"></div>

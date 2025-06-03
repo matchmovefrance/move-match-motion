@@ -11,6 +11,7 @@ import UserManagement from '../components/UserManagement';
 import MoverCalendar from '../components/MoverCalendar';
 import GoogleMap from '../components/GoogleMap';
 import PublicLinkManager from '../components/PublicLinkManager';
+import ServiceProviders from '../components/ServiceProviders';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -41,6 +42,7 @@ const Index = () => {
         { id: 'moves', label: 'Déménagements', icon: Truck },
         { id: 'clients', label: 'Clients', icon: Users },
         { id: 'users', label: 'Utilisateurs', icon: Users },
+        { id: 'providers', label: 'Prestataires', icon: MapPin },
         { id: 'public-links', label: 'Liens publics', icon: Search },
       ];
     } else if (profile?.role === 'agent') {
@@ -49,6 +51,7 @@ const Index = () => {
         { id: 'matching', label: 'Matching', icon: Search },
         { id: 'moves', label: 'Déménagements', icon: Truck },
         { id: 'clients', label: 'Clients', icon: Users },
+        { id: 'providers', label: 'Prestataires', icon: MapPin },
         { id: 'public-links', label: 'Liens publics', icon: Search },
       ];
     } else if (profile?.role === 'demenageur') {
@@ -251,6 +254,19 @@ const Index = () => {
               transition={{ duration: 0.3 }}
             >
               <UserManagement />
+            </motion.div>
+          )}
+
+          {activeTab === 'providers' && (
+            <motion.div
+              key="providers"
+              variants={tabVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <ServiceProviders />
             </motion.div>
           )}
 

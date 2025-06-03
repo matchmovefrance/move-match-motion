@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Link, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
@@ -70,7 +69,7 @@ const PublicLinkManager = () => {
   };
 
   const createLink = async () => {
-    if (!selectedMoverId || !user) return;
+    if (!user) return;
 
     try {
       const { data: tokenData } = await supabase.rpc('generate_public_link_token');
@@ -81,7 +80,7 @@ const PublicLinkManager = () => {
         .insert({
           link_token: tokenData,
           password: passwordData,
-          mover_id: selectedMoverId,
+          mover_id: selectedMoverId, // Can be null now
           created_by: user.id
         });
 
@@ -182,14 +181,14 @@ const PublicLinkManager = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sélectionner un déménageur
+                Sélectionner un déménageur (optionnel)
               </label>
               <select
                 value={selectedMoverId || ''}
-                onChange={(e) => setSelectedMoverId(Number(e.target.value))}
+                onChange={(e) => setSelectedMoverId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Choisir un déménageur</option>
+                <option value="">Lien générique (sans déménageur spécifique)</option>
                 {movers.map((mover) => (
                   <option key={mover.id} value={mover.id}>
                     {mover.name} - {mover.company_name}
@@ -198,10 +197,7 @@ const PublicLinkManager = () => {
               </select>
             </div>
             <div className="flex space-x-2">
-              <Button 
-                onClick={createLink}
-                disabled={!selectedMoverId}
-              >
+              <Button onClick={createLink}>
                 Créer
               </Button>
               <Button variant="outline" onClick={() => setShowCreateForm(false)}>
@@ -227,7 +223,7 @@ const PublicLinkManager = () => {
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-800 mb-2">
-                    {mover ? `${mover.name} - ${mover.company_name}` : 'Déménageur inconnu'}
+                    {mover ? `${mover.name} - ${mover.company_name}` : 'Lien générique'}
                   </h3>
                   
                   <div className="space-y-2 text-sm text-gray-600">
