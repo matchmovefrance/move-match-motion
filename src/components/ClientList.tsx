@@ -1,409 +1,313 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, User, MapPin, Calendar, Volume2, Phone, Mail, Edit, Trash2 } from 'lucide-react';
+import { Plus, Users, Mail, Phone, Edit, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ListView } from '@/components/ui/list-view';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 interface Client {
   id: number;
   name: string;
   email: string;
   phone: string;
-  requests: ClientRequest[];
-}
-
-interface ClientRequest {
-  id: number;
-  desiredDate: string;
-  departureCity: string;
-  departurePostal: string;
-  arrivalCity: string;
-  arrivalPostal: string;
-  requiredVolume: number;
-  status: 'pending' | 'matched' | 'completed';
+  created_at: string;
 }
 
 const ClientList = () => {
-  const [showForm, setShowForm] = useState(false);
-  const [clients, setClients] = useState<Client[]>([
-    {
-      id: 1,
-      name: "Marie Dubois",
-      email: "marie.dubois@email.com",
-      phone: "06 12 34 56 78",
-      requests: [
-        {
-          id: 1,
-          desiredDate: "2024-06-16",
-          departureCity: "Paris",
-          departurePostal: "75008",
-          arrivalCity: "Lyon",
-          arrivalPostal: "69002",
-          requiredVolume: 6.0,
-          status: 'pending'
-        }
-      ]
-    },
-    {
-      id: 2,
-      name: "Jean Martin",
-      email: "jean.martin@email.com",
-      phone: "06 98 76 54 32",
-      requests: [
-        {
-          id: 2,
-          desiredDate: "2024-06-19",
-          departureCity: "Marseille",
-          departurePostal: "13008",
-          arrivalCity: "Nice",
-          arrivalPostal: "06300",
-          requiredVolume: 4.5,
-          status: 'matched'
-        }
-      ]
-    },
-    {
-      id: 3,
-      name: "Sophie Laurent",
-      email: "sophie.laurent@email.com",
-      phone: "06 11 22 33 44",
-      requests: [
-        {
-          id: 3,
-          desiredDate: "2024-06-22",
-          departureCity: "Toulouse",
-          departurePostal: "31000",
-          arrivalCity: "Bordeaux",
-          arrivalPostal: "33000",
-          requiredVolume: 8.2,
-          status: 'pending'
-        }
-      ]
-    }
-  ]);
-
-  const [formData, setFormData] = useState({
+  const { user } = useAuth();
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [newClient, setNewClient] = useState({
     name: '',
     email: '',
-    phone: '',
-    desiredDate: '',
-    departureCity: '',
-    departurePostal: '',
-    arrivalCity: '',
-    arrivalPostal: '',
-    requiredVolume: ''
+    phone: ''
   });
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newClient: Client = {
-      id: clients.length + 1,
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      requests: [
-        {
-          id: clients.length + 1,
-          desiredDate: formData.desiredDate,
-          departureCity: formData.departureCity,
-          departurePostal: formData.departurePostal,
-          arrivalCity: formData.arrivalCity,
-          arrivalPostal: formData.arrivalPostal,
-          requiredVolume: parseFloat(formData.requiredVolume),
-          status: 'pending'
-        }
-      ]
-    };
-    setClients([...clients, newClient]);
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      desiredDate: '',
-      departureCity: '',
-      departurePostal: '',
-      arrivalCity: '',
-      arrivalPostal: '',
-      requiredVolume: ''
-    });
-    setShowForm(false);
-  };
+  useEffect(() => {
+    fetchClients();
+  }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'yellow';
-      case 'matched': return 'green';
-      case 'completed': return 'blue';
-      default: return 'gray';
+  const fetchClients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setClients(data || []);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending': return 'En attente';
-      case 'matched': return 'Matché';
-      case 'completed': return 'Terminé';
-      default: return status;
+  const addClient = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .insert({
+          ...newClient,
+          created_by: user.id
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Client ajouté avec succès",
+      });
+
+      setNewClient({ name: '', email: '', phone: '' });
+      setShowAddForm(false);
+      fetchClients();
+    } catch (error: any) {
+      console.error('Error adding client:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'ajouter le client",
+        variant: "destructive",
+      });
     }
   };
 
-  return (
-    <div className="max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-3xl font-bold text-gray-800"
-          >
-            Gestion des Clients
-          </motion.h2>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-gray-600 mt-2"
-          >
-            Gérez vos clients et leurs demandes de déménagement
-          </motion.p>
+  const updateClient = async () => {
+    if (!editingClient) return;
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update(editingClient)
+        .eq('id', editingClient.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Client mis à jour avec succès",
+      });
+
+      setEditingClient(null);
+      fetchClients();
+    } catch (error: any) {
+      console.error('Error updating client:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le client",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteClient = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Client supprimé avec succès",
+      });
+
+      fetchClients();
+    } catch (error: any) {
+      console.error('Error deleting client:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le client",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const renderClientCard = (client: Client) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-800 mb-3">{client.name}</h3>
+          
+          <div className="space-y-2 text-sm text-gray-600">
+            <div className="flex items-center space-x-2">
+              <Mail className="h-4 w-4 text-blue-600" />
+              <span>{client.email}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Phone className="h-4 w-4 text-blue-600" />
+              <span>{client.phone}</span>
+            </div>
+            <div className="text-xs text-gray-400 mt-3">
+              Créé le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+            </div>
+          </div>
         </div>
         
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-shadow"
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditingClient(client)}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => deleteClient(client.id)}
+            className="text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderClientListItem = (client: Client) => (
+    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+      <div className="flex-1">
+        <div className="flex items-center space-x-4">
+          <div>
+            <h4 className="font-medium text-gray-800">{client.name}</h4>
+            <p className="text-sm text-gray-600">{client.email}</p>
+          </div>
+          <div className="text-sm text-gray-500">
+            <span>{client.phone}</span>
+          </div>
+          <div className="text-xs text-gray-400">
+            {new Date(client.created_at).toLocaleDateString('fr-FR')}
+          </div>
+        </div>
+      </div>
+      <div className="flex space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setEditingClient(client)}
         >
-          <Plus className="h-5 w-5" />
-          <span>Nouveau client</span>
-        </motion.button>
+          <Edit className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => deleteClient(client.id)}
+          className="text-red-600 hover:text-red-700"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <Users className="h-6 w-6 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-800">Clients</h2>
+        </div>
+        <Button
+          onClick={() => setShowAddForm(true)}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Ajouter un client
+        </Button>
       </div>
 
-      {/* Add Client Form */}
-      {showForm && (
+      {/* Add/Edit Form */}
+      {(showAddForm || editingClient) && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
         >
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Ajouter un nouveau client</h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom complet
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Téléphone
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date souhaitée
-              </label>
-              <input
-                type="date"
-                value={formData.desiredDate}
-                onChange={(e) => setFormData({...formData, desiredDate: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ville de départ
-              </label>
-              <input
-                type="text"
-                value={formData.departureCity}
-                onChange={(e) => setFormData({...formData, departureCity: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code postal départ
-              </label>
-              <input
-                type="text"
-                value={formData.departurePostal}
-                onChange={(e) => setFormData({...formData, departurePostal: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ville d'arrivée
-              </label>
-              <input
-                type="text"
-                value={formData.arrivalCity}
-                onChange={(e) => setFormData({...formData, arrivalCity: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code postal arrivée
-              </label>
-              <input
-                type="text"
-                value={formData.arrivalPostal}
-                onChange={(e) => setFormData({...formData, arrivalPostal: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Volume requis (m³)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={formData.requiredVolume}
-                onChange={(e) => setFormData({...formData, requiredVolume: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div className="md:col-span-2 flex space-x-4">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-shadow"
-              >
-                Ajouter le client
-              </button>
-            </div>
-          </form>
+          <h3 className="text-lg font-semibold mb-4">
+            {editingClient ? 'Modifier le client' : 'Nouveau client'}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input
+              placeholder="Nom complet"
+              value={editingClient ? editingClient.name : newClient.name}
+              onChange={(e) => editingClient 
+                ? setEditingClient({...editingClient, name: e.target.value})
+                : setNewClient({...newClient, name: e.target.value})
+              }
+            />
+            <Input
+              placeholder="Email"
+              type="email"
+              value={editingClient ? editingClient.email : newClient.email}
+              onChange={(e) => editingClient 
+                ? setEditingClient({...editingClient, email: e.target.value})
+                : setNewClient({...newClient, email: e.target.value})
+              }
+            />
+            <Input
+              placeholder="Téléphone"
+              value={editingClient ? editingClient.phone : newClient.phone}
+              onChange={(e) => editingClient 
+                ? setEditingClient({...editingClient, phone: e.target.value})
+                : setNewClient({...newClient, phone: e.target.value})
+              }
+            />
+          </div>
+          <div className="flex space-x-2 mt-4">
+            <Button onClick={editingClient ? updateClient : addClient}>
+              {editingClient ? 'Mettre à jour' : 'Ajouter'}
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowAddForm(false);
+                setEditingClient(null);
+              }}
+            >
+              Annuler
+            </Button>
+          </div>
         </motion.div>
       )}
 
-      {/* Clients Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {clients.map((client, index) => (
-          <motion.div
-            key={client.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300"
-          >
-            {/* Client Header */}
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <User className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">{client.name}</h3>
-                  <p className="text-sm text-gray-500">{client.requests.length} demande(s)</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 space-y-4">
-              {/* Contact Info */}
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 text-gray-600">
-                  <Mail className="h-4 w-4" />
-                  <span className="text-sm">{client.email}</span>
-                </div>
-                <div className="flex items-center space-x-2 text-gray-600">
-                  <Phone className="h-4 w-4" />
-                  <span className="text-sm">{client.phone}</span>
-                </div>
-              </div>
-
-              {/* Requests */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-gray-700">Demandes de déménagement</h4>
-                {client.requests.map((request) => (
-                  <div key={request.id} className="bg-gray-50 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className={`bg-${getStatusColor(request.status)}-100 text-${getStatusColor(request.status)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
-                        {getStatusLabel(request.status)}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(request.desiredDate).toLocaleDateString('fr-FR')}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 text-gray-600">
-                      <MapPin className="h-3 w-3" />
-                      <span className="text-xs">{request.departureCity} → {request.arrivalCity}</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 text-gray-600">
-                      <Volume2 className="h-3 w-3" />
-                      <span className="text-xs">{request.requiredVolume}m³</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Actions */}
-              <div className="flex space-x-2 pt-2 border-t border-gray-100">
-                <button className="flex-1 flex items-center justify-center space-x-1 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
-                  <Edit className="h-4 w-4" />
-                  <span className="text-sm">Modifier</span>
-                </button>
-                <button className="flex items-center justify-center p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      {/* ListView with search and pagination */}
+      <ListView
+        items={clients}
+        searchFields={['name', 'email', 'phone']}
+        renderCard={renderClientCard}
+        renderListItem={renderClientListItem}
+        searchPlaceholder="Rechercher par nom, email ou téléphone..."
+        emptyStateMessage="Aucun client trouvé"
+        emptyStateIcon={<Users className="h-12 w-12 text-gray-400 mx-auto" />}
+        itemsPerPage={10}
+      />
     </div>
   );
 };

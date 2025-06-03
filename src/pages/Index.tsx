@@ -1,6 +1,7 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MapPin, Calendar, Users, Truck, ArrowRight, LogOut } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Truck, ArrowRight, LogOut, Activity, Settings, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import MatchFinder from '../components/MatchFinder';
@@ -12,10 +13,56 @@ import MoverCalendar from '../components/MoverCalendar';
 import GoogleMap from '../components/GoogleMap';
 import PublicLinkManager from '../components/PublicLinkManager';
 import ServiceProviders from '../components/ServiceProviders';
+import Analytics from '../components/Analytics';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { profile, signOut } = useAuth();
+  const [stats, setStats] = useState({
+    confirmedMoves: 0,
+    activeClients: 0,
+    foundMatches: 0,
+    optimizedVolume: 0
+  });
+
+  useEffect(() => {
+    fetchRealStats();
+  }, []);
+
+  const fetchRealStats = async () => {
+    try {
+      // Get confirmed moves
+      const { data: moves } = await supabase
+        .from('confirmed_moves')
+        .select('used_volume');
+
+      // Get active clients
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('id');
+
+      // Get matches
+      const { data: matches } = await supabase
+        .from('move_matches')
+        .select('id');
+
+      // Calculate stats
+      const confirmedMoves = moves?.length || 0;
+      const activeClients = clients?.length || 0;
+      const foundMatches = matches?.length || 0;
+      const optimizedVolume = moves?.reduce((sum, move) => sum + (Number(move.used_volume) || 0), 0) || 0;
+
+      setStats({
+        confirmedMoves,
+        activeClients,
+        foundMatches,
+        optimizedVolume
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    }
+  };
 
   const tabVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -23,11 +70,11 @@ const Index = () => {
     exit: { opacity: 0, y: -20 }
   };
 
-  const stats = [
-    { label: 'Trajets confirmés', value: '248', icon: Truck, color: 'blue' },
-    { label: 'Clients actifs', value: '156', icon: Users, color: 'green' },
-    { label: 'Matchs trouvés', value: '89', icon: Search, color: 'purple' },
-    { label: 'Volume optimisé', value: '12.4m³', icon: MapPin, color: 'orange' },
+  const realStats = [
+    { label: 'Trajets confirmés', value: stats.confirmedMoves.toString(), icon: Truck, color: 'blue' },
+    { label: 'Clients actifs', value: stats.activeClients.toString(), icon: Users, color: 'green' },
+    { label: 'Matchs trouvés', value: stats.foundMatches.toString(), icon: Search, color: 'purple' },
+    { label: 'Volume optimisé', value: `${stats.optimizedVolume.toFixed(1)}m³`, icon: MapPin, color: 'orange' },
   ];
 
   const getTabsForRole = () => {
@@ -38,19 +85,23 @@ const Index = () => {
     if (profile?.role === 'admin') {
       return [
         ...baseTabs,
+        { id: 'analytics', label: 'Analytics', icon: BarChart3 },
         { id: 'matching', label: 'Matching', icon: Search },
         { id: 'moves', label: 'Déménagements', icon: Truck },
         { id: 'clients', label: 'Clients', icon: Users },
-        { id: 'users', label: 'Utilisateurs', icon: Users },
+        { id: 'movers', label: 'Déménageurs', icon: Truck },
         { id: 'providers', label: 'Prestataires', icon: MapPin },
+        { id: 'users', label: 'Utilisateurs', icon: Settings },
         { id: 'public-links', label: 'Liens publics', icon: Search },
       ];
     } else if (profile?.role === 'agent') {
       return [
         ...baseTabs,
+        { id: 'analytics', label: 'Analytics', icon: BarChart3 },
         { id: 'matching', label: 'Matching', icon: Search },
         { id: 'moves', label: 'Déménagements', icon: Truck },
         { id: 'clients', label: 'Clients', icon: Users },
+        { id: 'movers', label: 'Déménageurs', icon: Truck },
         { id: 'providers', label: 'Prestataires', icon: MapPin },
         { id: 'public-links', label: 'Liens publics', icon: Search },
       ];
@@ -65,11 +116,11 @@ const Index = () => {
   const tabs = getTabsForRole();
 
   // Set default tab based on role
-  useState(() => {
+  useEffect(() => {
     if (profile?.role === 'demenageur') {
       setActiveTab('calendar');
     }
-  });
+  }, [profile]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -98,19 +149,20 @@ const Index = () => {
             </motion.div>
             
             <div className="flex items-center space-x-4">
-              <nav className="hidden md:flex space-x-1 bg-gray-100 rounded-lg p-1">
+              {/* Compact navigation for large menus */}
+              <nav className="hidden md:flex space-x-1 bg-gray-100 rounded-lg p-1 max-w-4xl overflow-x-auto">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'bg-white text-blue-600 shadow-md'
                         : 'text-gray-600 hover:text-blue-600 hover:bg-white/50'
                     }`}
                   >
-                    <tab.icon className="h-4 w-4" />
-                    <span>{tab.label}</span>
+                    <tab.icon className="h-3 w-3" />
+                    <span className="hidden lg:inline">{tab.label}</span>
                   </button>
                 ))}
               </nav>
@@ -163,7 +215,7 @@ const Index = () => {
 
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {stats.map((stat, index) => (
+                {realStats.map((stat, index) => (
                   <motion.div
                     key={stat.label}
                     initial={{ opacity: 0, y: 20 }}
@@ -189,6 +241,19 @@ const Index = () => {
                 <h3 className="text-xl font-semibold text-gray-800 mb-4">Carte des trajets</h3>
                 <GoogleMap />
               </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <motion.div
+              key="analytics"
+              variants={tabVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <Analytics />
             </motion.div>
           )}
 
@@ -241,6 +306,19 @@ const Index = () => {
               transition={{ duration: 0.3 }}
             >
               <ClientList />
+            </motion.div>
+          )}
+
+          {activeTab === 'movers' && (
+            <motion.div
+              key="movers"
+              variants={tabVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <MoverList />
             </motion.div>
           )}
 
