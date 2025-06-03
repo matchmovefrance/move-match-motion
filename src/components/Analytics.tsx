@@ -1,199 +1,159 @@
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Calendar, TrendingUp, Users, Truck, MapPin, Activity, DollarSign, Target, Clock } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { TrendingUp, TrendingDown, Users, Calendar, Truck, MapPin, Activity, Target, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import MatchAnalytics from './MatchAnalytics';
 
 interface AnalyticsData {
-  totalMoves: number;
   totalClients: number;
   totalMovers: number;
-  totalRevenue: number;
-  avgMoveValue: number;
-  completionRate: number;
-  monthlyData: { month: string; moves: number; revenue: number; leads: number }[];
-  statusDistribution: { name: string; value: number; color: string }[];
-  topCities: { city: string; count: number; revenue: number }[];
-  dailyVolume: { date: string; volume: number; revenue: number }[];
-  recentLeads: { id: number; name: string; date: string; status: string; value: number }[];
+  totalMoves: number;
+  totalRequests: number;
+  clientGrowth: number;
+  moverGrowth: number;
+  moveGrowth: number;
+  requestGrowth: number;
+  monthlyData: Array<{
+    month: string;
+    clients: number;
+    movers: number;
+    moves: number;
+    requests: number;
+  }>;
+  statusDistribution: Array<{
+    status: string;
+    count: number;
+    color: string;
+  }>;
+  cityDistribution: Array<{
+    city: string;
+    count: number;
+  }>;
 }
 
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
 const Analytics = () => {
-  const [data, setData] = useState<AnalyticsData>({
-    totalMoves: 0,
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
     totalClients: 0,
     totalMovers: 0,
-    totalRevenue: 0,
-    avgMoveValue: 0,
-    completionRate: 0,
+    totalMoves: 0,
+    totalRequests: 0,
+    clientGrowth: 0,
+    moverGrowth: 0,
+    moveGrowth: 0,
+    requestGrowth: 0,
     monthlyData: [],
     statusDistribution: [],
-    topCities: [],
-    dailyVolume: [],
-    recentLeads: []
+    cityDistribution: []
   });
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({
-    start: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
-  });
 
   useEffect(() => {
     fetchAnalyticsData();
-  }, [dateRange]);
+  }, []);
 
   const fetchAnalyticsData = async () => {
     try {
-      console.log('Fetching analytics data for period:', dateRange);
+      setLoading(true);
       
-      // Récupérer les données des déménagements avec filtrage par date
-      const [movesResponse, clientsResponse, moversResponse] = await Promise.all([
-        supabase
-          .from('confirmed_moves')
-          .select('*')
-          .gte('departure_date', dateRange.start)
-          .lte('departure_date', dateRange.end),
-        supabase.from('client_requests').select('*'),
-        supabase.from('movers').select('*')
+      // Récupérer toutes les données nécessaires
+      const [clientsResult, moversResult, movesResult, requestsResult] = await Promise.all([
+        supabase.from('clients').select('*'),
+        supabase.from('movers').select('*'),
+        supabase.from('confirmed_moves').select('*'),
+        supabase.from('client_requests').select('*')
       ]);
 
-      const moves = movesResponse.data || [];
-      const clients = clientsResponse.data || [];
-      const movers = moversResponse.data || [];
+      const clients = clientsResult.data || [];
+      const movers = moversResult.data || [];
+      const moves = movesResult.data || [];
+      const requests = requestsResult.data || [];
 
-      // Calculer les métriques principales
-      const totalRevenue = moves.reduce((sum, move) => sum + (move.total_price || 0), 0);
-      const avgMoveValue = moves.length > 0 ? totalRevenue / moves.length : 0;
-      const completedMoves = moves.filter(move => move.status === 'completed').length;
-      const completionRate = moves.length > 0 ? (completedMoves / moves.length) * 100 : 0;
+      // Calculer les statistiques de croissance (simulation pour les 30 derniers jours)
+      const last30Days = new Date();
+      last30Days.setDate(last30Days.getDate() - 30);
 
-      // Données mensuelles avec leads
-      const monthlyMap = new Map();
-      moves.forEach(move => {
-        const date = new Date(move.departure_date);
-        const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-        const monthName = date.toLocaleDateString('fr-FR', { month: 'short' });
-        
-        if (!monthlyMap.has(monthKey)) {
-          monthlyMap.set(monthKey, { 
-            month: monthName, 
-            moves: 0, 
-            revenue: 0, 
-            leads: 0 
-          });
-        }
-        
-        const monthData = monthlyMap.get(monthKey);
-        monthData.moves += 1;
-        monthData.revenue += move.total_price || 0;
-      });
-
-      // Ajouter les leads (client_requests) aux données mensuelles
-      clients.forEach(client => {
-        const date = new Date(client.created_at);
-        const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-        
-        if (monthlyMap.has(monthKey)) {
-          monthlyMap.get(monthKey).leads += 1;
-        }
-      });
-
-      const monthlyData = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+      const recentClients = clients.filter(c => new Date(c.created_at) > last30Days);
+      const recentMovers = movers.filter(m => new Date(m.created_at) > last30Days);
+      const recentMoves = moves.filter(m => new Date(m.created_at) > last30Days);
+      const recentRequests = requests.filter(r => new Date(r.created_at) > last30Days);
 
       // Distribution des statuts
-      const statusCount = moves.reduce((acc, move) => {
-        acc[move.status] = (acc[move.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const statusDistribution = [
-        { name: 'Confirmé', value: statusCount.confirmed || 0, color: '#82ca9d' },
-        { name: 'En cours', value: statusCount.pending || 0, color: '#8884d8' },
-        { name: 'Terminé', value: statusCount.completed || 0, color: '#ffc658' }
-      ];
-
-      // Top villes avec revenus
-      const cityMap = new Map();
-      moves.forEach(move => {
-        const city = move.departure_city;
-        if (!cityMap.has(city)) {
-          cityMap.set(city, { city, count: 0, revenue: 0 });
-        }
-        const cityData = cityMap.get(city);
-        cityData.count += 1;
-        cityData.revenue += move.total_price || 0;
+      const statusCounts: { [key: string]: number } = {};
+      [...moves, ...requests].forEach(item => {
+        const status = item.status_custom || item.status || 'unknown';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
       });
 
-      const topCities = Array.from(cityMap.values())
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
+      const statusDistribution = Object.entries(statusCounts).map(([status, count], index) => ({
+        status: status === 'en_cours' ? 'En cours' : status === 'termine' ? 'Terminé' : status.charAt(0).toUpperCase() + status.slice(1),
+        count,
+        color: COLORS[index % COLORS.length]
+      }));
 
-      // Volume quotidien des 30 derniers jours
-      const dailyMap = new Map();
-      const last30Days = Array.from({ length: 30 }, (_, i) => {
+      // Distribution par ville (top 5)
+      const cityCounts: { [key: string]: number } = {};
+      [...moves, ...requests].forEach(item => {
+        const city = item.departure_city || item.arrival_city;
+        if (city) {
+          cityCounts[city] = (cityCounts[city] || 0) + 1;
+        }
+      });
+
+      const cityDistribution = Object.entries(cityCounts)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([city, count]) => ({ city, count }));
+
+      // Données mensuelles (6 derniers mois)
+      const monthlyData = Array.from({ length: 6 }, (_, i) => {
         const date = new Date();
-        date.setDate(date.getDate() - (29 - i));
-        return date;
-      });
+        date.setMonth(date.getMonth() - i);
+        const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+        const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
-      last30Days.forEach(date => {
-        const dateKey = date.toISOString().split('T')[0];
-        dailyMap.set(dateKey, {
-          date: date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
-          volume: 0,
-          revenue: 0
-        });
-      });
+        return {
+          month: date.toLocaleDateString('fr-FR', { month: 'short' }),
+          clients: clients.filter(c => {
+            const createdAt = new Date(c.created_at);
+            return createdAt >= monthStart && createdAt <= monthEnd;
+          }).length,
+          movers: movers.filter(m => {
+            const createdAt = new Date(m.created_at);
+            return createdAt >= monthStart && createdAt <= monthEnd;
+          }).length,
+          moves: moves.filter(m => {
+            const createdAt = new Date(m.created_at);
+            return createdAt >= monthStart && createdAt <= monthEnd;
+          }).length,
+          requests: requests.filter(r => {
+            const createdAt = new Date(r.created_at);
+            return createdAt >= monthStart && createdAt <= monthEnd;
+          }).length
+        };
+      }).reverse();
 
-      moves.forEach(move => {
-        const dateKey = move.departure_date;
-        if (dailyMap.has(dateKey)) {
-          const dayData = dailyMap.get(dateKey);
-          dayData.volume += 1;
-          dayData.revenue += move.total_price || 0;
-        }
-      });
-
-      const dailyVolume = Array.from(dailyMap.values());
-
-      // Leads récents
-      const recentLeads = clients
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 10)
-        .map(client => ({
-          id: client.id,
-          name: client.name || 'Client anonyme',
-          date: new Date(client.created_at).toLocaleDateString('fr-FR'),
-          status: client.status,
-          value: client.quote_amount || 0
-        }));
-
-      setData({
-        totalMoves: moves.length,
+      setAnalyticsData({
         totalClients: clients.length,
         totalMovers: movers.length,
-        totalRevenue,
-        avgMoveValue,
-        completionRate,
+        totalMoves: moves.length,
+        totalRequests: requests.length,
+        clientGrowth: recentClients.length,
+        moverGrowth: recentMovers.length,
+        moveGrowth: recentMoves.length,
+        requestGrowth: recentRequests.length,
         monthlyData,
         statusDistribution,
-        topCities,
-        dailyVolume,
-        recentLeads
+        cityDistribution
       });
 
-      console.log('Analytics data loaded:', { 
-        totalMoves: moves.length, 
-        totalRevenue, 
-        avgMoveValue 
-      });
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      console.error('Erreur lors du chargement des analytics:', error);
     } finally {
       setLoading(false);
     }
@@ -201,271 +161,167 @@ const Analytics = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="ml-2 text-gray-600">Chargement des analytics...</p>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des analytics...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header avec filtres de période */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Activity className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Dashboard Déménagement</h2>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <div>
-            <Label htmlFor="start-date">Du</Label>
-            <Input
-              id="start-date"
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-              className="w-auto"
-            />
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-gray-800">Analytics & Reporting</h1>
+        <button 
+          onClick={fetchAnalyticsData}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Actualiser
+        </button>
+      </div>
+
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+          <TabsTrigger value="matches">Analytics Matchs</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {/* Métriques principales */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Clients</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analyticsData.totalClients}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-green-600">+{analyticsData.clientGrowth}</span> ce mois
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Déménageurs</CardTitle>
+                <Truck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analyticsData.totalMovers}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-green-600">+{analyticsData.moverGrowth}</span> ce mois
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Déménagements</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analyticsData.totalMoves}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-green-600">+{analyticsData.moveGrowth}</span> ce mois
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Demandes</CardTitle>
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analyticsData.totalRequests}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-green-600">+{analyticsData.requestGrowth}</span> ce mois
+                </p>
+              </CardContent>
+            </Card>
           </div>
-          <div>
-            <Label htmlFor="end-date">Au</Label>
-            <Input
-              id="end-date"
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-              className="w-auto"
-            />
+
+          {/* Graphiques */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Évolution mensuelle */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Évolution Mensuelle</CardTitle>
+                <CardDescription>Croissance sur les 6 derniers mois</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={analyticsData.monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="clients" stroke="#8884d8" name="Clients" />
+                    <Line type="monotone" dataKey="movers" stroke="#82ca9d" name="Déménageurs" />
+                    <Line type="monotone" dataKey="moves" stroke="#ffc658" name="Déménagements" />
+                    <Line type="monotone" dataKey="requests" stroke="#ff7300" name="Demandes" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Distribution des statuts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribution des Statuts</CardTitle>
+                <CardDescription>Répartition par état d'avancement</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={analyticsData.statusDistribution}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ status, count }) => `${status}: ${count}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="count"
+                    >
+                      {analyticsData.statusDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
           </div>
-          <Button onClick={fetchAnalyticsData} variant="outline">
-            Actualiser
-          </Button>
-        </div>
-      </div>
 
-      {/* KPI Cards principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Chiffre d'Affaires</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{data.totalRevenue.toLocaleString('fr-FR')}€</div>
-              <p className="text-xs text-muted-foreground">
-                Moyenne par déménagement: {data.avgMoveValue.toLocaleString('fr-FR')}€
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Déménagements</CardTitle>
-              <Truck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{data.totalMoves}</div>
-              <p className="text-xs text-muted-foreground">
-                Taux de réalisation: {data.completionRate.toFixed(1)}%
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Leads Générés</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{data.totalClients}</div>
-              <p className="text-xs text-muted-foreground">
-                Taux de conversion: {data.totalMoves > 0 ? ((data.totalMoves / data.totalClients) * 100).toFixed(1) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Partenaires</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{data.totalMovers}</div>
-              <p className="text-xs text-muted-foreground">
-                Déménageurs actifs
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Graphiques principaux */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Évolution mensuelle avec leads */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          {/* Top villes */}
           <Card>
             <CardHeader>
-              <CardTitle>Évolution Mensuelle (Déménagements, CA, Leads)</CardTitle>
+              <CardTitle>Top Villes</CardTitle>
+              <CardDescription>Villes les plus actives</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data.monthlyData}>
+                <BarChart data={analyticsData.cityDistribution}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip formatter={(value, name) => [
-                    name === 'revenue' ? `${value.toLocaleString('fr-FR')}€` : value,
-                    name === 'moves' ? 'Déménagements' :
-                    name === 'revenue' ? 'CA (€)' : 'Leads'
-                  ]} />
-                  <Legend />
-                  <Line yAxisId="left" type="monotone" dataKey="moves" stroke="#8884d8" name="Déménagements" />
-                  <Line yAxisId="left" type="monotone" dataKey="leads" stroke="#ff7c7c" name="Leads" />
-                  <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#82ca9d" name="Revenue (€)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Répartition des statuts */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Répartition des Statuts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={data.statusDistribution}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {data.statusDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Graphiques secondaires */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Volume quotidien */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Activité des 30 derniers jours</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data.dailyVolume}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
+                  <XAxis dataKey="city" />
                   <YAxis />
-                  <Tooltip formatter={(value, name) => [
-                    name === 'revenue' ? `${value.toLocaleString('fr-FR')}€` : value,
-                    name === 'volume' ? 'Déménagements' : 'Revenue'
-                  ]} />
-                  <Bar dataKey="volume" fill="#8884d8" />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
-        </motion.div>
+        </TabsContent>
 
-        {/* Top villes avec CA */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Villes (Volume & CA)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {data.topCities.map((city, index) => (
-                  <div key={city.city} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <MapPin className="h-4 w-4 text-blue-600" />
-                      <div>
-                        <span className="font-medium">{city.city}</span>
-                        <p className="text-sm text-gray-600">{city.count} déménagements</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium">{city.revenue.toLocaleString('fr-FR')}€</div>
-                      <div className="w-20 bg-gray-200 rounded-full h-2 mt-1">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{ 
-                            width: `${Math.max(10, (city.count / Math.max(1, Math.max(...data.topCities.map(c => c.count)))) * 100)}%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Leads récents */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Clock className="h-5 w-5" />
-              <span>Derniers Leads Générés</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.recentLeads.map((lead) => (
-                <div key={lead.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <div className="font-medium">{lead.name}</div>
-                    <div className="text-sm text-gray-600">{lead.date}</div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      lead.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      lead.status === 'matched' ? 'bg-green-100 text-green-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {lead.status === 'pending' ? 'En attente' : 
-                       lead.status === 'matched' ? 'Matché' : lead.status}
-                    </span>
-                    {lead.value > 0 && (
-                      <span className="font-medium text-green-600">
-                        {lead.value.toLocaleString('fr-FR')}€
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+        <TabsContent value="matches">
+          <MatchAnalytics />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

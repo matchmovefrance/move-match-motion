@@ -251,6 +251,36 @@ export type Database = {
           },
         ]
       }
+      match_actions: {
+        Row: {
+          action_date: string
+          action_type: string
+          created_at: string
+          id: string
+          match_id: number
+          notes: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_date?: string
+          action_type: string
+          created_at?: string
+          id?: string
+          match_id: number
+          notes?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_date?: string
+          action_type?: string
+          created_at?: string
+          id?: string
+          match_id?: number
+          notes?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       move_matches: {
         Row: {
           client_request_id: number

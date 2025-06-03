@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Check, X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { ListView } from '@/components/ui/list-view';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Match {
   id: number;
@@ -87,14 +89,80 @@ const MatchFinder = () => {
     setShowListView(true);
   };
 
-  const handleAccept = (matchId: number) => {
-    setAcceptedMatches(prev => [...prev, matchId]);
-    setCurrentMatchIndex(prev => prev + 1);
+  const handleAccept = async (matchId: number) => {
+    try {
+      console.log('Accepting match:', matchId);
+      
+      // Sauvegarder l'action dans la base de données
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error('Vous devez être connecté pour effectuer cette action');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('match_actions')
+        .insert({
+          match_id: matchId,
+          action_type: 'accepted',
+          user_id: user.id,
+          notes: `Match accepté - Score: ${matches.find(m => m.id === matchId)?.matchScore}%`
+        });
+
+      if (error) {
+        console.error('Erreur lors de la sauvegarde:', error);
+        toast.error('Erreur lors de la sauvegarde de l\'action');
+        return;
+      }
+
+      setAcceptedMatches(prev => [...prev, matchId]);
+      setCurrentMatchIndex(prev => prev + 1);
+      toast.success('Match accepté avec succès !');
+      
+      console.log('Match accepté et sauvegardé:', matchId);
+    } catch (error) {
+      console.error('Erreur lors de l\'acceptation du match:', error);
+      toast.error('Erreur lors de l\'acceptation du match');
+    }
   };
 
-  const handleReject = (matchId: number) => {
-    setRejectedMatches(prev => [...prev, matchId]);
-    setCurrentMatchIndex(prev => prev + 1);
+  const handleReject = async (matchId: number) => {
+    try {
+      console.log('Rejecting match:', matchId);
+      
+      // Sauvegarder l'action dans la base de données
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error('Vous devez être connecté pour effectuer cette action');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('match_actions')
+        .insert({
+          match_id: matchId,
+          action_type: 'rejected',
+          user_id: user.id,
+          notes: `Match rejeté - Score: ${matches.find(m => m.id === matchId)?.matchScore}%`
+        });
+
+      if (error) {
+        console.error('Erreur lors de la sauvegarde:', error);
+        toast.error('Erreur lors de la sauvegarde de l\'action');
+        return;
+      }
+
+      setRejectedMatches(prev => [...prev, matchId]);
+      setCurrentMatchIndex(prev => prev + 1);
+      toast.success('Match rejeté');
+      
+      console.log('Match rejeté et sauvegardé:', matchId);
+    } catch (error) {
+      console.error('Erreur lors du rejet du match:', error);
+      toast.error('Erreur lors du rejet du match');
+    }
   };
 
   const getTypeLabel = (type: string) => {
@@ -115,109 +183,157 @@ const MatchFinder = () => {
     }
   };
 
-  const renderMatchCard = (match: Match) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-3 py-1 rounded-full text-sm font-medium`}>
-          {getTypeLabel(match.type)}
-        </div>
-        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-          <span className="text-white font-bold text-sm">{match.matchScore}%</span>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">Client</p>
-            <p className="font-semibold text-gray-800">{match.clientName}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Déménageur</p>
-            <p className="font-semibold text-gray-800">{match.moveName}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2 text-gray-600">
-          <MapPin className="h-4 w-4" />
-          <span className="text-sm">{match.departureCity} → {match.arrivalCity}</span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-          <div className="text-center">
-            <p className="text-sm text-gray-500">Distance</p>
-            <p className="font-semibold text-gray-800">{match.distanceKm} km</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-gray-500">Décalage</p>
-            <p className="font-semibold text-gray-800">{match.dateDiffDays}j</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-gray-500">Volume</p>
-            <p className="font-semibold text-gray-800">{match.combinedVolume}m³</p>
-          </div>
-        </div>
-
-        <div className="flex space-x-2 pt-4">
-          <button
-            onClick={() => handleReject(match.id)}
-            className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            <X className="h-4 w-4" />
-            <span>Rejeter</span>
-          </button>
-          
-          <button
-            onClick={() => handleAccept(match.id)}
-            className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition-all"
-          >
-            <Check className="h-4 w-4" />
-            <span>Accepter</span>
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  const renderMatchListItem = (match: Match) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex-1">
-        <div className="flex items-center space-x-4">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-xs">{match.matchScore}%</span>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-800">{match.clientName}</h4>
-            <p className="text-sm text-gray-600">{match.moveName}</p>
-          </div>
-          <div className="text-sm text-gray-500">
-            <span>{match.departureCity} → {match.arrivalCity}</span>
-          </div>
-          <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
+  const renderMatchCard = (match: Match) => {
+    const isAccepted = acceptedMatches.includes(match.id);
+    const isRejected = rejectedMatches.includes(match.id);
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`bg-white rounded-xl p-6 shadow-lg border border-gray-100 ${
+          isAccepted ? 'ring-2 ring-green-500 bg-green-50' : 
+          isRejected ? 'ring-2 ring-red-500 bg-red-50' : ''
+        }`}
+      >
+        <div className="flex justify-between items-start mb-4">
+          <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-3 py-1 rounded-full text-sm font-medium`}>
             {getTypeLabel(match.type)}
           </div>
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+            <span className="text-white font-bold text-sm">{match.matchScore}%</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Client</p>
+              <p className="font-semibold text-gray-800">{match.clientName}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-500">Déménageur</p>
+              <p className="font-semibold text-gray-800">{match.moveName}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 text-gray-600">
+            <MapPin className="h-4 w-4" />
+            <span className="text-sm">{match.departureCity} → {match.arrivalCity}</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+            <div className="text-center">
+              <p className="text-sm text-gray-500">Distance</p>
+              <p className="font-semibold text-gray-800">{match.distanceKm} km</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-500">Décalage</p>
+              <p className="font-semibold text-gray-800">{match.dateDiffDays}j</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-500">Volume</p>
+              <p className="font-semibold text-gray-800">{match.combinedVolume}m³</p>
+            </div>
+          </div>
+
+          {isAccepted && (
+            <div className="flex items-center justify-center space-x-2 pt-4 text-green-600">
+              <Check className="h-5 w-5" />
+              <span className="font-medium">Match Accepté</span>
+            </div>
+          )}
+
+          {isRejected && (
+            <div className="flex items-center justify-center space-x-2 pt-4 text-red-600">
+              <X className="h-5 w-5" />
+              <span className="font-medium">Match Rejeté</span>
+            </div>
+          )}
+
+          {!isAccepted && !isRejected && (
+            <div className="flex space-x-2 pt-4">
+              <button
+                onClick={() => handleReject(match.id)}
+                className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+                <span>Rejeter</span>
+              </button>
+              
+              <button
+                onClick={() => handleAccept(match.id)}
+                className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition-all"
+              >
+                <Check className="h-4 w-4" />
+                <span>Accepter</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderMatchListItem = (match: Match) => {
+    const isAccepted = acceptedMatches.includes(match.id);
+    const isRejected = rejectedMatches.includes(match.id);
+    
+    return (
+      <div className={`flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow ${
+        isAccepted ? 'ring-2 ring-green-500 bg-green-50' : 
+        isRejected ? 'ring-2 ring-red-500 bg-red-50' : ''
+      }`}>
+        <div className="flex-1">
+          <div className="flex items-center space-x-4">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-xs">{match.matchScore}%</span>
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-800">{match.clientName}</h4>
+              <p className="text-sm text-gray-600">{match.moveName}</p>
+            </div>
+            <div className="text-sm text-gray-500">
+              <span>{match.departureCity} → {match.arrivalCity}</span>
+            </div>
+            <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
+              {getTypeLabel(match.type)}
+            </div>
+          </div>
+        </div>
+        <div className="flex space-x-2">
+          {isAccepted && (
+            <div className="flex items-center space-x-1 text-green-600">
+              <Check className="h-4 w-4" />
+              <span className="text-sm font-medium">Accepté</span>
+            </div>
+          )}
+          {isRejected && (
+            <div className="flex items-center space-x-1 text-red-600">
+              <X className="h-4 w-4" />
+              <span className="text-sm font-medium">Rejeté</span>
+            </div>
+          )}
+          {!isAccepted && !isRejected && (
+            <>
+              <button
+                onClick={() => handleReject(match.id)}
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm"
+              >
+                Rejeter
+              </button>
+              <button
+                onClick={() => handleAccept(match.id)}
+                className="px-3 py-1 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded hover:from-green-600 hover:to-blue-600 transition-all text-sm"
+              >
+                Accepter
+              </button>
+            </>
+          )}
         </div>
       </div>
-      <div className="flex space-x-2">
-        <button
-          onClick={() => handleReject(match.id)}
-          className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm"
-        >
-          Rejeter
-        </button>
-        <button
-          onClick={() => handleAccept(match.id)}
-          className="px-3 py-1 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded hover:from-green-600 hover:to-blue-600 transition-all text-sm"
-        >
-          Accepter
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const currentMatch = matches[currentMatchIndex];
   const hasMoreMatches = currentMatchIndex < matches.length;
