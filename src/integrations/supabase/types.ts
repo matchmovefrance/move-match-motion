@@ -301,6 +301,48 @@ export type Database = {
           },
         ]
       }
+      service_providers: {
+        Row: {
+          address: string
+          city: string
+          company_name: string
+          coordinates: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string
+          id: number
+          name: string
+          phone: string
+          postal_code: string
+        }
+        Insert: {
+          address: string
+          city: string
+          company_name: string
+          coordinates?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email: string
+          id?: number
+          name: string
+          phone: string
+          postal_code: string
+        }
+        Update: {
+          address?: string
+          city?: string
+          company_name?: string
+          coordinates?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string
+          id?: number
+          name?: string
+          phone?: string
+          postal_code?: string
+        }
+        Relationships: []
+      }
       trucks: {
         Row: {
           created_at: string

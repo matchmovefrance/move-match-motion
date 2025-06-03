@@ -44,6 +44,7 @@ const GoogleMap = () => {
   const [clientRequests, setClientRequests] = useState<ClientRequest[]>([]);
   const [selectedMover, setSelectedMover] = useState<any>(null);
   const [showMoverInfo, setShowMoverInfo] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const GOOGLE_MAPS_API_KEY = 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
 
@@ -54,7 +55,8 @@ const GoogleMap = () => {
   }, []);
 
   const loadGoogleMapsScript = () => {
-    if (window.google) {
+    if (typeof google !== 'undefined' && google.maps) {
+      setIsLoaded(true);
       initializeMap();
       return;
     }
@@ -63,12 +65,15 @@ const GoogleMap = () => {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
     script.async = true;
     script.defer = true;
-    script.onload = initializeMap;
+    script.onload = () => {
+      setIsLoaded(true);
+      initializeMap();
+    };
     document.head.appendChild(script);
   };
 
   const initializeMap = () => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || typeof google === 'undefined') return;
 
     const mapInstance = new google.maps.Map(mapRef.current, {
       center: { lat: 46.603354, lng: 1.888334 }, // Center of France
@@ -135,7 +140,7 @@ const GoogleMap = () => {
 
   const geocodeAddress = (postalCode: string, city: string): Promise<google.maps.LatLng | null> => {
     return new Promise((resolve) => {
-      if (!window.google) {
+      if (typeof google === 'undefined' || !google.maps) {
         resolve(null);
         return;
       }
@@ -147,6 +152,7 @@ const GoogleMap = () => {
           if (status === 'OK' && results && results[0]) {
             resolve(results[0].geometry.location);
           } else {
+            console.warn(`Geocoding failed for ${postalCode} ${city}:`, status);
             resolve(null);
           }
         }
@@ -155,7 +161,9 @@ const GoogleMap = () => {
   };
 
   const addMarkers = async () => {
-    if (!map) return;
+    if (!map || typeof google === 'undefined') return;
+
+    console.log('Adding markers for', moves.length, 'moves and', clientRequests.length, 'client requests');
 
     // Add markers for confirmed moves (blue)
     for (const move of moves) {
@@ -179,7 +187,6 @@ const GoogleMap = () => {
           title: `Départ: ${move.departure_city} (${new Date(move.departure_date).toLocaleDateString('fr-FR')})`
         });
 
-        // Add click event to show mover info
         departureMarker.addListener('click', () => {
           setSelectedMover(move.movers);
           setShowMoverInfo(true);
@@ -197,7 +204,6 @@ const GoogleMap = () => {
           title: `Arrivée: ${move.arrival_city}`
         });
 
-        // Add click event to show mover info
         arrivalMarker.addListener('click', () => {
           setSelectedMover(move.movers);
           setShowMoverInfo(true);
@@ -272,10 +278,18 @@ const GoogleMap = () => {
   };
 
   useEffect(() => {
-    if (map && (moves.length > 0 || clientRequests.length > 0)) {
+    if (map && isLoaded && (moves.length > 0 || clientRequests.length > 0)) {
       addMarkers();
     }
-  }, [map, moves, clientRequests]);
+  }, [map, moves, clientRequests, isLoaded]);
+
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-96 rounded-lg shadow-lg border border-gray-200 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-96 rounded-lg shadow-lg border border-gray-200 relative">

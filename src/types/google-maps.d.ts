@@ -1,101 +1,99 @@
 
-declare global {
-  interface Window {
-    google: typeof google;
-  }
-}
-
 declare namespace google {
   namespace maps {
     class Map {
-      constructor(mapDiv: Element | null, opts?: MapOptions);
+      constructor(mapDiv: HTMLElement, opts?: MapOptions);
+      addListener(eventName: string, handler: () => void): void;
+      getCenter(): LatLng;
+      getZoom(): number;
+      easeTo(options: { center: LatLng; duration: number; easing: (n: number) => number }): void;
+      setFog(options: {
+        color: string;
+        'high-color': string;
+        'horizon-blend': number;
+      }): void;
+      on(eventName: string, handler: () => void): void;
+      scrollZoom: {
+        disable(): void;
+      };
+      addControl(control: any, position: string): void;
+      remove(): void;
     }
-    
-    class Marker {
-      constructor(opts?: MarkerOptions);
+
+    interface MapOptions {
+      center?: LatLng | LatLngLiteral;
+      zoom?: number;
+      styles?: any[];
+      projection?: string;
+      pitch?: number;
     }
-    
-    class Polyline {
-      constructor(opts?: PolylineOptions);
-    }
-    
-    class Geocoder {
-      geocode(request: GeocoderRequest, callback: (results: GeocoderResult[] | null, status: GeocoderStatus) => void): void;
-    }
-    
+
     class LatLng {
       constructor(lat: number, lng: number);
       lat(): number;
       lng(): number;
+      lng: number;
     }
-    
-    class Size {
-      constructor(width: number, height: number);
-    }
-    
-    interface MapOptions {
-      center?: LatLng | LatLngLiteral;
-      zoom?: number;
-      styles?: MapTypeStyle[];
-    }
-    
-    interface MarkerOptions {
-      position?: LatLng | LatLngLiteral;
-      map?: Map;
-      title?: string;
-      icon?: string | Icon;
-    }
-    
-    interface Icon {
-      url: string;
-      scaledSize?: Size;
-    }
-    
-    interface PolylineOptions {
-      path?: LatLng[] | LatLngLiteral[];
-      geodesic?: boolean;
-      strokeColor?: string;
-      strokeOpacity?: number;
-      strokeWeight?: number;
-      map?: Map;
-      icons?: IconSequence[];
-    }
-    
-    interface IconSequence {
-      icon: Symbol;
-      offset: string;
-      repeat: string;
-    }
-    
-    interface Symbol {
-      path: string;
-      strokeOpacity: number;
-      scale: number;
-    }
-    
+
     interface LatLngLiteral {
       lat: number;
       lng: number;
     }
-    
-    interface MapTypeStyle {
-      featureType?: string;
-      elementType?: string;
-      stylers?: any[];
+
+    class Marker {
+      constructor(opts: MarkerOptions);
+      addListener(eventName: string, handler: () => void): void;
     }
-    
-    interface GeocoderRequest {
-      address?: string;
+
+    interface MarkerOptions {
+      position: LatLng | LatLngLiteral;
+      map: Map;
+      icon?: {
+        url: string;
+        scaledSize: Size;
+      };
+      title?: string;
     }
-    
+
+    class Size {
+      constructor(width: number, height: number);
+    }
+
+    class Polyline {
+      constructor(opts: PolylineOptions);
+    }
+
+    interface PolylineOptions {
+      path: (LatLng | LatLngLiteral)[];
+      geodesic: boolean;
+      strokeColor: string;
+      strokeOpacity: number;
+      strokeWeight: number;
+      map: Map;
+      icons?: Array<{
+        icon: { path: string; strokeOpacity: number; scale: number };
+        offset: string;
+        repeat: string;
+      }>;
+    }
+
+    class Geocoder {
+      geocode(
+        request: { address: string },
+        callback: (results: GeocoderResult[] | null, status: string) => void
+      ): void;
+    }
+
     interface GeocoderResult {
       geometry: {
         location: LatLng;
       };
     }
-    
-    type GeocoderStatus = string;
+
+    class NavigationControl {
+      constructor(options?: { visualizePitch: boolean });
+    }
   }
 }
 
-export {};
+declare var google: typeof google;

@@ -1,26 +1,11 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, MapPin, Phone, Mail, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, MapPin, Phone, Mail, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
+import { ListView } from '@/components/ui/list-view';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -41,12 +26,9 @@ interface ServiceProvider {
 const ServiceProviders = () => {
   const { user } = useAuth();
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
-  const [filteredProviders, setFilteredProviders] = useState<ServiceProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ServiceProvider | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [newProvider, setNewProvider] = useState({
     name: '',
     company_name: '',
@@ -59,22 +41,9 @@ const ServiceProviders = () => {
   });
   const { toast } = useToast();
 
-  const providersPerPage = 10;
-
   useEffect(() => {
     fetchProviders();
   }, []);
-
-  useEffect(() => {
-    const filtered = providers.filter(provider =>
-      provider.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      provider.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      provider.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      provider.city.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredProviders(filtered);
-    setCurrentPage(1);
-  }, [providers, searchTerm]);
 
   const fetchProviders = async () => {
     try {
@@ -187,9 +156,92 @@ const ServiceProviders = () => {
     }
   };
 
-  const totalPages = Math.ceil(filteredProviders.length / providersPerPage);
-  const startIndex = (currentPage - 1) * providersPerPage;
-  const currentProviders = filteredProviders.slice(startIndex, startIndex + providersPerPage);
+  const renderProviderCard = (provider: ServiceProvider) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-800 mb-2">{provider.name}</h3>
+          <p className="text-gray-600 mb-3">{provider.company_name}</p>
+          
+          <div className="space-y-2 text-sm text-gray-600">
+            <div className="flex items-center space-x-2">
+              <Mail className="h-4 w-4 text-blue-600" />
+              <span>{provider.email}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Phone className="h-4 w-4 text-blue-600" />
+              <span>{provider.phone}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-4 w-4 text-blue-600" />
+              <span>{provider.address}, {provider.postal_code} {provider.city}</span>
+            </div>
+            {provider.coordinates && (
+              <div className="text-xs text-blue-600">{provider.coordinates}</div>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditingProvider(provider)}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => deleteProvider(provider.id)}
+            className="text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderProviderListItem = (provider: ServiceProvider) => (
+    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+      <div className="flex-1">
+        <div className="flex items-center space-x-4">
+          <div>
+            <h4 className="font-medium text-gray-800">{provider.name}</h4>
+            <p className="text-sm text-gray-600">{provider.company_name}</p>
+          </div>
+          <div className="text-sm text-gray-500">
+            <span>{provider.email}</span> • <span>{provider.phone}</span>
+          </div>
+          <div className="text-sm text-gray-500">
+            {provider.postal_code} {provider.city}
+          </div>
+        </div>
+      </div>
+      <div className="flex space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setEditingProvider(provider)}
+        >
+          <Edit className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => deleteProvider(provider.id)}
+          className="text-red-600 hover:text-red-700"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -213,19 +265,6 @@ const ServiceProviders = () => {
           <Plus className="h-4 w-4 mr-2" />
           Ajouter un prestataire
         </Button>
-      </div>
-
-      {/* Search Bar */}
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Rechercher par nom, entreprise, email ou ville..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
       </div>
 
       {/* Add/Edit Form */}
@@ -322,115 +361,17 @@ const ServiceProviders = () => {
         </motion.div>
       )}
 
-      {/* Providers Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Liste des prestataires ({filteredProviders.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Entreprise</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Localisation</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {currentProviders.map((provider) => (
-                <TableRow key={provider.id}>
-                  <TableCell className="font-medium">{provider.name}</TableCell>
-                  <TableCell>{provider.company_name}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-1">
-                        <Mail className="h-3 w-3 text-gray-400" />
-                        <span className="text-sm">{provider.email}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Phone className="h-3 w-3 text-gray-400" />
-                        <span className="text-sm">{provider.phone}</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="text-sm">{provider.address}</div>
-                      <div className="text-sm text-gray-500">
-                        {provider.postal_code} {provider.city}
-                      </div>
-                      {provider.coordinates && (
-                        <div className="text-xs text-blue-600">{provider.coordinates}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditingProvider(provider)}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteProvider(provider.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          {filteredProviders.length === 0 && (
-            <div className="text-center py-8">
-              <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Aucun prestataire trouvé</p>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-4">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                  {[...Array(totalPages)].map((_, i) => (
-                    <PaginationItem key={i}>
-                      <PaginationLink
-                        onClick={() => setCurrentPage(i + 1)}
-                        isActive={currentPage === i + 1}
-                        className="cursor-pointer"
-                      >
-                        {i + 1}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* ListView with search and pagination */}
+      <ListView
+        items={providers}
+        searchFields={['name', 'company_name', 'email', 'city']}
+        renderCard={renderProviderCard}
+        renderListItem={renderProviderListItem}
+        searchPlaceholder="Rechercher par nom, entreprise, email ou ville..."
+        emptyStateMessage="Aucun prestataire trouvé"
+        emptyStateIcon={<MapPin className="h-12 w-12 text-gray-400 mx-auto" />}
+        itemsPerPage={10}
+      />
     </div>
   );
 };
