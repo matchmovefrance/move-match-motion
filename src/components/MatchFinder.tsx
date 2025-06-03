@@ -1,441 +1,452 @@
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MapPin, Calendar, Volume2, Check, X, ArrowLeft, ArrowRight } from 'lucide-react';
-import { ListView } from '@/components/ui/list-view';
+import { motion } from 'framer-motion';
+import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface ClientRequest {
+  id: number;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  departure_city: string;
+  departure_postal_code: string;
+  arrival_city: string;
+  arrival_postal_code: string;
+  desired_date: string;
+  estimated_volume: number | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  status: string;
+  is_matched: boolean | null;
+  match_status: string | null;
+}
+
+interface Move {
+  id: number;
+  mover_name: string | null;
+  company_name: string | null;
+  departure_city: string;
+  departure_postal_code: string;
+  arrival_city: string;
+  arrival_postal_code: string;
+  departure_date: string;
+  max_volume: number | null;
+  used_volume: number;
+  available_volume: number;
+  price_per_m3: number | null;
+  total_price: number | null;
+  status: string;
+}
 
 interface Match {
   id: number;
-  moveId: number;
-  requestId: number;
-  clientName: string;
-  moveName: string;
-  distanceKm: number;
-  dateDiffDays: number;
-  combinedVolume: number;
-  type: 'grouped' | 'return' | 'loop';
-  departureCity: string;
-  arrivalCity: string;
-  matchScore: number;
+  move_id: number;
+  client_request_id: number;
+  match_type: string;
+  distance_km: number;
+  date_diff_days: number;
+  combined_volume: number;
+  volume_ok: boolean;
+  is_valid: boolean;
+  created_at: string;
 }
 
 const MatchFinder = () => {
-  const [isSearching, setIsSearching] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [clientRequests, setClientRequests] = useState<ClientRequest[]>([]);
+  const [moves, setMoves] = useState<Move[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-  const [acceptedMatches, setAcceptedMatches] = useState<number[]>([]);
-  const [rejectedMatches, setRejectedMatches] = useState<number[]>([]);
-  const [showListView, setShowListView] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for demonstration
-  const mockMatches: Match[] = [
-    {
-      id: 1,
-      moveId: 1,
-      requestId: 1,
-      clientName: "Marie Dubois",
-      moveName: "Transport Solutions Pro",
-      distanceKm: 45,
-      dateDiffDays: 3,
-      combinedVolume: 18.5,
-      type: 'grouped',
-      departureCity: "Paris",
-      arrivalCity: "Lyon",
-      matchScore: 92
-    },
-    {
-      id: 2,
-      moveId: 2,
-      requestId: 2,
-      clientName: "Jean Martin",
-      moveName: "Express Déménagement",
-      distanceKm: 25,
-      dateDiffDays: 1,
-      combinedVolume: 12.0,
-      type: 'return',
-      departureCity: "Marseille",
-      arrivalCity: "Nice",
-      matchScore: 88
-    },
-    {
-      id: 3,
-      moveId: 3,
-      requestId: 3,
-      clientName: "Sophie Laurent",
-      moveName: "Move Master",
-      distanceKm: 78,
-      dateDiffDays: 7,
-      combinedVolume: 22.3,
-      type: 'loop',
-      departureCity: "Toulouse",
-      arrivalCity: "Bordeaux",
-      matchScore: 76
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Récupérer les demandes clients
+      const { data: clientData, error: clientError } = await supabase
+        .from('client_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (clientError) throw clientError;
+
+      // Récupérer les déménagements confirmés
+      const { data: moveData, error: moveError } = await supabase
+        .from('confirmed_moves')
+        .select('*')
+        .eq('status', 'confirmed')
+        .order('created_at', { ascending: false });
+
+      if (moveError) throw moveError;
+
+      // Récupérer les matches existants
+      const { data: matchData, error: matchError } = await supabase
+        .from('move_matches')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (matchError) throw matchError;
+
+      setClientRequests(clientData || []);
+      setMoves(moveData || []);
+      setMatches(matchData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les données",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleMatchAction = async (matchId: number, actionType: 'accepted' | 'rejected') => {
+    try {
+      const { error } = await supabase
+        .from('match_actions')
+        .insert({
+          match_id: matchId,
+          action_type: actionType,
+          user_id: user?.id,
+          action_date: new Date().toISOString(),
+          notes: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} par l'utilisateur`
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
+      });
+
+      // Rafraîchir les données
+      fetchData();
+    } catch (error: any) {
+      console.error('Error processing match action:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de traiter l'action",
+        variant: "destructive",
+      });
+    }
+  };
 
   const findMatches = async () => {
-    setIsSearching(true);
-    setCurrentMatchIndex(0);
-    setAcceptedMatches([]);
-    setRejectedMatches([]);
-    
-    // Simulate API call with loading animation
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    setMatches(mockMatches);
-    setIsSearching(false);
-    setShowListView(true);
-  };
-
-  const handleAccept = async (matchId: number) => {
     try {
-      console.log('Accepting match:', matchId);
+      setLoading(true);
       
-      // Sauvegarder l'action dans la base de données
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast.error('Vous devez être connecté pour effectuer cette action');
-        return;
+      // Supprimer les anciens matches
+      await supabase.from('move_matches').delete().neq('id', 0);
+
+      // Calculer les nouveaux matches
+      for (const client of clientRequests) {
+        for (const move of moves) {
+          // Calculer la distance approximative (simulation basée sur les codes postaux)
+          const distanceKm = Math.abs(parseInt(client.departure_postal_code.substring(0, 2)) - 
+                                     parseInt(move.departure_postal_code.substring(0, 2))) * 50;
+          
+          // Calculer la différence de dates
+          const clientDate = new Date(client.desired_date);
+          const moveDate = new Date(move.departure_date);
+          const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Vérifier si le volume est compatible
+          const clientVolume = client.estimated_volume || 0;
+          const availableVolume = move.available_volume || 0;
+          const volumeOk = clientVolume <= availableVolume;
+          
+          // Calculer le volume combiné
+          const combinedVolume = (move.used_volume || 0) + clientVolume;
+          
+          // Déterminer si c'est un match valide
+          const isValid = distanceKm <= 200 && dateDiffDays <= 7 && volumeOk;
+          
+          // Déterminer le type de match
+          let matchType = 'partial';
+          if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
+              client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
+            matchType = 'perfect';
+          } else if (distanceKm <= 50) {
+            matchType = 'good';
+          }
+
+          // Insérer le match
+          const { error } = await supabase
+            .from('move_matches')
+            .insert({
+              move_id: move.id,
+              client_request_id: client.id,
+              match_type: matchType,
+              distance_km: distanceKm,
+              date_diff_days: Math.round(dateDiffDays),
+              combined_volume: combinedVolume,
+              volume_ok: volumeOk,
+              is_valid: isValid
+            });
+
+          if (error) {
+            console.error('Error inserting match:', error);
+          }
+        }
       }
 
-      const { error } = await supabase
-        .from('match_actions')
-        .insert({
-          match_id: matchId,
-          action_type: 'accepted',
-          user_id: user.id,
-          notes: `Match accepté - Score: ${matches.find(m => m.id === matchId)?.matchScore}%`
-        });
+      toast({
+        title: "Succès",
+        description: "Recherche de correspondances terminée",
+      });
 
-      if (error) {
-        console.error('Erreur lors de la sauvegarde:', error);
-        toast.error('Erreur lors de la sauvegarde de l\'action');
-        return;
-      }
-
-      setAcceptedMatches(prev => [...prev, matchId]);
-      setCurrentMatchIndex(prev => prev + 1);
-      toast.success('Match accepté avec succès !');
-      
-      console.log('Match accepté et sauvegardé:', matchId);
+      fetchData();
     } catch (error) {
-      console.error('Erreur lors de l\'acceptation du match:', error);
-      toast.error('Erreur lors de l\'acceptation du match');
+      console.error('Error finding matches:', error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la recherche de correspondances",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleReject = async (matchId: number) => {
-    try {
-      console.log('Rejecting match:', matchId);
-      
-      // Sauvegarder l'action dans la base de données
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast.error('Vous devez être connecté pour effectuer cette action');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('match_actions')
-        .insert({
-          match_id: matchId,
-          action_type: 'rejected',
-          user_id: user.id,
-          notes: `Match rejeté - Score: ${matches.find(m => m.id === matchId)?.matchScore}%`
-        });
-
-      if (error) {
-        console.error('Erreur lors de la sauvegarde:', error);
-        toast.error('Erreur lors de la sauvegarde de l\'action');
-        return;
-      }
-
-      setRejectedMatches(prev => [...prev, matchId]);
-      setCurrentMatchIndex(prev => prev + 1);
-      toast.success('Match rejeté');
-      
-      console.log('Match rejeté et sauvegardé:', matchId);
-    } catch (error) {
-      console.error('Erreur lors du rejet du match:', error);
-      toast.error('Erreur lors du rejet du match');
-    }
+  const getMatchDetails = (match: Match) => {
+    const client = clientRequests.find(c => c.id === match.client_request_id);
+    const move = moves.find(m => m.id === match.move_id);
+    return { client, move };
   };
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'grouped': return 'Trajet groupé';
-      case 'return': return 'Trajet retour';
-      case 'loop': return 'Boucle optimisée';
-      default: return type;
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'grouped': return 'blue';
-      case 'return': return 'green';
-      case 'loop': return 'purple';
-      default: return 'gray';
-    }
-  };
-
-  const renderMatchCard = (match: Match) => {
-    const isAccepted = acceptedMatches.includes(match.id);
-    const isRejected = rejectedMatches.includes(match.id);
-    
+  if (loading) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`bg-white rounded-xl p-6 shadow-lg border border-gray-100 ${
-          isAccepted ? 'ring-2 ring-green-500 bg-green-50' : 
-          isRejected ? 'ring-2 ring-red-500 bg-red-50' : ''
-        }`}
-      >
-        <div className="flex justify-between items-start mb-4">
-          <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-3 py-1 rounded-full text-sm font-medium`}>
-            {getTypeLabel(match.type)}
-          </div>
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-sm">{match.matchScore}%</span>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Client</p>
-              <p className="font-semibold text-gray-800">{match.clientName}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Déménageur</p>
-              <p className="font-semibold text-gray-800">{match.moveName}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2 text-gray-600">
-            <MapPin className="h-4 w-4" />
-            <span className="text-sm">{match.departureCity} → {match.arrivalCity}</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-            <div className="text-center">
-              <p className="text-sm text-gray-500">Distance</p>
-              <p className="font-semibold text-gray-800">{match.distanceKm} km</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-500">Décalage</p>
-              <p className="font-semibold text-gray-800">{match.dateDiffDays}j</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-500">Volume</p>
-              <p className="font-semibold text-gray-800">{match.combinedVolume}m³</p>
-            </div>
-          </div>
-
-          {isAccepted && (
-            <div className="flex items-center justify-center space-x-2 pt-4 text-green-600">
-              <Check className="h-5 w-5" />
-              <span className="font-medium">Match Accepté</span>
-            </div>
-          )}
-
-          {isRejected && (
-            <div className="flex items-center justify-center space-x-2 pt-4 text-red-600">
-              <X className="h-5 w-5" />
-              <span className="font-medium">Match Rejeté</span>
-            </div>
-          )}
-
-          {!isAccepted && !isRejected && (
-            <div className="flex space-x-2 pt-4">
-              <button
-                onClick={() => handleReject(match.id)}
-                className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                <X className="h-4 w-4" />
-                <span>Rejeter</span>
-              </button>
-              
-              <button
-                onClick={() => handleAccept(match.id)}
-                className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition-all"
-              >
-                <Check className="h-4 w-4" />
-                <span>Accepter</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </motion.div>
-    );
-  };
-
-  const renderMatchListItem = (match: Match) => {
-    const isAccepted = acceptedMatches.includes(match.id);
-    const isRejected = rejectedMatches.includes(match.id);
-    
-    return (
-      <div className={`flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow ${
-        isAccepted ? 'ring-2 ring-green-500 bg-green-50' : 
-        isRejected ? 'ring-2 ring-red-500 bg-red-50' : ''
-      }`}>
-        <div className="flex-1">
-          <div className="flex items-center space-x-4">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xs">{match.matchScore}%</span>
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-800">{match.clientName}</h4>
-              <p className="text-sm text-gray-600">{match.moveName}</p>
-            </div>
-            <div className="text-sm text-gray-500">
-              <span>{match.departureCity} → {match.arrivalCity}</span>
-            </div>
-            <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
-              {getTypeLabel(match.type)}
-            </div>
-          </div>
-        </div>
-        <div className="flex space-x-2">
-          {isAccepted && (
-            <div className="flex items-center space-x-1 text-green-600">
-              <Check className="h-4 w-4" />
-              <span className="text-sm font-medium">Accepté</span>
-            </div>
-          )}
-          {isRejected && (
-            <div className="flex items-center space-x-1 text-red-600">
-              <X className="h-4 w-4" />
-              <span className="text-sm font-medium">Rejeté</span>
-            </div>
-          )}
-          {!isAccepted && !isRejected && (
-            <>
-              <button
-                onClick={() => handleReject(match.id)}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm"
-              >
-                Rejeter
-              </button>
-              <button
-                onClick={() => handleAccept(match.id)}
-                className="px-3 py-1 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded hover:from-green-600 hover:to-blue-600 transition-all text-sm"
-              >
-                Accepter
-              </button>
-            </>
-          )}
-        </div>
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
-  };
-
-  const currentMatch = matches[currentMatchIndex];
-  const hasMoreMatches = currentMatchIndex < matches.length;
+  }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <motion.h2 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-3xl font-bold text-gray-800 mb-4"
-        >
-          Recherche de Matchs Intelligente
-        </motion.h2>
-        <motion.p 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-gray-600 mb-8"
-        >
-          Notre algorithme analyse les trajets et trouve les meilleures optimisations
-        </motion.p>
-        
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <Search className="h-6 w-6 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances</h2>
+        </div>
+        <Button
           onClick={findMatches}
-          disabled={isSearching}
-          className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-full font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700"
         >
-          <span className="relative z-10 flex items-center space-x-2">
-            <Search className="h-5 w-5" />
-            <span>{isSearching ? 'Recherche en cours...' : 'Lancer la recherche'}</span>
-          </span>
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        </motion.button>
+          <Search className="h-4 w-4 mr-2" />
+          Rechercher des correspondances
+        </Button>
       </div>
 
-      {/* Loading Animation */}
-      {isSearching && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center py-16"
-        >
-          <motion.div 
-            animate={{ 
-              scale: [1, 1.2, 1],
-              rotate: [0, 180, 360]
-            }}
-            transition={{ 
-              repeat: Infinity, 
-              duration: 2,
-              ease: "easeInOut"
-            }}
-            className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-6"
-          >
-            <Search className="w-8 h-8 text-white" />
-          </motion.div>
-          
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: "200px" }}
-            transition={{ duration: 3, ease: "easeInOut" }}
-            className="h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mb-4"
-          />
-          
-          <motion.p
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
-            className="text-gray-600 text-center"
-          >
-            Analyse des trajets en cours...<br />
-            Calcul des optimisations possibles...
-          </motion.p>
-        </motion.div>
-      )}
-
-      {/* Results with ListView */}
-      {!isSearching && matches.length > 0 && showListView && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xl font-semibold text-gray-800">Résultats de matching</h3>
-            <div className="text-sm text-gray-500">
-              {acceptedMatches.length} accepté(s) • {rejectedMatches.length} rejeté(s)
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm text-gray-600">Demandes clients</p>
+                <p className="text-2xl font-bold">{clientRequests.length}</p>
+              </div>
             </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Truck className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm text-gray-600">Déménagements</p>
+                <p className="text-2xl font-bold">{moves.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Search className="h-5 w-5 text-purple-600" />
+              <div>
+                <p className="text-sm text-gray-600">Correspondances</p>
+                <p className="text-2xl font-bold">{matches.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Check className="h-5 w-5 text-orange-600" />
+              <div>
+                <p className="text-sm text-gray-600">Correspondances valides</p>
+                <p className="text-2xl font-bold">{matches.filter(m => m.is_valid).length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Liste des correspondances */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Correspondances trouvées</h3>
+        
+        {matches.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">Aucune correspondance trouvée</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Cliquez sur "Rechercher des correspondances" pour commencer
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {matches.map((match) => {
+              const { client, move } = getMatchDetails(match);
+              
+              if (!client || !move) return null;
+
+              return (
+                <motion.div
+                  key={match.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`bg-white rounded-xl p-6 shadow-lg border ${
+                    match.is_valid ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Client */}
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+                          <Users className="h-4 w-4 mr-2 text-blue-600" />
+                          Client: {client.name || 'Non renseigné'}
+                        </h4>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-3 w-3" />
+                            <span>{client.departure_city} → {client.arrival_city}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-3 w-3" />
+                            <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Volume2 className="h-3 w-3" />
+                            <span>{client.estimated_volume || 0}m³</span>
+                          </div>
+                          {client.email && (
+                            <div className="text-blue-600">{client.email}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Déménageur */}
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+                          <Truck className="h-4 w-4 mr-2 text-green-600" />
+                          Déménageur: {move.company_name || 'Non renseigné'}
+                        </h4>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-3 w-3" />
+                            <span>{move.departure_city} → {move.arrival_city}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-3 w-3" />
+                            <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Volume2 className="h-3 w-3" />
+                            <span>Disponible: {move.available_volume}m³</span>
+                          </div>
+                          {move.price_per_m3 && (
+                            <div className="text-green-600">{move.price_per_m3}€/m³</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end space-y-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        match.match_type === 'perfect' ? 'bg-green-100 text-green-800' :
+                        match.match_type === 'good' ? 'bg-blue-100 text-blue-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {match.match_type === 'perfect' ? 'Parfait' :
+                         match.match_type === 'good' ? 'Bon' : 'Partiel'}
+                      </span>
+                      
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleMatchAction(match.id, 'accepted')}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <Check className="h-3 w-3 mr-1" />
+                          Accepter
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMatchAction(match.id, 'rejected')}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Rejeter
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Détails du match */}
+                  <div className="border-t pt-3 mt-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Distance:</span>
+                        <span className="ml-2 font-medium">{match.distance_km}km</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Diff. dates:</span>
+                        <span className="ml-2 font-medium">{match.date_diff_days} jours</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Volume combiné:</span>
+                        <span className="ml-2 font-medium">{match.combined_volume}m³</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Compatible:</span>
+                        <span className={`ml-2 font-medium ${match.volume_ok ? 'text-green-600' : 'text-red-600'}`}>
+                          {match.volume_ok ? 'Oui' : 'Non'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
-          
-          <ListView
-            items={matches}
-            searchFields={['clientName', 'moveName', 'departureCity', 'arrivalCity', 'type']}
-            renderCard={renderMatchCard}
-            renderListItem={renderMatchListItem}
-            searchPlaceholder="Rechercher par client, déménageur, ville..."
-            emptyStateMessage="Aucun match trouvé"
-            emptyStateIcon={<Search className="h-12 w-12 text-gray-400 mx-auto" />}
-            itemsPerPage={6}
-          />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

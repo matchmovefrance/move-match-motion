@@ -1,55 +1,51 @@
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { TrendingUp, TrendingDown, Users, Calendar, Truck, MapPin, Activity, Target, CheckCircle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TrendingUp, Users, Truck, DollarSign, MapPin, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import MatchAnalytics from './MatchAnalytics';
 
 interface AnalyticsData {
   totalClients: number;
-  totalMovers: number;
   totalMoves: number;
-  totalRequests: number;
-  clientGrowth: number;
-  moverGrowth: number;
-  moveGrowth: number;
-  requestGrowth: number;
+  totalMatches: number;
+  totalRevenue: number;
+  pendingRequests: number;
+  confirmedMoves: number;
   monthlyData: Array<{
     month: string;
     clients: number;
-    movers: number;
     moves: number;
-    requests: number;
+    revenue: number;
   }>;
-  statusDistribution: Array<{
-    status: string;
-    count: number;
+  statusData: Array<{
+    name: string;
+    value: number;
     color: string;
   }>;
-  cityDistribution: Array<{
+  cityData: Array<{
     city: string;
+    requests: number;
+    moves: number;
+  }>;
+  volumeData: Array<{
+    range: string;
     count: number;
   }>;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
-
 const Analytics = () => {
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
+  const [data, setData] = useState<AnalyticsData>({
     totalClients: 0,
-    totalMovers: 0,
     totalMoves: 0,
-    totalRequests: 0,
-    clientGrowth: 0,
-    moverGrowth: 0,
-    moveGrowth: 0,
-    requestGrowth: 0,
+    totalMatches: 0,
+    totalRevenue: 0,
+    pendingRequests: 0,
+    confirmedMoves: 0,
     monthlyData: [],
-    statusDistribution: [],
-    cityDistribution: []
+    statusData: [],
+    cityData: [],
+    volumeData: []
   });
   const [loading, setLoading] = useState(true);
 
@@ -60,100 +56,137 @@ const Analytics = () => {
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
+
+      // Récupérer les demandes clients
+      const { data: clientRequests, error: clientError } = await supabase
+        .from('client_requests')
+        .select('*');
+
+      // Récupérer les déménagements confirmés
+      const { data: confirmedMoves, error: moveError } = await supabase
+        .from('confirmed_moves')
+        .select('*');
+
+      // Récupérer les correspondances
+      const { data: matches, error: matchError } = await supabase
+        .from('move_matches')
+        .select('*');
+
+      if (clientError || moveError || matchError) {
+        throw new Error('Erreur lors du chargement des données');
+      }
+
+      const clients = clientRequests || [];
+      const moves = confirmedMoves || [];
+      const matchData = matches || [];
+
+      // Calculer les totaux
+      const totalRevenue = moves.reduce((sum, move) => sum + (move.total_price || 0), 0);
+      const pendingRequests = clients.filter(c => c.status === 'pending').length;
+      const confirmedMovesCount = moves.filter(m => m.status === 'confirmed').length;
+
+      // Données mensuelles
+      const monthlyStats = new Map();
+      const now = new Date();
       
-      // Récupérer toutes les données nécessaires
-      const [clientsResult, moversResult, movesResult, requestsResult] = await Promise.all([
-        supabase.from('clients').select('*'),
-        supabase.from('movers').select('*'),
-        supabase.from('confirmed_moves').select('*'),
-        supabase.from('client_requests').select('*')
-      ]);
+      // Initialiser les 6 derniers mois
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+        monthlyStats.set(monthKey, { month: monthKey, clients: 0, moves: 0, revenue: 0 });
+      }
 
-      const clients = clientsResult.data || [];
-      const movers = moversResult.data || [];
-      const moves = movesResult.data || [];
-      const requests = requestsResult.data || [];
-
-      // Calculer les statistiques de croissance (simulation pour les 30 derniers jours)
-      const last30Days = new Date();
-      last30Days.setDate(last30Days.getDate() - 30);
-
-      const recentClients = clients.filter(c => new Date(c.created_at) > last30Days);
-      const recentMovers = movers.filter(m => new Date(m.created_at) > last30Days);
-      const recentMoves = moves.filter(m => new Date(m.created_at) > last30Days);
-      const recentRequests = requests.filter(r => new Date(r.created_at) > last30Days);
-
-      // Distribution des statuts
-      const statusCounts: { [key: string]: number } = {};
-      [...moves, ...requests].forEach(item => {
-        const status = item.status_custom || item.status || 'unknown';
-        statusCounts[status] = (statusCounts[status] || 0) + 1;
-      });
-
-      const statusDistribution = Object.entries(statusCounts).map(([status, count], index) => ({
-        status: status === 'en_cours' ? 'En cours' : status === 'termine' ? 'Terminé' : status.charAt(0).toUpperCase() + status.slice(1),
-        count,
-        color: COLORS[index % COLORS.length]
-      }));
-
-      // Distribution par ville (top 5)
-      const cityCounts: { [key: string]: number } = {};
-      [...moves, ...requests].forEach(item => {
-        const city = item.departure_city || item.arrival_city;
-        if (city) {
-          cityCounts[city] = (cityCounts[city] || 0) + 1;
+      // Compter les clients par mois
+      clients.forEach(client => {
+        const date = new Date(client.created_at);
+        const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+        if (monthlyStats.has(monthKey)) {
+          monthlyStats.get(monthKey).clients++;
         }
       });
 
-      const cityDistribution = Object.entries(cityCounts)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
-        .map(([city, count]) => ({ city, count }));
+      // Compter les déménagements et revenus par mois
+      moves.forEach(move => {
+        const date = new Date(move.created_at);
+        const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+        if (monthlyStats.has(monthKey)) {
+          monthlyStats.get(monthKey).moves++;
+          monthlyStats.get(monthKey).revenue += move.total_price || 0;
+        }
+      });
 
-      // Données mensuelles (6 derniers mois)
-      const monthlyData = Array.from({ length: 6 }, (_, i) => {
-        const date = new Date();
-        date.setMonth(date.getMonth() - i);
-        const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-        const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      // Données de statut
+      const statusCounts = {
+        pending: clients.filter(c => c.status === 'pending').length,
+        confirmed: clients.filter(c => c.status === 'confirmed').length,
+        rejected: clients.filter(c => c.status === 'rejected').length
+      };
 
-        return {
-          month: date.toLocaleDateString('fr-FR', { month: 'short' }),
-          clients: clients.filter(c => {
-            const createdAt = new Date(c.created_at);
-            return createdAt >= monthStart && createdAt <= monthEnd;
-          }).length,
-          movers: movers.filter(m => {
-            const createdAt = new Date(m.created_at);
-            return createdAt >= monthStart && createdAt <= monthEnd;
-          }).length,
-          moves: moves.filter(m => {
-            const createdAt = new Date(m.created_at);
-            return createdAt >= monthStart && createdAt <= monthEnd;
-          }).length,
-          requests: requests.filter(r => {
-            const createdAt = new Date(r.created_at);
-            return createdAt >= monthStart && createdAt <= monthEnd;
-          }).length
-        };
-      }).reverse();
+      const statusData = [
+        { name: 'En attente', value: statusCounts.pending, color: '#fbbf24' },
+        { name: 'Confirmé', value: statusCounts.confirmed, color: '#10b981' },
+        { name: 'Rejeté', value: statusCounts.rejected, color: '#ef4444' }
+      ];
 
-      setAnalyticsData({
+      // Données par ville
+      const cityStats = new Map();
+      
+      clients.forEach(client => {
+        const city = client.departure_city;
+        if (!cityStats.has(city)) {
+          cityStats.set(city, { city, requests: 0, moves: 0 });
+        }
+        cityStats.get(city).requests++;
+      });
+
+      moves.forEach(move => {
+        const city = move.departure_city;
+        if (!cityStats.has(city)) {
+          cityStats.set(city, { city, requests: 0, moves: 0 });
+        }
+        cityStats.get(city).moves++;
+      });
+
+      const cityData = Array.from(cityStats.values())
+        .sort((a, b) => (b.requests + b.moves) - (a.requests + a.moves))
+        .slice(0, 10);
+
+      // Données de volume
+      const volumeRanges = [
+        { range: '0-5m³', min: 0, max: 5, count: 0 },
+        { range: '5-10m³', min: 5, max: 10, count: 0 },
+        { range: '10-20m³', min: 10, max: 20, count: 0 },
+        { range: '20-30m³', min: 20, max: 30, count: 0 },
+        { range: '30m³+', min: 30, max: Infinity, count: 0 }
+      ];
+
+      clients.forEach(client => {
+        const volume = client.estimated_volume || 0;
+        const range = volumeRanges.find(r => volume >= r.min && volume < r.max);
+        if (range) range.count++;
+      });
+
+      moves.forEach(move => {
+        const volume = move.max_volume || 0;
+        const range = volumeRanges.find(r => volume >= r.min && volume < r.max);
+        if (range) range.count++;
+      });
+
+      setData({
         totalClients: clients.length,
-        totalMovers: movers.length,
         totalMoves: moves.length,
-        totalRequests: requests.length,
-        clientGrowth: recentClients.length,
-        moverGrowth: recentMovers.length,
-        moveGrowth: recentMoves.length,
-        requestGrowth: recentRequests.length,
-        monthlyData,
-        statusDistribution,
-        cityDistribution
+        totalMatches: matchData.length,
+        totalRevenue,
+        pendingRequests,
+        confirmedMoves: confirmedMovesCount,
+        monthlyData: Array.from(monthlyStats.values()),
+        statusData: statusData.filter(s => s.value > 0),
+        cityData,
+        volumeData: volumeRanges.filter(r => r.count > 0)
       });
 
     } catch (error) {
-      console.error('Erreur lors du chargement des analytics:', error);
+      console.error('Error fetching analytics data:', error);
     } finally {
       setLoading(false);
     }
@@ -161,167 +194,160 @@ const Analytics = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement des analytics...</p>
-        </div>
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Analytics & Reporting</h1>
-        <button 
-          onClick={fetchAnalyticsData}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Actualiser
-        </button>
+      <div className="flex items-center space-x-3">
+        <TrendingUp className="h-6 w-6 text-blue-600" />
+        <h2 className="text-2xl font-bold text-gray-800">Analytics</h2>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-          <TabsTrigger value="matches">Analytics Matchs</TabsTrigger>
-        </TabsList>
+      {/* Métriques principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Clients</p>
+                <p className="text-2xl font-bold text-gray-900">{data.totalClients}</p>
+                <p className="text-xs text-gray-500">{data.pendingRequests} en attente</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
 
-        <TabsContent value="overview" className="space-y-6">
-          {/* Métriques principales */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Clients</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.totalClients}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+{analyticsData.clientGrowth}</span> ce mois
-                </p>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Déménagements</p>
+                <p className="text-2xl font-bold text-gray-900">{data.totalMoves}</p>
+                <p className="text-xs text-gray-500">{data.confirmedMoves} confirmés</p>
+              </div>
+              <Truck className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Déménageurs</CardTitle>
-                <Truck className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.totalMovers}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+{analyticsData.moverGrowth}</span> ce mois
-                </p>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Correspondances</p>
+                <p className="text-2xl font-bold text-gray-900">{data.totalMatches}</p>
+                <p className="text-xs text-gray-500">Trouvées</p>
+              </div>
+              <MapPin className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Déménagements</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.totalMoves}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+{analyticsData.moveGrowth}</span> ce mois
-                </p>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Chiffre d'affaires</p>
+                <p className="text-2xl font-bold text-gray-900">{data.totalRevenue.toLocaleString()}€</p>
+                <p className="text-xs text-gray-500">Total</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Demandes</CardTitle>
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsData.totalRequests}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">+{analyticsData.requestGrowth}</span> ce mois
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+      {/* Graphiques */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Évolution mensuelle */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Évolution mensuelle</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="clients" stroke="#3b82f6" name="Clients" />
+                <Line type="monotone" dataKey="moves" stroke="#10b981" name="Déménagements" />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-          {/* Graphiques */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Évolution mensuelle */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Évolution Mensuelle</CardTitle>
-                <CardDescription>Croissance sur les 6 derniers mois</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={analyticsData.monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="clients" stroke="#8884d8" name="Clients" />
-                    <Line type="monotone" dataKey="movers" stroke="#82ca9d" name="Déménageurs" />
-                    <Line type="monotone" dataKey="moves" stroke="#ffc658" name="Déménagements" />
-                    <Line type="monotone" dataKey="requests" stroke="#ff7300" name="Demandes" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+        {/* Répartition des statuts */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Statuts des demandes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  dataKey="value"
+                  data={data.statusData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {data.statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-            {/* Distribution des statuts */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Distribution des Statuts</CardTitle>
-                <CardDescription>Répartition par état d'avancement</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={analyticsData.statusDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ status, count }) => `${status}: ${count}`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="count"
-                    >
-                      {analyticsData.statusDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Top villes */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top villes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.cityData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="city" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="requests" fill="#3b82f6" name="Demandes" />
+                <Bar dataKey="moves" fill="#10b981" name="Déménagements" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-          {/* Top villes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Villes</CardTitle>
-              <CardDescription>Villes les plus actives</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={analyticsData.cityDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="city" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="matches">
-          <MatchAnalytics />
-        </TabsContent>
-      </Tabs>
+        {/* Répartition des volumes */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Répartition des volumes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.volumeData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="range" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#8b5cf6" name="Nombre" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

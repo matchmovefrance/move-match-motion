@@ -22,6 +22,7 @@ interface ClientFormData {
   departure_city: string;
   departure_postal_code: string;
   departure_country: string;
+  departure_time: string;
   
   // Adresse d'arrivée
   arrival_address: string;
@@ -31,13 +32,12 @@ interface ClientFormData {
   
   // Détails du déménagement
   desired_date: string;
-  flexible_dates: boolean;
-  date_range_start: string;
-  date_range_end: string;
+  estimated_arrival_date: string;
+  estimated_arrival_time: string;
   estimated_volume: string;
   description: string;
   
-  // Devis
+  // Budget
   budget_min: string;
   budget_max: string;
   quote_amount: string;
@@ -64,14 +64,14 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
     departure_city: '',
     departure_postal_code: '',
     departure_country: 'France',
+    departure_time: '',
     arrival_address: '',
     arrival_city: '',
     arrival_postal_code: '',
     arrival_country: 'France',
     desired_date: '',
-    flexible_dates: false,
-    date_range_start: '',
-    date_range_end: '',
+    estimated_arrival_date: '',
+    estimated_arrival_time: '',
     estimated_volume: '',
     description: '',
     budget_min: '',
@@ -91,7 +91,7 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
     e.preventDefault();
     
     // Validation basique
-    if (!formData.name || !formData.email || !formData.phone || !formData.departure_city || !formData.arrival_city) {
+    if (!formData.name || !formData.email || !formData.phone || !formData.departure_city || !formData.arrival_city || !formData.estimated_volume || !formData.desired_date) {
       toast({
         title: "Erreur",
         description: "Veuillez remplir tous les champs obligatoires",
@@ -156,6 +156,9 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
             <MovingDetailsSection
               formData={{
                 desired_date: formData.desired_date,
+                departure_time: formData.departure_time,
+                estimated_arrival_date: formData.estimated_arrival_date,
+                estimated_arrival_time: formData.estimated_arrival_time,
                 estimated_volume: formData.estimated_volume,
                 description: formData.description,
               }}

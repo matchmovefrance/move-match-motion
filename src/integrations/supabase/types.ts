@@ -16,6 +16,7 @@ export type Database = {
           arrival_city: string
           arrival_country: string | null
           arrival_postal_code: string
+          arrival_time: string | null
           budget_max: number | null
           budget_min: number | null
           client_id: number
@@ -27,14 +28,20 @@ export type Database = {
           departure_city: string
           departure_country: string | null
           departure_postal_code: string
+          departure_time: string | null
           description: string | null
           desired_date: string
           email: string | null
+          estimated_arrival_date: string | null
+          estimated_arrival_time: string | null
           estimated_volume: number | null
           estimated_volume_backup: number
           flexible_dates: boolean | null
           id: number
           inventory_list: string | null
+          is_matched: boolean | null
+          match_status: string | null
+          matched_at: string | null
           name: string | null
           phone: string | null
           quote_amount: number | null
@@ -48,6 +55,7 @@ export type Database = {
           arrival_city: string
           arrival_country?: string | null
           arrival_postal_code: string
+          arrival_time?: string | null
           budget_max?: number | null
           budget_min?: number | null
           client_id: number
@@ -59,14 +67,20 @@ export type Database = {
           departure_city: string
           departure_country?: string | null
           departure_postal_code: string
+          departure_time?: string | null
           description?: string | null
           desired_date: string
           email?: string | null
+          estimated_arrival_date?: string | null
+          estimated_arrival_time?: string | null
           estimated_volume?: number | null
           estimated_volume_backup: number
           flexible_dates?: boolean | null
           id?: number
           inventory_list?: string | null
+          is_matched?: boolean | null
+          match_status?: string | null
+          matched_at?: string | null
           name?: string | null
           phone?: string | null
           quote_amount?: number | null
@@ -80,6 +94,7 @@ export type Database = {
           arrival_city?: string
           arrival_country?: string | null
           arrival_postal_code?: string
+          arrival_time?: string | null
           budget_max?: number | null
           budget_min?: number | null
           client_id?: number
@@ -91,14 +106,20 @@ export type Database = {
           departure_city?: string
           departure_country?: string | null
           departure_postal_code?: string
+          departure_time?: string | null
           description?: string | null
           desired_date?: string
           email?: string | null
+          estimated_arrival_date?: string | null
+          estimated_arrival_time?: string | null
           estimated_volume?: number | null
           estimated_volume_backup?: number
           flexible_dates?: boolean | null
           id?: number
           inventory_list?: string | null
+          is_matched?: boolean | null
+          match_status?: string | null
+          matched_at?: string | null
           name?: string | null
           phone?: string | null
           quote_amount?: number | null
@@ -146,10 +167,14 @@ export type Database = {
       confirmed_moves: {
         Row: {
           access_conditions: string | null
+          additional_fees: number | null
           arrival_address: string | null
           arrival_city: string
           arrival_country: string | null
           arrival_postal_code: string
+          arrival_time: string | null
+          available_volume: number | null
+          base_rate: number | null
           company_name: string | null
           contact_email: string | null
           contact_phone: string | null
@@ -160,26 +185,42 @@ export type Database = {
           departure_country: string | null
           departure_date: string
           departure_postal_code: string
+          departure_time: string | null
           description: string | null
+          equipment_available: string | null
+          estimated_arrival_date: string | null
+          estimated_arrival_time: string | null
+          fuel_surcharge: number | null
           id: number
+          insurance_details: string | null
           max_volume: number | null
+          max_weight: number | null
           mover_id: number
           mover_name: string | null
+          number_of_clients: number | null
           price_per_m3: number | null
+          route_type: string | null
+          special_conditions: string | null
           special_requirements: string | null
           status: string
           status_custom: string | null
+          total_cost: number | null
           total_price: number | null
           truck_id: number
           truck_identifier: string | null
+          truck_type: string | null
           used_volume: number
         }
         Insert: {
           access_conditions?: string | null
+          additional_fees?: number | null
           arrival_address?: string | null
           arrival_city: string
           arrival_country?: string | null
           arrival_postal_code: string
+          arrival_time?: string | null
+          available_volume?: number | null
+          base_rate?: number | null
           company_name?: string | null
           contact_email?: string | null
           contact_phone?: string | null
@@ -190,26 +231,42 @@ export type Database = {
           departure_country?: string | null
           departure_date: string
           departure_postal_code: string
+          departure_time?: string | null
           description?: string | null
+          equipment_available?: string | null
+          estimated_arrival_date?: string | null
+          estimated_arrival_time?: string | null
+          fuel_surcharge?: number | null
           id?: number
+          insurance_details?: string | null
           max_volume?: number | null
+          max_weight?: number | null
           mover_id: number
           mover_name?: string | null
+          number_of_clients?: number | null
           price_per_m3?: number | null
+          route_type?: string | null
+          special_conditions?: string | null
           special_requirements?: string | null
           status?: string
           status_custom?: string | null
+          total_cost?: number | null
           total_price?: number | null
           truck_id: number
           truck_identifier?: string | null
+          truck_type?: string | null
           used_volume: number
         }
         Update: {
           access_conditions?: string | null
+          additional_fees?: number | null
           arrival_address?: string | null
           arrival_city?: string
           arrival_country?: string | null
           arrival_postal_code?: string
+          arrival_time?: string | null
+          available_volume?: number | null
+          base_rate?: number | null
           company_name?: string | null
           contact_email?: string | null
           contact_phone?: string | null
@@ -220,18 +277,30 @@ export type Database = {
           departure_country?: string | null
           departure_date?: string
           departure_postal_code?: string
+          departure_time?: string | null
           description?: string | null
+          equipment_available?: string | null
+          estimated_arrival_date?: string | null
+          estimated_arrival_time?: string | null
+          fuel_surcharge?: number | null
           id?: number
+          insurance_details?: string | null
           max_volume?: number | null
+          max_weight?: number | null
           mover_id?: number
           mover_name?: string | null
+          number_of_clients?: number | null
           price_per_m3?: number | null
+          route_type?: string | null
+          special_conditions?: string | null
           special_requirements?: string | null
           status?: string
           status_custom?: string | null
+          total_cost?: number | null
           total_price?: number | null
           truck_id?: number
           truck_identifier?: string | null
+          truck_type?: string | null
           used_volume?: number
         }
         Relationships: [
