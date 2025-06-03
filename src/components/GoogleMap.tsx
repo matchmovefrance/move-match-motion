@@ -93,7 +93,6 @@ const GoogleMap = () => {
     try {
       console.log('Fetching moves and movers...');
       
-      // Use correct table name: confirmed_moves instead of moves
       const [movesResponse, moversResponse] = await Promise.all([
         supabase.from('confirmed_moves').select('*'),
         supabase.from('movers').select('*')
@@ -102,7 +101,6 @@ const GoogleMap = () => {
       if (movesResponse.error) {
         console.error('Error fetching moves:', movesResponse.error);
       } else {
-        // Transform database data to match Move interface
         const transformedMoves: Move[] = (movesResponse.data || []).map(move => ({
           id: move.id.toString(),
           departure_city: move.departure_city,
@@ -110,7 +108,6 @@ const GoogleMap = () => {
           departure_postal_code: move.departure_postal_code,
           arrival_postal_code: move.arrival_postal_code,
           status: move.status,
-          // For now, we'll generate sample coordinates based on postal codes
           pickup_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
           pickup_lng: 2.3522 + (Math.random() - 0.5) * 0.1,
           delivery_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
@@ -123,14 +120,12 @@ const GoogleMap = () => {
       if (moversResponse.error) {
         console.error('Error fetching movers:', moversResponse.error);
       } else {
-        // Transform database data to match Mover interface
         const transformedMovers: Mover[] = (moversResponse.data || []).map(mover => ({
           id: mover.id.toString(),
           name: mover.name,
           company_name: mover.company_name,
           email: mover.email,
           phone: mover.phone,
-          // Generate sample coordinates for movers
           lat: 48.8566 + (Math.random() - 0.5) * 0.2,
           lng: 2.3522 + (Math.random() - 0.5) * 0.2
         }));
@@ -174,10 +169,14 @@ const GoogleMap = () => {
 
     // Clear existing markers and polylines
     markersRef.current.forEach(marker => {
-      marker.setMap(null);
+      if (marker && typeof marker.setMap === 'function') {
+        marker.setMap(null);
+      }
     });
     polylinesRef.current.forEach(polyline => {
-      polyline.setMap(null);
+      if (polyline && typeof polyline.setMap === 'function') {
+        polyline.setMap(null);
+      }
     });
     markersRef.current = [];
     polylinesRef.current = [];
