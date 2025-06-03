@@ -16,6 +16,25 @@ interface Profile {
   created_at: string;
 }
 
+// Function to validate and sanitize profile data
+const allowedRoles = ['admin', 'agent', 'demenageur'] as const;
+type AllowedRole = typeof allowedRoles[number];
+
+function sanitizeProfile(profileData: any): Profile | null {
+  if (!profileData || !allowedRoles.includes(profileData.role)) {
+    console.warn(`Invalid role ignored: ${profileData?.role}`);
+    return null;
+  }
+
+  return {
+    id: profileData.id,
+    email: profileData.email,
+    role: profileData.role as AllowedRole,
+    company_name: profileData.company_name,
+    created_at: profileData.created_at,
+  };
+}
+
 const UserManagement = () => {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +59,13 @@ const UserManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUsers(data || []);
+      
+      // Filter and sanitize profiles with valid roles
+      const sanitizedUsers = (data || [])
+        .map(sanitizeProfile)
+        .filter((profile): profile is Profile => profile !== null);
+      
+      setUsers(sanitizedUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({

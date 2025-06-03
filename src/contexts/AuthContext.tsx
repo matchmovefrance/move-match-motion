@@ -24,6 +24,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Function to validate and sanitize profile data
+const allowedRoles = ['admin', 'agent', 'demenageur'] as const;
+type AllowedRole = typeof allowedRoles[number];
+
+function sanitizeProfile(profileData: any): Profile | null {
+  if (!profileData || !allowedRoles.includes(profileData.role)) {
+    console.warn(`Invalid role ignored: ${profileData?.role}`);
+    return null;
+  }
+
+  return {
+    id: profileData.id,
+    email: profileData.email,
+    role: profileData.role as AllowedRole,
+    company_name: profileData.company_name,
+  };
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -81,7 +99,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      setProfile(data);
+      const sanitizedProfile = sanitizeProfile(data);
+      if (sanitizedProfile) {
+        setProfile(sanitizedProfile);
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -136,8 +157,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .update(updates)
       .eq('id', user.id);
 
-    if (!error) {
-      setProfile(prev => prev ? { ...prev, ...updates } : null);
+    if (!error && profile) {
+      const updatedProfile = { ...profile, ...updates };
+      setProfile(updatedProfile);
     }
 
     return { error };
