@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, List, Grid } from 'lucide-react';
@@ -49,7 +49,7 @@ export function ListView<T extends Record<string, any>>({
   const currentItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
 
   // Reset to first page when search changes
-  useState(() => {
+  useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
