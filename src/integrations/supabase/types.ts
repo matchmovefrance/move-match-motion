@@ -9,7 +9,286 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      client_requests: {
+        Row: {
+          arrival_city: string
+          arrival_postal_code: string
+          client_id: number
+          created_at: string
+          created_by: string
+          departure_city: string
+          departure_postal_code: string
+          desired_date: string
+          id: number
+          required_volume: number
+          status: string
+        }
+        Insert: {
+          arrival_city: string
+          arrival_postal_code: string
+          client_id: number
+          created_at?: string
+          created_by: string
+          departure_city: string
+          departure_postal_code: string
+          desired_date: string
+          id?: number
+          required_volume: number
+          status?: string
+        }
+        Update: {
+          arrival_city?: string
+          arrival_postal_code?: string
+          client_id?: number
+          created_at?: string
+          created_by?: string
+          departure_city?: string
+          departure_postal_code?: string
+          desired_date?: string
+          id?: number
+          required_volume?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          created_at: string
+          created_by: string
+          email: string
+          id: number
+          name: string
+          phone: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          email: string
+          id?: number
+          name: string
+          phone: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          email?: string
+          id?: number
+          name?: string
+          phone?: string
+        }
+        Relationships: []
+      }
+      confirmed_moves: {
+        Row: {
+          arrival_city: string
+          arrival_postal_code: string
+          created_at: string
+          created_by: string
+          departure_city: string
+          departure_date: string
+          departure_postal_code: string
+          id: number
+          mover_id: number
+          status: string
+          truck_id: number
+          used_volume: number
+        }
+        Insert: {
+          arrival_city: string
+          arrival_postal_code: string
+          created_at?: string
+          created_by: string
+          departure_city: string
+          departure_date: string
+          departure_postal_code: string
+          id?: number
+          mover_id: number
+          status?: string
+          truck_id: number
+          used_volume: number
+        }
+        Update: {
+          arrival_city?: string
+          arrival_postal_code?: string
+          created_at?: string
+          created_by?: string
+          departure_city?: string
+          departure_date?: string
+          departure_postal_code?: string
+          id?: number
+          mover_id?: number
+          status?: string
+          truck_id?: number
+          used_volume?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "confirmed_moves_mover_id_fkey"
+            columns: ["mover_id"]
+            isOneToOne: false
+            referencedRelation: "movers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confirmed_moves_truck_id_fkey"
+            columns: ["truck_id"]
+            isOneToOne: false
+            referencedRelation: "trucks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      move_matches: {
+        Row: {
+          client_request_id: number
+          combined_volume: number
+          created_at: string
+          date_diff_days: number
+          distance_km: number
+          id: number
+          is_valid: boolean
+          match_type: string
+          move_id: number
+          volume_ok: boolean
+        }
+        Insert: {
+          client_request_id: number
+          combined_volume: number
+          created_at?: string
+          date_diff_days: number
+          distance_km: number
+          id?: number
+          is_valid: boolean
+          match_type: string
+          move_id: number
+          volume_ok: boolean
+        }
+        Update: {
+          client_request_id?: number
+          combined_volume?: number
+          created_at?: string
+          date_diff_days?: number
+          distance_km?: number
+          id?: number
+          is_valid?: boolean
+          match_type?: string
+          move_id?: number
+          volume_ok?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "move_matches_client_request_id_fkey"
+            columns: ["client_request_id"]
+            isOneToOne: false
+            referencedRelation: "client_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "move_matches_move_id_fkey"
+            columns: ["move_id"]
+            isOneToOne: false
+            referencedRelation: "confirmed_moves"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movers: {
+        Row: {
+          company_name: string
+          created_at: string
+          created_by: string
+          email: string
+          id: number
+          name: string
+          phone: string
+        }
+        Insert: {
+          company_name: string
+          created_at?: string
+          created_by: string
+          email: string
+          id?: number
+          name: string
+          phone: string
+        }
+        Update: {
+          company_name?: string
+          created_at?: string
+          created_by?: string
+          email?: string
+          id?: number
+          name?: string
+          phone?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          email: string
+          id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          email: string
+          id: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      trucks: {
+        Row: {
+          created_at: string
+          id: number
+          identifier: string
+          max_volume: number
+          mover_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          identifier: string
+          max_volume: number
+          mover_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          identifier?: string
+          max_volume?: number
+          mover_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trucks_mover_id_fkey"
+            columns: ["mover_id"]
+            isOneToOne: false
+            referencedRelation: "movers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,14 +1,19 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MapPin, Calendar, Users, Truck, ArrowRight } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Truck, ArrowRight, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 import MatchFinder from '../components/MatchFinder';
 import MoveManagement from '../components/MoveManagement';
 import ClientList from '../components/ClientList';
 import MoverList from '../components/MoverList';
+import UserManagement from '../components/UserManagement';
+import MoverCalendar from '../components/MoverCalendar';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const { profile, signOut } = useAuth();
 
   const tabVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -22,6 +27,43 @@ const Index = () => {
     { label: 'Matchs trouvés', value: '89', icon: Search, color: 'purple' },
     { label: 'Volume optimisé', value: '12.4m³', icon: MapPin, color: 'orange' },
   ];
+
+  const getTabsForRole = () => {
+    const baseTabs = [
+      { id: 'dashboard', label: 'Dashboard', icon: MapPin },
+    ];
+
+    if (profile?.role === 'admin') {
+      return [
+        ...baseTabs,
+        { id: 'matching', label: 'Matching', icon: Search },
+        { id: 'moves', label: 'Déménagements', icon: Truck },
+        { id: 'clients', label: 'Clients', icon: Users },
+        { id: 'users', label: 'Utilisateurs', icon: Users },
+      ];
+    } else if (profile?.role === 'agent') {
+      return [
+        ...baseTabs,
+        { id: 'matching', label: 'Matching', icon: Search },
+        { id: 'moves', label: 'Déménagements', icon: Truck },
+        { id: 'clients', label: 'Clients', icon: Users },
+      ];
+    } else if (profile?.role === 'demenageur') {
+      return [
+        { id: 'calendar', label: 'Mon Agenda', icon: Calendar },
+      ];
+    }
+    return baseTabs;
+  };
+
+  const tabs = getTabsForRole();
+
+  // Set default tab based on role
+  useState(() => {
+    if (profile?.role === 'demenageur') {
+      setActiveTab('calendar');
+    }
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -37,32 +79,42 @@ const Index = () => {
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                 <Truck className="h-6 w-6 text-white" />
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                MatchMove.io
-              </h1>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  MatchMove.io
+                </h1>
+                <p className="text-xs text-gray-600">{profile?.role} - {profile?.email}</p>
+              </div>
             </motion.div>
             
-            <nav className="hidden md:flex space-x-1 bg-gray-100 rounded-lg p-1">
-              {[
-                { id: 'dashboard', label: 'Dashboard', icon: MapPin },
-                { id: 'matching', label: 'Matching', icon: Search },
-                { id: 'moves', label: 'Déménagements', icon: Truck },
-                { id: 'clients', label: 'Clients', icon: Users },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? 'bg-white text-blue-600 shadow-md'
-                      : 'text-gray-600 hover:text-blue-600 hover:bg-white/50'
-                  }`}
-                >
-                  <tab.icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </nav>
+            <div className="flex items-center space-x-4">
+              <nav className="hidden md:flex space-x-1 bg-gray-100 rounded-lg p-1">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      activeTab === tab.id
+                        ? 'bg-white text-blue-600 shadow-md'
+                        : 'text-gray-600 hover:text-blue-600 hover:bg-white/50'
+                    }`}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </nav>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={signOut}
+                className="text-gray-600 hover:text-red-600"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Déconnexion
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -70,7 +122,7 @@ const Index = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && (
+          {activeTab === 'dashboard' && profile?.role !== 'demenageur' && (
             <motion.div
               key="dashboard"
               variants={tabVariants}
@@ -121,50 +173,19 @@ const Index = () => {
                   </motion.div>
                 ))}
               </div>
+            </motion.div>
+          )}
 
-              {/* Quick Actions */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-                className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-              >
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Actions rapides</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <button
-                    onClick={() => setActiveTab('matching')}
-                    className="group flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all duration-300"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Search className="h-5 w-5 text-blue-600" />
-                      <span className="font-medium text-blue-800">Lancer le matching</span>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-blue-600 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                  
-                  <button
-                    onClick={() => setActiveTab('moves')}
-                    className="group flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg hover:from-green-100 hover:to-green-200 transition-all duration-300"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Truck className="h-5 w-5 text-green-600" />
-                      <span className="font-medium text-green-800">Nouveau trajet</span>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-green-600 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                  
-                  <button
-                    onClick={() => setActiveTab('clients')}
-                    className="group flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg hover:from-purple-100 hover:to-purple-200 transition-all duration-300"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Users className="h-5 w-5 text-purple-600" />
-                      <span className="font-medium text-purple-800">Ajouter client</span>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-purple-600 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              </motion.div>
+          {activeTab === 'calendar' && (
+            <motion.div
+              key="calendar"
+              variants={tabVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <MoverCalendar />
             </motion.div>
           )}
 
@@ -204,6 +225,19 @@ const Index = () => {
               transition={{ duration: 0.3 }}
             >
               <ClientList />
+            </motion.div>
+          )}
+
+          {activeTab === 'users' && (
+            <motion.div
+              key="users"
+              variants={tabVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <UserManagement />
             </motion.div>
           )}
         </AnimatePresence>
