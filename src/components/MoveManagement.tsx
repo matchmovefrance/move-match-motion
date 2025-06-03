@@ -86,7 +86,7 @@ const MoveManagement = () => {
 
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Convertir les valeurs string en nombres appropriés
+      // Convertir les valeurs string en nombres appropriés et nettoyer les champs time
       const processedData = {
         ...formData,
         max_volume: parseFloat(formData.max_volume) || 0,
@@ -94,6 +94,11 @@ const MoveManagement = () => {
         price_per_m3: formData.price_per_m3 ? parseFloat(formData.price_per_m3) : null,
         total_price: formData.total_price ? parseFloat(formData.total_price) : null,
       };
+
+      // Supprimer available_volume car c'est une colonne générée
+      delete processedData.available_volume;
+
+      console.log('Processed data before save:', processedData);
 
       if (editingMove) {
         const { error } = await supabase
@@ -132,7 +137,7 @@ const MoveManagement = () => {
       console.error('Error saving move:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de sauvegarder le déménagement",
+        description: `Impossible de sauvegarder le déménagement: ${error.message}`,
         variant: "destructive",
       });
     }
