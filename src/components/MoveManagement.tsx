@@ -1,7 +1,7 @@
-
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2 } from 'lucide-react';
+import { ListView } from '@/components/ui/list-view';
 
 interface Move {
   id: number;
@@ -114,6 +114,121 @@ const MoveManagement = () => {
       default: return status;
     }
   };
+
+  const renderMoveCard = (move: Move) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300"
+    >
+      {/* Status Badge */}
+      <div className="relative p-4 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="absolute top-4 right-4">
+          <span className={`bg-${getStatusColor(move.status)}-100 text-${getStatusColor(move.status)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
+            {getStatusLabel(move.status)}
+          </span>
+        </div>
+        
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <Truck className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">{move.moverName}</h3>
+            <p className="text-sm text-gray-500">{move.truckIdentifier}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Date */}
+        <div className="flex items-center space-x-2 text-gray-600">
+          <Calendar className="h-4 w-4" />
+          <span className="text-sm">{new Date(move.departureDate).toLocaleDateString('fr-FR')}</span>
+        </div>
+
+        {/* Route */}
+        <div className="flex items-center space-x-2 text-gray-600">
+          <MapPin className="h-4 w-4" />
+          <span className="text-sm">{move.departureCity} → {move.arrivalCity}</span>
+        </div>
+
+        {/* Volume Progress */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <Volume2 className="h-4 w-4 text-gray-600" />
+              <span className="text-sm text-gray-600">Volume utilisé</span>
+            </div>
+            <span className="text-sm font-medium text-gray-800">
+              {move.usedVolume}m³ / {move.maxVolume}m³
+            </span>
+          </div>
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${(move.usedVolume / move.maxVolume) * 100}%` }}
+              transition={{ duration: 0.8 }}
+              className={`h-full rounded-full ${
+                (move.usedVolume / move.maxVolume) > 0.9 
+                  ? 'bg-red-500' 
+                  : (move.usedVolume / move.maxVolume) > 0.7 
+                  ? 'bg-yellow-500' 
+                  : 'bg-green-500'
+              }`}
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex space-x-2 pt-2">
+          <button className="flex-1 flex items-center justify-center space-x-1 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+            <Edit className="h-4 w-4" />
+            <span className="text-sm">Modifier</span>
+          </button>
+          <button className="flex items-center justify-center p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderMoveListItem = (move: Move) => (
+    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+      <div className="flex-1">
+        <div className="flex items-center space-x-4">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <Truck className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h4 className="font-medium text-gray-800">{move.moverName}</h4>
+            <p className="text-sm text-gray-600">{move.truckIdentifier}</p>
+          </div>
+          <div className="text-sm text-gray-500">
+            <span>{move.departureCity} → {move.arrivalCity}</span>
+          </div>
+          <div className="text-sm text-gray-500">
+            <span>{new Date(move.departureDate).toLocaleDateString('fr-FR')}</span>
+          </div>
+          <div className={`bg-${getStatusColor(move.status)}-100 text-${getStatusColor(move.status)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
+            {getStatusLabel(move.status)}
+          </div>
+          <div className="text-sm text-gray-600">
+            {move.usedVolume}m³ / {move.maxVolume}m³
+          </div>
+        </div>
+      </div>
+      <div className="flex space-x-2">
+        <button className="px-3 py-1 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm">
+          <Edit className="h-3 w-3" />
+        </button>
+        <button className="px-3 py-1 text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors text-sm">
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -283,89 +398,17 @@ const MoveManagement = () => {
         </motion.div>
       )}
 
-      {/* Moves Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {moves.map((move, index) => (
-          <motion.div
-            key={move.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300"
-          >
-            {/* Status Badge */}
-            <div className="relative p-4 bg-gradient-to-r from-blue-50 to-purple-50">
-              <div className="absolute top-4 right-4">
-                <span className={`bg-${getStatusColor(move.status)}-100 text-${getStatusColor(move.status)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
-                  {getStatusLabel(move.status)}
-                </span>
-              </div>
-              
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <Truck className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">{move.moverName}</h3>
-                  <p className="text-sm text-gray-500">{move.truckIdentifier}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 space-y-4">
-              {/* Date */}
-              <div className="flex items-center space-x-2 text-gray-600">
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm">{new Date(move.departureDate).toLocaleDateString('fr-FR')}</span>
-              </div>
-
-              {/* Route */}
-              <div className="flex items-center space-x-2 text-gray-600">
-                <MapPin className="h-4 w-4" />
-                <span className="text-sm">{move.departureCity} → {move.arrivalCity}</span>
-              </div>
-
-              {/* Volume Progress */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <Volume2 className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm text-gray-600">Volume utilisé</span>
-                  </div>
-                  <span className="text-sm font-medium text-gray-800">
-                    {move.usedVolume}m³ / {move.maxVolume}m³
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(move.usedVolume / move.maxVolume) * 100}%` }}
-                    transition={{ delay: index * 0.1 + 0.3, duration: 0.8 }}
-                    className={`h-full rounded-full ${
-                      (move.usedVolume / move.maxVolume) > 0.9 
-                        ? 'bg-red-500' 
-                        : (move.usedVolume / move.maxVolume) > 0.7 
-                        ? 'bg-yellow-500' 
-                        : 'bg-green-500'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex space-x-2 pt-2">
-                <button className="flex-1 flex items-center justify-center space-x-1 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
-                  <Edit className="h-4 w-4" />
-                  <span className="text-sm">Modifier</span>
-                </button>
-                <button className="flex items-center justify-center p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      {/* ListView for Moves */}
+      <ListView
+        items={moves}
+        searchFields={['moverName', 'truckIdentifier', 'departureCity', 'arrivalCity', 'status']}
+        renderCard={renderMoveCard}
+        renderListItem={renderMoveListItem}
+        searchPlaceholder="Rechercher par déménageur, camion, ville ou statut..."
+        emptyStateMessage="Aucun déménagement trouvé"
+        emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
+        itemsPerPage={9}
+      />
     </div>
   );
 };

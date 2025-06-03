@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Check, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ListView } from '@/components/ui/list-view';
 
 interface Match {
   id: number;
@@ -24,6 +25,7 @@ const MatchFinder = () => {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [acceptedMatches, setAcceptedMatches] = useState<number[]>([]);
   const [rejectedMatches, setRejectedMatches] = useState<number[]>([]);
+  const [showListView, setShowListView] = useState(false);
 
   // Mock data for demonstration
   const mockMatches: Match[] = [
@@ -82,6 +84,7 @@ const MatchFinder = () => {
     
     setMatches(mockMatches);
     setIsSearching(false);
+    setShowListView(true);
   };
 
   const handleAccept = (matchId: number) => {
@@ -111,6 +114,110 @@ const MatchFinder = () => {
       default: return 'gray';
     }
   };
+
+  const renderMatchCard = (match: Match) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+    >
+      <div className="flex justify-between items-start mb-4">
+        <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-3 py-1 rounded-full text-sm font-medium`}>
+          {getTypeLabel(match.type)}
+        </div>
+        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+          <span className="text-white font-bold text-sm">{match.matchScore}%</span>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500">Client</p>
+            <p className="font-semibold text-gray-800">{match.clientName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-gray-500">Déménageur</p>
+            <p className="font-semibold text-gray-800">{match.moveName}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 text-gray-600">
+          <MapPin className="h-4 w-4" />
+          <span className="text-sm">{match.departureCity} → {match.arrivalCity}</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Distance</p>
+            <p className="font-semibold text-gray-800">{match.distanceKm} km</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Décalage</p>
+            <p className="font-semibold text-gray-800">{match.dateDiffDays}j</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Volume</p>
+            <p className="font-semibold text-gray-800">{match.combinedVolume}m³</p>
+          </div>
+        </div>
+
+        <div className="flex space-x-2 pt-4">
+          <button
+            onClick={() => handleReject(match.id)}
+            className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            <X className="h-4 w-4" />
+            <span>Rejeter</span>
+          </button>
+          
+          <button
+            onClick={() => handleAccept(match.id)}
+            className="flex-1 flex items-center justify-center space-x-2 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition-all"
+          >
+            <Check className="h-4 w-4" />
+            <span>Accepter</span>
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderMatchListItem = (match: Match) => (
+    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+      <div className="flex-1">
+        <div className="flex items-center space-x-4">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+            <span className="text-white font-bold text-xs">{match.matchScore}%</span>
+          </div>
+          <div>
+            <h4 className="font-medium text-gray-800">{match.clientName}</h4>
+            <p className="text-sm text-gray-600">{match.moveName}</p>
+          </div>
+          <div className="text-sm text-gray-500">
+            <span>{match.departureCity} → {match.arrivalCity}</span>
+          </div>
+          <div className={`bg-${getTypeColor(match.type)}-100 text-${getTypeColor(match.type)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
+            {getTypeLabel(match.type)}
+          </div>
+        </div>
+      </div>
+      <div className="flex space-x-2">
+        <button
+          onClick={() => handleReject(match.id)}
+          className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm"
+        >
+          Rejeter
+        </button>
+        <button
+          onClick={() => handleAccept(match.id)}
+          className="px-3 py-1 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded hover:from-green-600 hover:to-blue-600 transition-all text-sm"
+        >
+          Accepter
+        </button>
+      </div>
+    </div>
+  );
 
   const currentMatch = matches[currentMatchIndex];
   const hasMoreMatches = currentMatchIndex < matches.length;
@@ -191,139 +298,26 @@ const MatchFinder = () => {
         </motion.div>
       )}
 
-      {/* Match Cards */}
-      {!isSearching && matches.length > 0 && (
-        <div className="relative">
-          {/* Progress Indicator */}
-          <div className="flex justify-center mb-6">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500">
-                {currentMatchIndex + 1} / {matches.length}
-              </span>
-              <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${((currentMatchIndex + 1) / matches.length) * 100}%` }}
-                  className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
+      {/* Results with ListView */}
+      {!isSearching && matches.length > 0 && showListView && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-semibold text-gray-800">Résultats de matching</h3>
+            <div className="text-sm text-gray-500">
+              {acceptedMatches.length} accepté(s) • {rejectedMatches.length} rejeté(s)
             </div>
           </div>
-
-          {/* Match Card Stack */}
-          <div className="relative h-96 flex items-center justify-center">
-            <AnimatePresence mode="wait">
-              {hasMoreMatches && currentMatch && (
-                <motion.div
-                  key={currentMatch.id}
-                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.8, opacity: 0, y: -50 }}
-                  transition={{ duration: 0.3 }}
-                  className="w-full max-w-md"
-                >
-                  <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
-                    {/* Match Score Badge */}
-                    <div className="relative p-6 bg-gradient-to-br from-blue-50 to-purple-50">
-                      <div className="absolute top-4 right-4">
-                        <div className={`bg-${getTypeColor(currentMatch.type)}-100 text-${getTypeColor(currentMatch.type)}-800 px-3 py-1 rounded-full text-sm font-medium`}>
-                          {getTypeLabel(currentMatch.type)}
-                        </div>
-                      </div>
-                      
-                      <div className="text-center mb-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-3 flex items-center justify-center">
-                          <span className="text-white font-bold text-lg">{currentMatch.matchScore}%</span>
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-800">Match trouvé !</h3>
-                      </div>
-                    </div>
-
-                    {/* Match Details */}
-                    <div className="p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-gray-500">Client</p>
-                          <p className="font-semibold text-gray-800">{currentMatch.clientName}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">Déménageur</p>
-                          <p className="font-semibold text-gray-800">{currentMatch.moveName}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <MapPin className="h-4 w-4" />
-                        <span className="text-sm">{currentMatch.departureCity} → {currentMatch.arrivalCity}</span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">Distance</p>
-                          <p className="font-semibold text-gray-800">{currentMatch.distanceKm} km</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">Décalage</p>
-                          <p className="font-semibold text-gray-800">{currentMatch.dateDiffDays}j</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">Volume</p>
-                          <p className="font-semibold text-gray-800">{currentMatch.combinedVolume}m³</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="p-6 bg-gray-50 flex space-x-4">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleReject(currentMatch.id)}
-                        className="flex-1 flex items-center justify-center space-x-2 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors"
-                      >
-                        <X className="h-5 w-5" />
-                        <span>Rejeter</span>
-                      </motion.button>
-                      
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleAccept(currentMatch.id)}
-                        className="flex-1 flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all"
-                      >
-                        <Check className="h-5 w-5" />
-                        <span>Accepter</span>
-                      </motion.button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* No More Matches */}
-            {!hasMoreMatches && matches.length > 0 && (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="text-center"
-              >
-                <div className="w-24 h-24 bg-gradient-to-br from-green-400 to-blue-500 rounded-full mx-auto mb-6 flex items-center justify-center">
-                  <Check className="w-12 h-12 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Recherche terminée !</h3>
-                <p className="text-gray-600 mb-6">
-                  {acceptedMatches.length} match(s) accepté(s) sur {matches.length}
-                </p>
-                <button
-                  onClick={findMatches}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg transition-shadow"
-                >
-                  Nouvelle recherche
-                </button>
-              </motion.div>
-            )}
-          </div>
+          
+          <ListView
+            items={matches}
+            searchFields={['clientName', 'moveName', 'departureCity', 'arrivalCity', 'type']}
+            renderCard={renderMatchCard}
+            renderListItem={renderMatchListItem}
+            searchPlaceholder="Rechercher par client, déménageur, ville..."
+            emptyStateMessage="Aucun match trouvé"
+            emptyStateIcon={<Search className="h-12 w-12 text-gray-400 mx-auto" />}
+            itemsPerPage={6}
+          />
         </div>
       )}
     </div>
