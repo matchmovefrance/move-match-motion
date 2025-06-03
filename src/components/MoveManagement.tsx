@@ -96,11 +96,22 @@ const MoveManagement = () => {
 
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Convertir les valeurs string en nombres appropriés et nettoyer les champs
-      const processedData = {
-        ...formData,
+      // Créer un objet de données propre avec conversion appropriée
+      const cleanData = {
+        // Informations de base (toujours présentes)
+        mover_name: formData.mover_name || null,
+        company_name: formData.company_name || null,
+        departure_city: formData.departure_city,
+        departure_postal_code: formData.departure_postal_code,
+        arrival_city: formData.arrival_city,
+        arrival_postal_code: formData.arrival_postal_code,
+        departure_date: formData.departure_date,
+        used_volume: parseFloat(formData.used_volume) || 0,
+        status: formData.status || 'confirmed',
+        created_by: user?.id,
+
+        // Valeurs numériques (conversion avec gestion des valeurs vides)
         max_volume: formData.max_volume && formData.max_volume !== '' ? parseFloat(formData.max_volume) : null,
-        used_volume: formData.used_volume && formData.used_volume !== '' ? parseFloat(formData.used_volume) : 0,
         price_per_m3: formData.price_per_m3 && formData.price_per_m3 !== '' ? parseFloat(formData.price_per_m3) : null,
         total_price: formData.total_price && formData.total_price !== '' ? parseFloat(formData.total_price) : null,
         max_weight: formData.max_weight && formData.max_weight !== '' ? parseFloat(formData.max_weight) : null,
@@ -108,23 +119,41 @@ const MoveManagement = () => {
         fuel_surcharge: formData.fuel_surcharge && formData.fuel_surcharge !== '' ? parseFloat(formData.fuel_surcharge) : null,
         additional_fees: formData.additional_fees && formData.additional_fees !== '' ? parseFloat(formData.additional_fees) : null,
         total_cost: formData.total_cost && formData.total_cost !== '' ? parseFloat(formData.total_cost) : null,
-        // Nettoyer les champs time
+        number_of_clients: formData.number_of_clients && formData.number_of_clients !== '' ? parseInt(formData.number_of_clients) : 0,
+
+        // Champs de temps (conversion avec gestion des valeurs vides)
         departure_time: formData.departure_time && formData.departure_time !== '' ? formData.departure_time : null,
         arrival_time: formData.arrival_time && formData.arrival_time !== '' ? formData.arrival_time : null,
         estimated_arrival_time: formData.estimated_arrival_time && formData.estimated_arrival_time !== '' ? formData.estimated_arrival_time : null,
-        // Nettoyer les champs date
+
+        // Champs de date (conversion avec gestion des valeurs vides)
         estimated_arrival_date: formData.estimated_arrival_date && formData.estimated_arrival_date !== '' ? formData.estimated_arrival_date : null,
+
+        // Champs texte
+        truck_identifier: formData.truck_identifier || null,
+        truck_type: formData.truck_type || 'Semi-remorque',
+        departure_address: formData.departure_address || null,
+        departure_country: formData.departure_country || 'France',
+        arrival_address: formData.arrival_address || null,
+        arrival_country: formData.arrival_country || 'France',
+        status_custom: formData.status_custom || 'en_cours',
+        route_type: formData.route_type || 'direct',
+        description: formData.description || null,
+        special_conditions: formData.special_conditions || null,
+        equipment_available: formData.equipment_available || null,
+        insurance_details: formData.insurance_details || null,
+        contact_phone: formData.contact_phone || null,
+        contact_email: formData.contact_email || null,
+        special_requirements: formData.special_requirements || null,
+        access_conditions: formData.access_conditions || null,
       };
 
-      // Supprimer available_volume car c'est une colonne générée
-      delete processedData.available_volume;
-
-      console.log('Processed data before save:', processedData);
+      console.log('Clean data before save:', cleanData);
 
       if (editingMove) {
         const { error } = await supabase
           .from('confirmed_moves')
-          .update(processedData)
+          .update(cleanData)
           .eq('id', editingMove.id);
 
         if (error) throw error;
@@ -134,13 +163,61 @@ const MoveManagement = () => {
           description: "Déménagement mis à jour avec succès",
         });
       } else {
-        // Supprimer les champs mover_id et truck_id qui causent la contrainte de clé étrangère
+        // Pour l'insertion, nous devons créer des entrées fictives pour mover_id et truck_id
+        // ou modifier la structure de la table pour rendre ces champs optionnels
+        
+        // Créer d'abord un mover fictif si nécessaire
+        let moverId = null;
+        if (cleanData.mover_name && cleanData.company_name) {
+          const { data: moverData, error: moverError } = await supabase
+            .from('movers')
+            .insert({
+              name: cleanData.mover_name,
+              company_name: cleanData.company_name,
+              email: cleanData.contact_email || 'non-renseigne@example.com',
+              phone: cleanData.contact_phone || '0000000000',
+              created_by: user?.id
+            })
+            .select()
+            .single();
+
+          if (moverError) {
+            console.error('Error creating mover:', moverError);
+            throw moverError;
+          }
+          moverId = moverData.id;
+        }
+
+        // Créer un truck fictif si nécessaire
+        let truckId = null;
+        if (moverId && cleanData.truck_identifier) {
+          const { data: truckData, error: truckError } = await supabase
+            .from('trucks')
+            .insert({
+              mover_id: moverId,
+              identifier: cleanData.truck_identifier,
+              max_volume: cleanData.max_volume || 1
+            })
+            .select()
+            .single();
+
+          if (truckError) {
+            console.error('Error creating truck:', truckError);
+            throw truckError;
+          }
+          truckId = truckData.id;
+        }
+
+        // Maintenant insérer le move avec les IDs appropriés
+        const moveData = {
+          ...cleanData,
+          mover_id: moverId,
+          truck_id: truckId
+        };
+
         const { error } = await supabase
           .from('confirmed_moves')
-          .insert({
-            ...processedData,
-            created_by: user?.id
-          });
+          .insert(moveData);
 
         if (error) throw error;
 
