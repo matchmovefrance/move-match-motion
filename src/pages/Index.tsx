@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, MapPin, Map, Calendar, UserCog, Link } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
@@ -11,6 +11,7 @@ import GoogleMap from '@/components/GoogleMap';
 import MoverCalendar from '@/components/MoverCalendar';
 import UserManagement from '@/components/UserManagement';
 import PublicLinkManager from '@/components/PublicLinkManager';
+import Header from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
@@ -34,38 +35,60 @@ const Index = () => {
       case 'clients': return <ClientList />;
       case 'moves': return <MoveManagement />;
       case 'matching': return <MatchFinder />;
-      case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
-      case 'calendar': return <MoverCalendar />;
-      case 'users': return <UserManagement />;
-      case 'links': return <PublicLinkManager />;
+      case 'management': 
+        return (
+          <div className="space-y-8">
+            <div>
+              <h2 className="text-2xl font-bold mb-6">Gestion des Services</h2>
+              <ServiceProviders />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold mb-6">Calendrier</h2>
+              <MoverCalendar />
+            </div>
+            {profile?.role === 'admin' && (
+              <>
+                <div>
+                  <h2 className="text-2xl font-bold mb-6">Gestion des Utilisateurs</h2>
+                  <UserManagement />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold mb-6">Liens Publics</h2>
+                  <PublicLinkManager />
+                </div>
+              </>
+            )}
+          </div>
+        );
       default: return <div>Contenu de l'onglet non trouvé.</div>;
     }
   };
 
   const tabs = [
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, component: Analytics },
-    { id: 'clients', label: 'Clients', icon: Users, component: ClientList },
-    { id: 'moves', label: 'Déménagements', icon: Truck, component: MoveManagement },
-    { id: 'matching', label: 'Matching', icon: Target, component: MatchFinder },
-    { id: 'providers', label: 'Prestataires', icon: MapPin, component: ServiceProviders },
-    { id: 'map', label: 'Carte', icon: Map, component: GoogleMap },
-    { id: 'calendar', label: 'Calendrier', icon: Calendar, component: MoverCalendar },
-    ...(profile?.role === 'admin' ? [
-      { id: 'users', label: 'Utilisateurs', icon: UserCog, component: UserManagement },
-      { id: 'links', label: 'Liens publics', icon: Link, component: PublicLinkManager }
-    ] : [])
+    { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
+    { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'moves', label: 'Déménagements', icon: Truck },
+    { id: 'matching', label: 'Matching', icon: Target },
+    { id: 'map', label: 'Carte', icon: Map },
+    { id: 'management', label: 'Gestion', icon: Settings }
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto py-12">
-        {/* Barre de navigation */}
-        <nav className="flex space-x-4 mb-8">
+      <Header />
+      
+      <div className="container mx-auto py-8">
+        {/* Navigation */}
+        <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              className={`group flex items-center space-x-2 px-4 py-2 rounded-md text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === tab.id ? 'bg-blue-50 text-blue-700' : ''}`}
+              className={`group flex items-center space-x-2 px-4 py-3 rounded-md text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                activeTab === tab.id 
+                  ? 'bg-blue-50 text-blue-700 shadow-sm' 
+                  : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
+              }`}
               onClick={() => setActiveTab(tab.id)}
             >
               <tab.icon className="h-5 w-5" />
@@ -75,7 +98,7 @@ const Index = () => {
         </nav>
 
         {/* Contenu de l'onglet actif */}
-        <div className="bg-white rounded-xl shadow-md p-8">
+        <div className="bg-white rounded-xl shadow-sm p-8">
           {renderTabComponent(activeTab)}
         </div>
       </div>
