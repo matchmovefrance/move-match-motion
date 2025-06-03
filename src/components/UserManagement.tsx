@@ -57,66 +57,25 @@ const UserManagement = () => {
       setError(null);
       console.log('Fetching users...');
       
-      // For admin users, try to fetch all profiles
-      if (profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        if (error) {
-          console.warn('Error fetching users:', error);
-          
-          // If it's a policy error, show a helpful message
-          if (error.message.includes('infinite recursion') || error.message.includes('policy')) {
-            setError('Database configuration issue detected. Please check RLS policies.');
-            // Show current user at least
-            if (profile) {
-              setUsers([{
-                id: profile.id,
-                email: profile.email,
-                role: profile.role,
-                company_name: profile.company_name,
-                created_at: new Date().toISOString()
-              }]);
-            }
-          } else {
-            setError(error.message);
-          }
-        } else {
-          const sanitizedUsers = (data || [])
-            .map(sanitizeProfile)
-            .filter((profile): profile is Profile => profile !== null);
-          
-          console.log('Fetched users:', sanitizedUsers);
-          setUsers(sanitizedUsers);
-        }
+      if (error) {
+        console.error('Error fetching users:', error);
+        setError(error.message);
       } else {
-        // Non-admin users can only see themselves
-        if (profile) {
-          setUsers([{
-            id: profile.id,
-            email: profile.email,
-            role: profile.role,
-            company_name: profile.company_name,
-            created_at: new Date().toISOString()
-          }]);
-        }
+        const sanitizedUsers = (data || [])
+          .map(sanitizeProfile)
+          .filter((profile): profile is Profile => profile !== null);
+        
+        console.log('Fetched users:', sanitizedUsers);
+        setUsers(sanitizedUsers);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
       setError('Failed to fetch users');
-      
-      // Fallback: show current user profile if available
-      if (profile) {
-        setUsers([{
-          id: profile.id,
-          email: profile.email,
-          role: profile.role,
-          company_name: profile.company_name,
-          created_at: new Date().toISOString()
-        }]);
-      }
     } finally {
       setLoading(false);
     }
@@ -234,14 +193,11 @@ const UserManagement = () => {
       </div>
 
       {error && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center space-x-3">
-          <AlertCircle className="h-5 w-5 text-yellow-600" />
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
           <div>
-            <p className="text-yellow-800 font-medium">Problème de configuration</p>
-            <p className="text-yellow-700 text-sm">{error}</p>
-            <p className="text-yellow-600 text-xs mt-1">
-              Les politiques RLS nécessitent une mise à jour pour afficher tous les utilisateurs.
-            </p>
+            <p className="text-red-800 font-medium">Erreur de chargement</p>
+            <p className="text-red-700 text-sm">{error}</p>
           </div>
         </div>
       )}
