@@ -30,13 +30,13 @@ const Header = () => {
       <div className="flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center space-x-3">
-          <div className="bg-blue-600 text-white p-2 rounded-lg">
-            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-            </svg>
-          </div>
+          <img 
+            src="https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png" 
+            alt="MatchMove Logo" 
+            className="h-12 w-auto"
+          />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Movable</h1>
+            <h1 className="text-xl font-bold text-gray-900">MatchMove</h1>
             <p className="text-sm text-gray-500">Gestion de Déménagements</p>
           </div>
         </div>
@@ -45,9 +45,7 @@ const Header = () => {
         <div className="flex items-center space-x-4">
           <div className="text-right">
             <p className="text-sm font-medium text-gray-900">
-              {profile?.first_name && profile?.last_name 
-                ? `${profile.first_name} ${profile.last_name}` 
-                : user?.email}
+              {user?.email}
             </p>
             <p className="text-xs text-gray-500 capitalize">{profile?.role || 'Utilisateur'}</p>
           </div>
