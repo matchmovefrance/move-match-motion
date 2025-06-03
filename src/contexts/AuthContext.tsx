@@ -24,7 +24,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Function to validate and sanitize profile data
 const allowedRoles = ['admin', 'agent', 'demenageur'] as const;
 type AllowedRole = typeof allowedRoles[number];
 
@@ -58,22 +57,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
 
   useEffect(() => {
+    let mounted = true;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
+        
         console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           console.log('User logged in, fetching profile...');
-          // Try to fetch profile, but don't block login if it fails
           try {
             await fetchProfile(session.user.id);
           } catch (error) {
             console.warn('Profile fetch failed, but user is still logged in:', error);
-            // Create a default profile for admin user if profile fetch fails
+            // For admin user, create a default profile
             if (session.user.email === 'contact@matchmove.fr') {
               console.log('Setting default admin profile');
+              if (mounted) {
+                setProfile({
+                  id: session.user.id,
+                  email: session.user.email,
+                  role: 'admin',
+                  company_name: undefined
+                });
+              }
+            }
+          }
+        } else {
+          if (mounted) {
+            setProfile(null);
+          }
+        }
+        
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    );
+
+    // Get initial session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+          if (mounted) {
+            setLoading(false);
+          }
+          return;
+        }
+
+        console.log('Initial session check:', session?.user?.email);
+        if (mounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+        
+        if (session?.user && mounted) {
+          try {
+            await fetchProfile(session.user.id);
+          } catch (error) {
+            console.warn('Initial profile fetch failed:', error);
+            if (session.user.email === 'contact@matchmove.fr' && mounted) {
+              console.log('Setting default admin profile on initial load');
               setProfile({
                 id: session.user.id,
                 email: session.user.email,
@@ -82,64 +131,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
             }
           }
-        } else {
-          setProfile(null);
         }
-        setLoading(false);
+        
+        if (mounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    );
+    };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session check:', session?.user?.email);
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).catch((error) => {
-          console.warn('Initial profile fetch failed:', error);
-          // Create a default profile for admin user if profile fetch fails
-          if (session.user.email === 'contact@matchmove.fr') {
-            console.log('Setting default admin profile on initial load');
-            setProfile({
-              id: session.user.id,
-              email: session.user.email,
-              role: 'admin',
-              company_name: undefined
-            });
-          }
-        });
-      }
-      setLoading(false);
-    });
+    initializeAuth();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (userId: string) => {
     console.log('Fetching profile for user:', userId);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-      if (error) {
-        console.error('Error fetching profile:', error);
-        throw error;
-      }
-
-      console.log('Profile data received:', data);
-      const sanitizedProfile = sanitizeProfile(data);
-      if (sanitizedProfile) {
-        setProfile(sanitizedProfile);
-        console.log('Profile set successfully:', sanitizedProfile);
-      } else {
-        console.warn('Profile data could not be sanitized');
-        throw new Error('Invalid profile data');
-      }
-    } catch (error) {
-      console.error('Profile fetch failed:', error);
+    if (error) {
+      console.error('Error fetching profile:', error);
       throw error;
+    }
+
+    console.log('Profile data received:', data);
+    const sanitizedProfile = sanitizeProfile(data);
+    if (sanitizedProfile) {
+      setProfile(sanitizedProfile);
+      console.log('Profile set successfully:', sanitizedProfile);
+    } else {
+      console.warn('Profile data could not be sanitized');
+      throw new Error('Invalid profile data');
     }
   };
 
@@ -160,9 +193,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: "destructive",
       });
       setLoading(false);
-    } else {
-      console.log('Sign in successful');
-      // Don't set loading to false here, let the auth state change handle it
     }
 
     return { error };

@@ -12,8 +12,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement...</p>
+        </div>
       </div>
     );
   }
@@ -22,8 +25,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/auth" replace />;
   }
 
-  // If user is logged in but no profile, still allow access
-  // This handles cases where profile fetch fails but authentication succeeded
+  // Allow access even if profile is not loaded yet (for cases where profile fetch fails)
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return <Navigate to="/" replace />;
   }
