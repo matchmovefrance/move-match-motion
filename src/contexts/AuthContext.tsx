@@ -59,54 +59,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
-        
-        console.log('Auth state changed:', event, session?.user?.email);
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          console.log('User logged in, fetching profile...');
-          try {
-            await fetchProfile(session.user.id);
-          } catch (error) {
-            console.warn('Profile fetch failed, but user is still logged in:', error);
-            // For admin user, create a default profile
-            if (session.user.email === 'contact@matchmove.fr') {
-              console.log('Setting default admin profile');
-              if (mounted) {
-                setProfile({
-                  id: session.user.id,
-                  email: session.user.email,
-                  role: 'admin',
-                  company_name: undefined
-                });
-              }
-            }
-          }
-        } else {
-          if (mounted) {
-            setProfile(null);
-          }
-        }
-        
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    );
-
-    // Get initial session
     const initializeAuth = async () => {
       try {
+        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-          if (mounted) {
-            setLoading(false);
-          }
+          if (mounted) setLoading(false);
           return;
         }
 
@@ -117,32 +76,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         if (session?.user && mounted) {
-          try {
-            await fetchProfile(session.user.id);
-          } catch (error) {
-            console.warn('Initial profile fetch failed:', error);
-            if (session.user.email === 'contact@matchmove.fr' && mounted) {
-              console.log('Setting default admin profile on initial load');
-              setProfile({
-                id: session.user.id,
-                email: session.user.email,
-                role: 'admin',
-                company_name: undefined
-              });
-            }
-          }
+          await handleUserProfile(session.user);
         }
         
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       } catch (error) {
         console.error('Auth initialization error:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+        
+        console.log('Auth state changed:', event, session?.user?.email);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await handleUserProfile(session.user);
+        } else {
+          setProfile(null);
+        }
+        
+        if (mounted) setLoading(false);
+      }
+    );
 
     initializeAuth();
 
@@ -152,27 +112,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchProfile = async (userId: string) => {
-    console.log('Fetching profile for user:', userId);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+  const handleUserProfile = async (user: User) => {
+    try {
+      console.log('Fetching profile for user:', user.id);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-    if (error) {
-      console.error('Error fetching profile:', error);
-      throw error;
-    }
+      if (error) {
+        console.warn('Profile fetch failed:', error);
+        // For admin user, create default profile
+        if (user.email === 'contact@matchmove.fr') {
+          console.log('Setting default admin profile');
+          setProfile({
+            id: user.id,
+            email: user.email,
+            role: 'admin',
+            company_name: undefined
+          });
+        }
+        return;
+      }
 
-    console.log('Profile data received:', data);
-    const sanitizedProfile = sanitizeProfile(data);
-    if (sanitizedProfile) {
-      setProfile(sanitizedProfile);
-      console.log('Profile set successfully:', sanitizedProfile);
-    } else {
-      console.warn('Profile data could not be sanitized');
-      throw new Error('Invalid profile data');
+      console.log('Profile data received:', data);
+      const sanitizedProfile = sanitizeProfile(data);
+      if (sanitizedProfile) {
+        setProfile(sanitizedProfile);
+        console.log('Profile set successfully:', sanitizedProfile);
+      }
+    } catch (error) {
+      console.error('Error in handleUserProfile:', error);
+      // For admin user, set default profile even on error
+      if (user.email === 'contact@matchmove.fr') {
+        setProfile({
+          id: user.id,
+          email: user.email,
+          role: 'admin',
+          company_name: undefined
+        });
+      }
     }
   };
 
