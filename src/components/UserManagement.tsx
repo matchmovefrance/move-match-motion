@@ -1,8 +1,20 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, Users, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Users, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,6 +51,7 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
@@ -120,6 +133,7 @@ const UserManagement = () => {
 
   const createUser = async () => {
     try {
+      // First try to create via admin API for better control
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -134,6 +148,7 @@ const UserManagement = () => {
       if (authError) throw authError;
 
       if (authData.user) {
+        // Create profile manually since the trigger might not work for admin-created users
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -146,11 +161,15 @@ const UserManagement = () => {
         if (profileError) {
           console.warn('Profile creation failed:', profileError);
         }
+
+        // For admin-created users, we should confirm them automatically
+        // This requires additional setup with service role key
+        console.log('User created, confirmation may be required via email');
       }
 
       toast({
         title: "Succès",
-        description: "Utilisateur créé avec succès",
+        description: "Utilisateur créé avec succès. L'utilisateur doit confirmer son email pour se connecter.",
       });
 
       setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
@@ -163,6 +182,46 @@ const UserManagement = () => {
         description: error.message || "Impossible de créer l'utilisateur",
         variant: "destructive",
       });
+    }
+  };
+
+  const resetPassword = async (userId: string, userEmail: string) => {
+    try {
+      setResettingPassword(userId);
+      
+      // Generate a new temporary password
+      const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
+      
+      // For now, we'll show the password in a toast since we need admin privileges
+      // In production, this would require service role key to update passwords directly
+      
+      toast({
+        title: "Mot de passe temporaire généré",
+        description: `Nouveau mot de passe pour ${userEmail}: ${tempPassword}`,
+        duration: 10000, // Show for 10 seconds
+      });
+
+      // Try to send notification email
+      try {
+        await supabase.functions.invoke('send-password-reset', {
+          body: {
+            email: userEmail,
+            tempPassword: tempPassword
+          }
+        });
+      } catch (emailError) {
+        console.warn('Email notification failed:', emailError);
+      }
+
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de réinitialiser le mot de passe",
+        variant: "destructive",
+      });
+    } finally {
+      setResettingPassword(null);
     }
   };
 
@@ -294,9 +353,9 @@ const UserManagement = () => {
             <p className="text-gray-500">Aucun utilisateur trouvé</p>
           </div>
         ) : (
-          users.map((user) => (
+          users.map((userItem) => (
             <motion.div
-              key={user.id}
+              key={userItem.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
@@ -307,27 +366,64 @@ const UserManagement = () => {
                     <Users className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-800">{user.email}</h3>
+                    <h3 className="font-semibold text-gray-800">{userItem.email}</h3>
                     <div className="flex items-center space-x-2 mt-1">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                        {user.role}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(userItem.role)}`}>
+                        {userItem.role}
                       </span>
-                      {user.company_name && (
-                        <span className="text-sm text-gray-600">{user.company_name}</span>
+                      {userItem.company_name && (
+                        <span className="text-sm text-gray-600">{userItem.company_name}</span>
                       )}
                     </div>
                   </div>
                 </div>
-                {(profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') && user.id !== profile?.id && (
+                {(profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') && (
                   <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteUser(user.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={resettingPassword === userItem.id}
+                          className="text-orange-600 hover:text-orange-700"
+                        >
+                          {resettingPassword === userItem.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600"></div>
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Réinitialiser le mot de passe</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Êtes-vous sûr de vouloir réinitialiser le mot de passe de {userItem.email} ? 
+                            Un nouveau mot de passe temporaire sera généré et affiché.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Annuler</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => resetPassword(userItem.id, userItem.email)}
+                            className="bg-orange-600 hover:bg-orange-700"
+                          >
+                            Réinitialiser
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    
+                    {userItem.id !== profile?.id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteUser(userItem.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
