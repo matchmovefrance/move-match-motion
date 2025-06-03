@@ -1,20 +1,28 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, Mail, Phone, Edit, Trash2 } from 'lucide-react';
+import { Plus, Users, Mail, Phone, Edit, Trash2, MapPin, Calendar, Volume2, Euro } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ListView } from '@/components/ui/list-view';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import ClientForm from './ClientForm';
 
 interface Client {
   id: number;
   name: string;
   email: string;
   phone: string;
+  departure_city: string;
+  departure_postal_code: string;
+  arrival_city: string;
+  arrival_postal_code: string;
+  desired_date: string;
+  estimated_volume: number;
+  quote_amount?: number;
+  status: string;
   created_at: string;
 }
 
@@ -24,11 +32,6 @@ const ClientList = () => {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [newClient, setNewClient] = useState({
-    name: '',
-    email: '',
-    phone: ''
-  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -38,7 +41,7 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       const { data, error } = await supabase
-        .from('clients')
+        .from('client_requests')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -51,60 +54,44 @@ const ClientList = () => {
     }
   };
 
-  const addClient = async () => {
-    if (!user) return;
-
+  const handleFormSubmit = async (formData: any) => {
     try {
-      const { error } = await supabase
-        .from('clients')
-        .insert({
-          ...newClient,
-          created_by: user.id
+      if (editingClient) {
+        const { error } = await supabase
+          .from('client_requests')
+          .update(formData)
+          .eq('id', editingClient.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Succès",
+          description: "Client mis à jour avec succès",
         });
+      } else {
+        const { error } = await supabase
+          .from('client_requests')
+          .insert({
+            ...formData,
+            created_by: user?.id
+          });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: "Succès",
-        description: "Client ajouté avec succès",
-      });
+        toast({
+          title: "Succès",
+          description: "Client ajouté avec succès",
+        });
+      }
 
-      setNewClient({ name: '', email: '', phone: '' });
       setShowAddForm(false);
-      fetchClients();
-    } catch (error: any) {
-      console.error('Error adding client:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible d'ajouter le client",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const updateClient = async () => {
-    if (!editingClient) return;
-
-    try {
-      const { error } = await supabase
-        .from('clients')
-        .update(editingClient)
-        .eq('id', editingClient.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Succès",
-        description: "Client mis à jour avec succès",
-      });
-
       setEditingClient(null);
       fetchClients();
     } catch (error: any) {
-      console.error('Error updating client:', error);
+      console.error('Error saving client:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de mettre à jour le client",
+        description: "Impossible de sauvegarder le client",
         variant: "destructive",
       });
     }
@@ -115,7 +102,7 @@ const ClientList = () => {
 
     try {
       const { error } = await supabase
-        .from('clients')
+        .from('client_requests')
         .delete()
         .eq('id', id);
 
@@ -143,9 +130,9 @@ const ClientList = () => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
     >
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-800 mb-3">{client.name}</h3>
+          <h3 className="font-semibold text-gray-800 mb-2">{client.name}</h3>
           
           <div className="space-y-2 text-sm text-gray-600">
             <div className="flex items-center space-x-2">
@@ -156,9 +143,35 @@ const ClientList = () => {
               <Phone className="h-4 w-4 text-blue-600" />
               <span>{client.phone}</span>
             </div>
-            <div className="text-xs text-gray-400 mt-3">
-              Créé le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-4 w-4 text-green-600" />
+              <span>{client.departure_postal_code} {client.departure_city} → {client.arrival_postal_code} {client.arrival_city}</span>
             </div>
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-purple-600" />
+              <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Volume2 className="h-4 w-4 text-orange-600" />
+              <span>{client.estimated_volume}m³</span>
+            </div>
+            {client.quote_amount && (
+              <div className="flex items-center space-x-2">
+                <Euro className="h-4 w-4 text-green-600" />
+                <span>{client.quote_amount}€</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-3">
+            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+              client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              client.status === 'matched' ? 'bg-green-100 text-green-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {client.status === 'pending' ? 'En attente' : 
+               client.status === 'matched' ? 'Matché' : client.status}
+            </span>
           </div>
         </div>
         
@@ -192,10 +205,21 @@ const ClientList = () => {
             <p className="text-sm text-gray-600">{client.email}</p>
           </div>
           <div className="text-sm text-gray-500">
-            <span>{client.phone}</span>
+            <span>{client.departure_city} → {client.arrival_city}</span>
           </div>
-          <div className="text-xs text-gray-400">
-            {new Date(client.created_at).toLocaleDateString('fr-FR')}
+          <div className="text-sm text-gray-500">
+            <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+          </div>
+          <div className="text-sm text-gray-500">
+            <span>{client.estimated_volume}m³</span>
+          </div>
+          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+            client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+            client.status === 'matched' ? 'bg-green-100 text-green-800' :
+            'bg-gray-100 text-gray-800'
+          }`}>
+            {client.status === 'pending' ? 'En attente' : 
+             client.status === 'matched' ? 'Matché' : client.status}
           </div>
         </div>
       </div>
@@ -227,6 +251,36 @@ const ClientList = () => {
     );
   }
 
+  if (showAddForm || editingClient) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Users className="h-6 w-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-gray-800">
+              {editingClient ? 'Modifier le client' : 'Nouveau client'}
+            </h2>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowAddForm(false);
+              setEditingClient(null);
+            }}
+          >
+            Retour à la liste
+          </Button>
+        </div>
+        
+        <ClientForm
+          onSubmit={handleFormSubmit}
+          initialData={editingClient || undefined}
+          isEditing={!!editingClient}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -243,67 +297,12 @@ const ClientList = () => {
         </Button>
       </div>
 
-      {/* Add/Edit Form */}
-      {(showAddForm || editingClient) && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-        >
-          <h3 className="text-lg font-semibold mb-4">
-            {editingClient ? 'Modifier le client' : 'Nouveau client'}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              placeholder="Nom complet"
-              value={editingClient ? editingClient.name : newClient.name}
-              onChange={(e) => editingClient 
-                ? setEditingClient({...editingClient, name: e.target.value})
-                : setNewClient({...newClient, name: e.target.value})
-              }
-            />
-            <Input
-              placeholder="Email"
-              type="email"
-              value={editingClient ? editingClient.email : newClient.email}
-              onChange={(e) => editingClient 
-                ? setEditingClient({...editingClient, email: e.target.value})
-                : setNewClient({...newClient, email: e.target.value})
-              }
-            />
-            <Input
-              placeholder="Téléphone"
-              value={editingClient ? editingClient.phone : newClient.phone}
-              onChange={(e) => editingClient 
-                ? setEditingClient({...editingClient, phone: e.target.value})
-                : setNewClient({...newClient, phone: e.target.value})
-              }
-            />
-          </div>
-          <div className="flex space-x-2 mt-4">
-            <Button onClick={editingClient ? updateClient : addClient}>
-              {editingClient ? 'Mettre à jour' : 'Ajouter'}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowAddForm(false);
-                setEditingClient(null);
-              }}
-            >
-              Annuler
-            </Button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ListView with search and pagination */}
       <ListView
         items={clients}
-        searchFields={['name', 'email', 'phone']}
+        searchFields={['name', 'email', 'phone', 'departure_city', 'arrival_city']}
         renderCard={renderClientCard}
         renderListItem={renderClientListItem}
-        searchPlaceholder="Rechercher par nom, email ou téléphone..."
+        searchPlaceholder="Rechercher par nom, email, téléphone ou ville..."
         emptyStateMessage="Aucun client trouvé"
         emptyStateIcon={<Users className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}

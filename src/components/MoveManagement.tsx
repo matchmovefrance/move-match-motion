@@ -1,100 +1,133 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2 } from 'lucide-react';
+import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, Users } from 'lucide-react';
 import { ListView } from '@/components/ui/list-view';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import MoveForm from './MoveForm';
 
 interface Move {
   id: number;
-  moverName: string;
-  truckIdentifier: string;
-  departureDate: string;
-  departureCity: string;
-  departurePostal: string;
-  arrivalCity: string;
-  arrivalPostal: string;
-  maxVolume: number;
-  usedVolume: number;
+  mover_name: string;
+  company_name: string;
+  truck_identifier: string;
+  departure_date: string;
+  departure_city: string;
+  departure_postal_code: string;
+  arrival_city: string;
+  arrival_postal_code: string;
+  max_volume: number;
+  used_volume: number;
+  available_volume?: number;
   status: 'confirmed' | 'pending' | 'completed';
+  status_custom?: string;
+  created_at: string;
 }
 
 const MoveManagement = () => {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
-  const [moves, setMoves] = useState<Move[]>([
-    {
-      id: 1,
-      moverName: "Transport Solutions Pro",
-      truckIdentifier: "TSP-001",
-      departureDate: "2024-06-15",
-      departureCity: "Paris",
-      departurePostal: "75001",
-      arrivalCity: "Lyon",
-      arrivalPostal: "69001",
-      maxVolume: 25.0,
-      usedVolume: 12.5,
-      status: 'confirmed'
-    },
-    {
-      id: 2,
-      moverName: "Express Déménagement",
-      truckIdentifier: "EXP-042",
-      departureDate: "2024-06-18",
-      departureCity: "Marseille",
-      departurePostal: "13001",
-      arrivalCity: "Nice",
-      arrivalPostal: "06000",
-      maxVolume: 18.0,
-      usedVolume: 18.0,
-      status: 'confirmed'
-    },
-    {
-      id: 3,
-      moverName: "Move Master",
-      truckIdentifier: "MM-123",
-      departureDate: "2024-06-20",
-      departureCity: "Toulouse",
-      departurePostal: "31000",
-      arrivalCity: "Bordeaux",
-      arrivalPostal: "33000",
-      maxVolume: 30.0,
-      usedVolume: 8.2,
-      status: 'pending'
+  const [editingMove, setEditingMove] = useState<Move | null>(null);
+  const [moves, setMoves] = useState<Move[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchMoves();
+  }, []);
+
+  const fetchMoves = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('confirmed_moves')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      const movesWithCalculations = (data || []).map(move => ({
+        ...move,
+        available_volume: move.max_volume - move.used_volume
+      }));
+      
+      setMoves(movesWithCalculations);
+    } catch (error) {
+      console.error('Error fetching moves:', error);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
-  const [formData, setFormData] = useState({
-    moverName: '',
-    truckIdentifier: '',
-    departureDate: '',
-    departureCity: '',
-    departurePostal: '',
-    arrivalCity: '',
-    arrivalPostal: '',
-    maxVolume: '',
-    usedVolume: ''
-  });
+  const handleFormSubmit = async (formData: any) => {
+    try {
+      if (editingMove) {
+        const { error } = await supabase
+          .from('confirmed_moves')
+          .update(formData)
+          .eq('id', editingMove.id);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newMove: Move = {
-      id: moves.length + 1,
-      ...formData,
-      maxVolume: parseFloat(formData.maxVolume),
-      usedVolume: parseFloat(formData.usedVolume),
-      status: 'confirmed'
-    };
-    setMoves([...moves, newMove]);
-    setFormData({
-      moverName: '',
-      truckIdentifier: '',
-      departureDate: '',
-      departureCity: '',
-      departurePostal: '',
-      arrivalCity: '',
-      arrivalPostal: '',
-      maxVolume: '',
-      usedVolume: ''
-    });
-    setShowForm(false);
+        if (error) throw error;
+
+        toast({
+          title: "Succès",
+          description: "Déménagement mis à jour avec succès",
+        });
+      } else {
+        const { error } = await supabase
+          .from('confirmed_moves')
+          .insert({
+            ...formData,
+            created_by: user?.id
+          });
+
+        if (error) throw error;
+
+        toast({
+          title: "Succès",
+          description: "Déménagement ajouté avec succès",
+        });
+      }
+
+      setShowForm(false);
+      setEditingMove(null);
+      fetchMoves();
+    } catch (error: any) {
+      console.error('Error saving move:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder le déménagement",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteMove = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce déménagement ?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Déménagement supprimé avec succès",
+      });
+
+      fetchMoves();
+    } catch (error: any) {
+      console.error('Error deleting move:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le déménagement",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -121,11 +154,10 @@ const MoveManagement = () => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300"
     >
-      {/* Status Badge */}
       <div className="relative p-4 bg-gradient-to-r from-blue-50 to-purple-50">
         <div className="absolute top-4 right-4">
-          <span className={`bg-${getStatusColor(move.status)}-100 text-${getStatusColor(move.status)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
-            {getStatusLabel(move.status)}
+          <span className={`bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium`}>
+            {move.status_custom || move.status}
           </span>
         </div>
         
@@ -134,26 +166,28 @@ const MoveManagement = () => {
             <Truck className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">{move.moverName}</h3>
-            <p className="text-sm text-gray-500">{move.truckIdentifier}</p>
+            <h3 className="font-semibold text-gray-800">{move.company_name}</h3>
+            <p className="text-sm text-gray-500">{move.truck_identifier}</p>
           </div>
         </div>
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Date */}
+        <div className="flex items-center space-x-2 text-gray-600">
+          <Users className="h-4 w-4" />
+          <span className="text-sm">{move.mover_name}</span>
+        </div>
+
         <div className="flex items-center space-x-2 text-gray-600">
           <Calendar className="h-4 w-4" />
-          <span className="text-sm">{new Date(move.departureDate).toLocaleDateString('fr-FR')}</span>
+          <span className="text-sm">{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
         </div>
 
-        {/* Route */}
         <div className="flex items-center space-x-2 text-gray-600">
           <MapPin className="h-4 w-4" />
-          <span className="text-sm">{move.departureCity} → {move.arrivalCity}</span>
+          <span className="text-sm">{move.departure_city} → {move.arrival_city}</span>
         </div>
 
-        {/* Volume Progress */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
@@ -161,18 +195,18 @@ const MoveManagement = () => {
               <span className="text-sm text-gray-600">Volume utilisé</span>
             </div>
             <span className="text-sm font-medium text-gray-800">
-              {move.usedVolume}m³ / {move.maxVolume}m³
+              {move.used_volume}m³ / {move.max_volume}m³
             </span>
           </div>
           <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${(move.usedVolume / move.maxVolume) * 100}%` }}
+              animate={{ width: `${(move.used_volume / move.max_volume) * 100}%` }}
               transition={{ duration: 0.8 }}
               className={`h-full rounded-full ${
-                (move.usedVolume / move.maxVolume) > 0.9 
+                (move.used_volume / move.max_volume) > 0.9 
                   ? 'bg-red-500' 
-                  : (move.usedVolume / move.maxVolume) > 0.7 
+                  : (move.used_volume / move.max_volume) > 0.7 
                   ? 'bg-yellow-500' 
                   : 'bg-green-500'
               }`}
@@ -180,13 +214,18 @@ const MoveManagement = () => {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex space-x-2 pt-2">
-          <button className="flex-1 flex items-center justify-center space-x-1 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+          <button 
+            onClick={() => setEditingMove(move)}
+            className="flex-1 flex items-center justify-center space-x-1 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          >
             <Edit className="h-4 w-4" />
             <span className="text-sm">Modifier</span>
           </button>
-          <button className="flex items-center justify-center p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+          <button 
+            onClick={() => deleteMove(move.id)}
+            className="flex items-center justify-center p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+          >
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
@@ -202,37 +241,77 @@ const MoveManagement = () => {
             <Truck className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h4 className="font-medium text-gray-800">{move.moverName}</h4>
-            <p className="text-sm text-gray-600">{move.truckIdentifier}</p>
+            <h4 className="font-medium text-gray-800">{move.company_name}</h4>
+            <p className="text-sm text-gray-600">{move.truck_identifier}</p>
           </div>
           <div className="text-sm text-gray-500">
-            <span>{move.departureCity} → {move.arrivalCity}</span>
+            <span>{move.departure_city} → {move.arrival_city}</span>
           </div>
           <div className="text-sm text-gray-500">
-            <span>{new Date(move.departureDate).toLocaleDateString('fr-FR')}</span>
-          </div>
-          <div className={`bg-${getStatusColor(move.status)}-100 text-${getStatusColor(move.status)}-800 px-2 py-1 rounded-full text-xs font-medium`}>
-            {getStatusLabel(move.status)}
+            <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
           </div>
           <div className="text-sm text-gray-600">
-            {move.usedVolume}m³ / {move.maxVolume}m³
+            {move.used_volume}m³ / {move.max_volume}m³
           </div>
         </div>
       </div>
       <div className="flex space-x-2">
-        <button className="px-3 py-1 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm">
+        <button 
+          onClick={() => setEditingMove(move)}
+          className="px-3 py-1 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm"
+        >
           <Edit className="h-3 w-3" />
         </button>
-        <button className="px-3 py-1 text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors text-sm">
+        <button 
+          onClick={() => deleteMove(move.id)}
+          className="px-3 py-1 text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors text-sm"
+        >
           <Trash2 className="h-3 w-3" />
         </button>
       </div>
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (showForm || editingMove) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Truck className="h-6 w-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-gray-800">
+              {editingMove ? 'Modifier le déménagement' : 'Nouveau déménagement'}
+            </h2>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowForm(false);
+              setEditingMove(null);
+            }}
+          >
+            Retour à la liste
+          </Button>
+        </div>
+        
+        <MoveForm
+          onSubmit={handleFormSubmit}
+          initialData={editingMove || undefined}
+          isEditing={!!editingMove}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <motion.h2 
@@ -256,7 +335,7 @@ const MoveManagement = () => {
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => setShowForm(true)}
           className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-shadow"
         >
           <Plus className="h-5 w-5" />
@@ -264,147 +343,12 @@ const MoveManagement = () => {
         </motion.button>
       </div>
 
-      {/* Add Move Form */}
-      {showForm && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 mb-8"
-        >
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Ajouter un nouveau trajet</h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom du déménageur
-              </label>
-              <input
-                type="text"
-                value={formData.moverName}
-                onChange={(e) => setFormData({...formData, moverName: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Identifiant camion
-              </label>
-              <input
-                type="text"
-                value={formData.truckIdentifier}
-                onChange={(e) => setFormData({...formData, truckIdentifier: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date de départ
-              </label>
-              <input
-                type="date"
-                value={formData.departureDate}
-                onChange={(e) => setFormData({...formData, departureDate: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Volume maximum (m³)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={formData.maxVolume}
-                onChange={(e) => setFormData({...formData, maxVolume: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ville de départ
-              </label>
-              <input
-                type="text"
-                value={formData.departureCity}
-                onChange={(e) => setFormData({...formData, departureCity: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code postal départ
-              </label>
-              <input
-                type="text"
-                value={formData.departurePostal}
-                onChange={(e) => setFormData({...formData, departurePostal: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ville d'arrivée
-              </label>
-              <input
-                type="text"
-                value={formData.arrivalCity}
-                onChange={(e) => setFormData({...formData, arrivalCity: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code postal arrivée
-              </label>
-              <input
-                type="text"
-                value={formData.arrivalPostal}
-                onChange={(e) => setFormData({...formData, arrivalPostal: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div className="md:col-span-2 flex space-x-4">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-shadow"
-              >
-                Ajouter le trajet
-              </button>
-            </div>
-          </form>
-        </motion.div>
-      )}
-
-      {/* ListView for Moves */}
       <ListView
         items={moves}
-        searchFields={['moverName', 'truckIdentifier', 'departureCity', 'arrivalCity', 'status']}
+        searchFields={['company_name', 'mover_name', 'truck_identifier', 'departure_city', 'arrival_city', 'status']}
         renderCard={renderMoveCard}
         renderListItem={renderMoveListItem}
-        searchPlaceholder="Rechercher par déménageur, camion, ville ou statut..."
+        searchPlaceholder="Rechercher par entreprise, déménageur, camion, ville ou statut..."
         emptyStateMessage="Aucun déménagement trouvé"
         emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={9}
