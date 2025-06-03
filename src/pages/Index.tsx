@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, Map, Settings } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings, Calendar } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
@@ -20,12 +20,18 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!user || !profile) {
+    if (!user) {
       navigate('/auth');
+      return;
+    }
+
+    // Set default tab based on user role
+    if (profile?.role === 'demenageur') {
+      setActiveTab('calendar');
     }
   }, [user, profile, navigate]);
 
-  if (!user || !profile) {
+  if (!user) {
     return null;
   }
 
@@ -36,16 +42,13 @@ const Index = () => {
       case 'moves': return <MoveManagement />;
       case 'matching': return <MatchFinder />;
       case 'map': return <GoogleMap />;
+      case 'calendar': return <MoverCalendar />;
       case 'management': 
         return (
           <div className="space-y-8">
             <div>
               <h2 className="text-2xl font-bold mb-6">Gestion des Services</h2>
               <ServiceProviders />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold mb-6">Calendrier</h2>
-              <MoverCalendar />
             </div>
             {profile?.role === 'admin' && (
               <>
@@ -65,14 +68,33 @@ const Index = () => {
     }
   };
 
-  const tabs = [
-    { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
-    { id: 'clients', label: 'Clients', icon: Users },
-    { id: 'moves', label: 'Déménagements', icon: Truck },
-    { id: 'matching', label: 'Matching', icon: Target },
-    { id: 'map', label: 'Carte', icon: Map },
-    { id: 'management', label: 'Gestion', icon: Settings }
-  ];
+  // Define tabs based on user role
+  const getTabs = () => {
+    if (profile?.role === 'demenageur') {
+      // Déménageur users only see the calendar
+      return [
+        { id: 'calendar', label: 'Mon Planning', icon: Calendar }
+      ];
+    }
+
+    // Default tabs for admin and agent users
+    const baseTabs = [
+      { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
+      { id: 'clients', label: 'Clients', icon: Users },
+      { id: 'moves', label: 'Déménagements', icon: Truck },
+      { id: 'matching', label: 'Matching', icon: Target },
+      { id: 'map', label: 'Carte', icon: Map },
+    ];
+
+    // Add management tab for admin users
+    if (profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') {
+      baseTabs.push({ id: 'management', label: 'Gestion', icon: Settings });
+    }
+
+    return baseTabs;
+  };
+
+  const tabs = getTabs();
 
   return (
     <div className="min-h-screen bg-gray-50">

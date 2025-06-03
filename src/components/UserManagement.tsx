@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, Users, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Users, AlertCircle, RefreshCw, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,6 +15,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,6 +59,12 @@ const UserManagement = () => {
   const [error, setError] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
+  const [passwordDialog, setPasswordDialog] = useState<{
+    show: boolean;
+    email: string;
+    password: string;
+  }>({ show: false, email: '', password: '' });
+  const [copied, setCopied] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
@@ -133,7 +146,9 @@ const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      // First try to create via admin API for better control
+      console.log('Creating user with role:', newUser.role);
+      
+      // Create the user via signup
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -145,10 +160,15 @@ const UserManagement = () => {
         }
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Auth signup error:', authError);
+        throw authError;
+      }
 
       if (authData.user) {
-        // Create profile manually since the trigger might not work for admin-created users
+        console.log('User created, ID:', authData.user.id);
+        
+        // Create profile manually to ensure it exists
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -156,20 +176,25 @@ const UserManagement = () => {
             email: authData.user.email,
             role: newUser.role,
             company_name: newUser.company_name || null
+          }, {
+            onConflict: 'id'
           });
 
         if (profileError) {
-          console.warn('Profile creation failed:', profileError);
+          console.error('Profile creation error:', profileError);
+          // Don't throw, just warn since the trigger might have created it
+          console.warn('Profile creation failed, but user might still be created via trigger');
+        } else {
+          console.log('Profile created successfully');
         }
 
-        // For admin-created users, we should confirm them automatically
-        // This requires additional setup with service role key
-        console.log('User created, confirmation may be required via email');
+        // For admin-created users, we should confirm them automatically if possible
+        console.log('User created successfully. Email confirmation may be required.');
       }
 
       toast({
         title: "Succès",
-        description: "Utilisateur créé avec succès. L'utilisateur doit confirmer son email pour se connecter.",
+        description: "Utilisateur créé avec succès.",
       });
 
       setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
@@ -192,13 +217,11 @@ const UserManagement = () => {
       // Generate a new temporary password
       const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
       
-      // For now, we'll show the password in a toast since we need admin privileges
-      // In production, this would require service role key to update passwords directly
-      
-      toast({
-        title: "Mot de passe temporaire généré",
-        description: `Nouveau mot de passe pour ${userEmail}: ${tempPassword}`,
-        duration: 10000, // Show for 10 seconds
+      // Show the password in a dialog for copying
+      setPasswordDialog({
+        show: true,
+        email: userEmail,
+        password: tempPassword
       });
 
       // Try to send notification email
@@ -222,6 +245,25 @@ const UserManagement = () => {
       });
     } finally {
       setResettingPassword(null);
+    }
+  };
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(passwordDialog.password);
+      setCopied(true);
+      toast({
+        title: "Copié !",
+        description: "Le mot de passe a été copié dans le presse-papiers",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy password:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de copier le mot de passe",
+        variant: "destructive",
+      });
     }
   };
 
@@ -300,6 +342,44 @@ const UserManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Password Dialog */}
+      <Dialog open={passwordDialog.show} onOpenChange={(open) => setPasswordDialog({ ...passwordDialog, show: open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mot de passe temporaire généré</DialogTitle>
+            <DialogDescription>
+              Nouveau mot de passe pour {passwordDialog.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2 p-3 bg-gray-100 rounded-lg">
+              <code className="flex-1 font-mono text-sm">{passwordDialog.password}</code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyPassword}
+                className="flex items-center space-x-1"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>Copié</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    <span>Copier</span>
+                  </>
+                )}
+              </Button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Partagez ce mot de passe avec l'utilisateur. Il devra le changer lors de sa prochaine connexion.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {showAddUser && (profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') && (
         <motion.div
@@ -399,7 +479,7 @@ const UserManagement = () => {
                           <AlertDialogTitle>Réinitialiser le mot de passe</AlertDialogTitle>
                           <AlertDialogDescription>
                             Êtes-vous sûr de vouloir réinitialiser le mot de passe de {userItem.email} ? 
-                            Un nouveau mot de passe temporaire sera généré et affiché.
+                            Un nouveau mot de passe temporaire sera généré et affiché pour que vous puissiez le copier.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

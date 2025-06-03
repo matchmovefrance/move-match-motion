@@ -32,12 +32,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <>{children}</>;
   }
 
-  // For role-based access, check if profile exists and has the right role
-  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
-    return <Navigate to="/" replace />;
+  // If we have specific role requirements, check them
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!profile) {
+      // No profile yet, but user is authenticated - redirect to auth to reload
+      return <Navigate to="/auth" replace />;
+    }
+    
+    if (!allowedRoles.includes(profile.role)) {
+      return <Navigate to="/" replace />;
+    }
   }
 
-  // Allow access - even if profile is missing, let the user in
+  // Allow access - user is authenticated and either no role requirements or role matches
   return <>{children}</>;
 };
 

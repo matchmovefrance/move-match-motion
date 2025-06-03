@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
             } else {
               // For other users, try to fetch profile
-              fetchUserProfile(session.user.id);
+              await fetchUserProfile(session.user.id);
             }
           }
           
@@ -146,23 +146,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (userId: string) => {
     try {
       console.log('Fetching profile for user:', userId);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      
+      // Try multiple times with a small delay to account for profile creation lag
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-      if (error) {
-        console.warn('Profile fetch failed:', error);
-        return;
-      }
+        if (!error && data) {
+          console.log('Profile data received:', data);
+          const sanitizedProfile = sanitizeProfile(data);
+          if (sanitizedProfile) {
+            setProfile(sanitizedProfile);
+            console.log('Profile set successfully:', sanitizedProfile);
+            return;
+          }
+        }
 
-      console.log('Profile data received:', data);
-      const sanitizedProfile = sanitizeProfile(data);
-      if (sanitizedProfile) {
-        setProfile(sanitizedProfile);
-        console.log('Profile set successfully:', sanitizedProfile);
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`Profile fetch attempt ${attempts} failed, retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        }
       }
+      
+      console.warn('Profile fetch failed after all attempts:', userId);
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
     }
@@ -196,6 +209,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          role: role,
+        }
+      }
     });
 
     if (error) {
