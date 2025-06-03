@@ -9,16 +9,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
 
 const Header = () => {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/auth');
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion:', error);
+    }
   };
 
   const getInitials = (email: string) => {
