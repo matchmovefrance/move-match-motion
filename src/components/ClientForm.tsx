@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, MapPin, Calendar, Volume2, Euro, Mail, Phone } from 'lucide-react';
@@ -8,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import AddressAutocomplete from './AddressAutocomplete';
 
 interface ClientFormData {
   // Informations personnelles
@@ -159,13 +159,13 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="departure_address">Adresse complète *</Label>
-                  <Input
-                    id="departure_address"
+                  <AddressAutocomplete
+                    label="Adresse complète"
                     value={formData.departure_address}
-                    onChange={(e) => handleInputChange('departure_address', e.target.value)}
-                    placeholder="123 Rue de la Paix"
+                    onChange={(value) => handleInputChange('departure_address', value)}
+                    placeholder="123 Rue de la Paix, Paris"
                     required
+                    id="departure_address"
                   />
                 </div>
                 <div>
@@ -199,13 +199,13 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="arrival_address">Adresse complète *</Label>
-                  <Input
-                    id="arrival_address"
+                  <AddressAutocomplete
+                    label="Adresse complète"
                     value={formData.arrival_address}
-                    onChange={(e) => handleInputChange('arrival_address', e.target.value)}
-                    placeholder="456 Avenue des Champs"
+                    onChange={(value) => handleInputChange('arrival_address', value)}
+                    placeholder="456 Avenue des Champs, Lyon"
                     required
+                    id="arrival_address"
                   />
                 </div>
                 <div>

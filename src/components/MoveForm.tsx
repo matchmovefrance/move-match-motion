@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import AddressAutocomplete from './AddressAutocomplete';
 
 interface MoveFormData {
   // Informations du déménageur
@@ -259,7 +260,7 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
               </div>
             </div>
 
-            {/* Départ */}
+            {/* Départ avec autocomplétion */}
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
                 <MapPin className="h-5 w-5 text-green-600" />
@@ -267,12 +268,12 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="departure_address">Adresse de départ</Label>
-                  <Input
-                    id="departure_address"
+                  <AddressAutocomplete
+                    label="Adresse de départ"
                     value={formData.departure_address}
-                    onChange={(e) => handleInputChange('departure_address', e.target.value)}
-                    placeholder="123 Rue de la République"
+                    onChange={(value) => handleInputChange('departure_address', value)}
+                    placeholder="123 Rue de la République, Paris"
+                    id="departure_address"
                   />
                 </div>
                 <div>
@@ -317,7 +318,7 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
               </div>
             </div>
 
-            {/* Arrivée */}
+            {/* Arrivée avec autocomplétion */}
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
                 <MapPin className="h-5 w-5 text-red-600" />
@@ -325,12 +326,12 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="arrival_address">Adresse d'arrivée</Label>
-                  <Input
-                    id="arrival_address"
+                  <AddressAutocomplete
+                    label="Adresse d'arrivée"
                     value={formData.arrival_address}
-                    onChange={(e) => handleInputChange('arrival_address', e.target.value)}
-                    placeholder="456 Avenue des Champs"
+                    onChange={(value) => handleInputChange('arrival_address', value)}
+                    placeholder="456 Avenue des Champs, Lyon"
+                    id="arrival_address"
                   />
                 </div>
                 <div>

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, Users } from 'lucide-react';
-import { ListView } from '@/components/ui/list-view';
+import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ListView } from '@/components/ui/list-view';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -13,7 +14,6 @@ interface Move {
   mover_name: string | null;
   company_name: string | null;
   truck_identifier: string | null;
-  departure_date: string;
   departure_address: string | null;
   departure_city: string;
   departure_postal_code: string;
@@ -22,27 +22,27 @@ interface Move {
   arrival_city: string;
   arrival_postal_code: string;
   arrival_country: string | null;
+  departure_date: string;
   max_volume: number | null;
   used_volume: number;
-  available_volume?: number;
+  available_volume: number;
+  status: 'pending' | 'confirmed' | 'completed';
+  price_per_m3: number | null;
+  total_price: number | null;
   description: string | null;
   special_requirements: string | null;
   access_conditions: string | null;
-  price_per_m3: number | null;
-  total_price: number | null;
   contact_phone: string | null;
   contact_email: string | null;
-  status: 'confirmed' | 'pending' | 'completed';
-  status_custom?: string | null;
   created_at: string;
 }
 
 const MoveManagement = () => {
   const { user } = useAuth();
-  const [showForm, setShowForm] = useState(false);
-  const [editingMove, setEditingMove] = useState<Move | null>(null);
   const [moves, setMoves] = useState<Move[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingMove, setEditingMove] = useState<Move | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -58,12 +58,14 @@ const MoveManagement = () => {
 
       if (error) throw error;
       
-      const movesWithCalculations = (data || []).map(move => ({
+      // Calculer le volume disponible et s'assurer que le status est compatible
+      const movesWithCalculatedVolume = (data || []).map(move => ({
         ...move,
-        available_volume: (move.max_volume || 0) - move.used_volume
+        available_volume: (move.max_volume || 0) - (move.used_volume || 0),
+        status: (move.status as 'pending' | 'confirmed' | 'completed') || 'confirmed'
       }));
       
-      setMoves(movesWithCalculations);
+      setMoves(movesWithCalculatedVolume);
     } catch (error) {
       console.error('Error fetching moves:', error);
     } finally {
@@ -73,13 +75,13 @@ const MoveManagement = () => {
 
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Convert string values to appropriate types
+      // Convertir les valeurs string en nombres appropriés
       const processedData = {
         ...formData,
         max_volume: parseFloat(formData.max_volume) || 0,
         used_volume: parseFloat(formData.used_volume) || 0,
-        price_per_m3: parseFloat(formData.price_per_m3) || 0,
-        total_price: parseFloat(formData.total_price) || 0
+        price_per_m3: formData.price_per_m3 ? parseFloat(formData.price_per_m3) : null,
+        total_price: formData.total_price ? parseFloat(formData.total_price) : null,
       };
 
       if (editingMove) {
@@ -100,8 +102,8 @@ const MoveManagement = () => {
           .insert({
             ...processedData,
             created_by: user?.id,
-            mover_id: Math.floor(Math.random() * 1000000), // Temporary mover_id
-            truck_id: Math.floor(Math.random() * 1000000)  // Temporary truck_id
+            mover_id: Math.floor(Math.random() * 1000),
+            truck_id: Math.floor(Math.random() * 1000)
           });
 
         if (error) throw error;
@@ -112,7 +114,7 @@ const MoveManagement = () => {
         });
       }
 
-      setShowForm(false);
+      setShowAddForm(false);
       setEditingMove(null);
       fetchMoves();
     } catch (error: any) {
@@ -156,86 +158,73 @@ const MoveManagement = () => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300"
+      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
     >
-      <div className="relative p-4 bg-gradient-to-r from-blue-50 to-purple-50">
-        <div className="absolute top-4 right-4">
-          <span className={`bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium`}>
-            {move.status_custom || move.status}
-          </span>
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-800 mb-2">
+            {move.company_name || 'Entreprise non renseignée'} - {move.mover_name || 'Déménageur non renseigné'}
+          </h3>
+          
+          <div className="space-y-2 text-sm text-gray-600">
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-4 w-4 text-green-600" />
+              <span>{move.departure_postal_code} {move.departure_city} → {move.arrival_postal_code} {move.arrival_city}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-purple-600" />
+              <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
+            </div>
+            {move.max_volume && (
+              <div className="flex items-center space-x-2">
+                <Volume2 className="h-4 w-4 text-orange-600" />
+                <span>Volume: {move.used_volume}m³ / {move.max_volume}m³ (Disponible: {move.available_volume}m³)</span>
+              </div>
+            )}
+            {move.total_price && (
+              <div className="flex items-center space-x-2">
+                <Euro className="h-4 w-4 text-green-600" />
+                <span>{move.total_price}€</span>
+              </div>
+            )}
+            {move.contact_phone && (
+              <div className="flex items-center space-x-2">
+                <User className="h-4 w-4 text-blue-600" />
+                <span>{move.contact_phone}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-3">
+            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+              move.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              move.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+              move.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {move.status === 'pending' ? 'En attente' : 
+               move.status === 'confirmed' ? 'Confirmé' :
+               move.status === 'completed' ? 'Terminé' : move.status}
+            </span>
+          </div>
         </div>
         
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-            <Truck className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-800">{move.company_name || 'Entreprise non renseignée'}</h3>
-            <p className="text-sm text-gray-500">{move.truck_identifier || 'Camion non identifié'}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-4">
-        {move.mover_name && (
-          <div className="flex items-center space-x-2 text-gray-600">
-            <Users className="h-4 w-4" />
-            <span className="text-sm">{move.mover_name}</span>
-          </div>
-        )}
-
-        <div className="flex items-center space-x-2 text-gray-600">
-          <Calendar className="h-4 w-4" />
-          <span className="text-sm">{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
-        </div>
-
-        <div className="flex items-center space-x-2 text-gray-600">
-          <MapPin className="h-4 w-4" />
-          <span className="text-sm">{move.departure_city} → {move.arrival_city}</span>
-        </div>
-
-        {move.max_volume && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <Volume2 className="h-4 w-4 text-gray-600" />
-                <span className="text-sm text-gray-600">Volume utilisé</span>
-              </div>
-              <span className="text-sm font-medium text-gray-800">
-                {move.used_volume}m³ / {move.max_volume}m³
-              </span>
-            </div>
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(move.used_volume / move.max_volume) * 100}%` }}
-                transition={{ duration: 0.8 }}
-                className={`h-full rounded-full ${
-                  (move.used_volume / move.max_volume) > 0.9 
-                    ? 'bg-red-500' 
-                    : (move.used_volume / move.max_volume) > 0.7 
-                    ? 'bg-yellow-500' 
-                    : 'bg-green-500'
-                }`}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex space-x-2 pt-2">
-          <button 
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setEditingMove(move)}
-            className="flex-1 flex items-center justify-center space-x-1 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
           >
             <Edit className="h-4 w-4" />
-            <span className="text-sm">Modifier</span>
-          </button>
-          <button 
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => deleteMove(move.id)}
-            className="flex items-center justify-center p-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+            className="text-red-600 hover:text-red-700"
           >
             <Trash2 className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
     </motion.div>
@@ -245,12 +234,9 @@ const MoveManagement = () => {
     <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
       <div className="flex-1">
         <div className="flex items-center space-x-4">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-            <Truck className="h-4 w-4 text-white" />
-          </div>
           <div>
             <h4 className="font-medium text-gray-800">{move.company_name || 'Entreprise non renseignée'}</h4>
-            <p className="text-sm text-gray-600">{move.truck_identifier || 'Camion non identifié'}</p>
+            <p className="text-sm text-gray-600">{move.mover_name || 'Déménageur non renseigné'}</p>
           </div>
           <div className="text-sm text-gray-500">
             <span>{move.departure_city} → {move.arrival_city}</span>
@@ -258,26 +244,39 @@ const MoveManagement = () => {
           <div className="text-sm text-gray-500">
             <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
           </div>
-          {move.max_volume && (
-            <div className="text-sm text-gray-600">
-              {move.used_volume}m³ / {move.max_volume}m³
+          {move.available_volume && (
+            <div className="text-sm text-gray-500">
+              <span>{move.available_volume}m³ disponible</span>
             </div>
           )}
+          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+            move.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+            move.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+            move.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+            'bg-gray-100 text-gray-800'
+          }`}>
+            {move.status === 'pending' ? 'En attente' : 
+             move.status === 'confirmed' ? 'Confirmé' :
+             move.status === 'completed' ? 'Terminé' : move.status}
+          </div>
         </div>
       </div>
       <div className="flex space-x-2">
-        <button 
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setEditingMove(move)}
-          className="px-3 py-1 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm"
         >
           <Edit className="h-3 w-3" />
-        </button>
-        <button 
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => deleteMove(move.id)}
-          className="px-3 py-1 text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors text-sm"
+          className="text-red-600 hover:text-red-700"
         >
           <Trash2 className="h-3 w-3" />
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -290,7 +289,7 @@ const MoveManagement = () => {
     );
   }
 
-  if (showForm || editingMove) {
+  if (showAddForm || editingMove) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -303,7 +302,7 @@ const MoveManagement = () => {
           <Button
             variant="outline"
             onClick={() => {
-              setShowForm(false);
+              setShowAddForm(false);
               setEditingMove(null);
             }}
           >
@@ -316,7 +315,8 @@ const MoveManagement = () => {
           initialData={editingMove ? {
             ...editingMove,
             max_volume: editingMove.max_volume?.toString() || '',
-            used_volume: editingMove.used_volume.toString(),
+            used_volume: editingMove.used_volume?.toString() || '',
+            available_volume: editingMove.available_volume?.toString() || '',
             price_per_m3: editingMove.price_per_m3?.toString() || '',
             total_price: editingMove.total_price?.toString() || ''
           } : undefined}
@@ -327,47 +327,30 @@ const MoveManagement = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-3xl font-bold text-gray-800"
-          >
-            Gestion des Déménagements
-          </motion.h2>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-gray-600 mt-2"
-          >
-            Gérez les trajets confirmés et planifiez de nouveaux déménagements
-          </motion.p>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <Truck className="h-6 w-6 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-800">Déménagements</h2>
         </div>
-        
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          onClick={() => setShowForm(true)}
-          className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-shadow"
+        <Button
+          onClick={() => setShowAddForm(true)}
+          className="bg-blue-600 hover:bg-blue-700"
         >
-          <Plus className="h-5 w-5" />
-          <span>Nouveau trajet</span>
-        </motion.button>
+          <Plus className="h-4 w-4 mr-2" />
+          Ajouter un déménagement
+        </Button>
       </div>
 
       <ListView
         items={moves}
-        searchFields={['company_name', 'mover_name', 'truck_identifier', 'departure_city', 'arrival_city', 'status']}
+        searchFields={['company_name', 'mover_name', 'departure_city', 'arrival_city']}
         renderCard={renderMoveCard}
         renderListItem={renderMoveListItem}
-        searchPlaceholder="Rechercher par entreprise, déménageur, camion, ville ou statut..."
+        searchPlaceholder="Rechercher par entreprise, déménageur ou ville..."
         emptyStateMessage="Aucun déménagement trouvé"
         emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
-        itemsPerPage={9}
+        itemsPerPage={10}
       />
     </div>
   );
