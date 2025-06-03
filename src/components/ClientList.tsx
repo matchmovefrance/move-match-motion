@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
@@ -82,14 +81,25 @@ const ClientList = () => {
 
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Convertir les valeurs string en nombres appropriés
+      // Nettoyer les valeurs vides pour les champs time et date
+      const cleanTimeField = (value: string) => {
+        return value && value.trim() !== '' ? value : null;
+      };
+
+      // Convertir les valeurs string en nombres appropriés et nettoyer les champs time
       const processedData = {
         ...formData,
         estimated_volume: parseFloat(formData.estimated_volume) || 0,
         budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
         budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
         quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
+        departure_time: cleanTimeField(formData.departure_time),
+        arrival_time: cleanTimeField(formData.arrival_time),
+        estimated_arrival_date: cleanTimeField(formData.estimated_arrival_date),
+        estimated_arrival_time: cleanTimeField(formData.estimated_arrival_time),
       };
+
+      console.log('Processed data before save:', processedData);
 
       if (editingClient) {
         const { error } = await supabase
@@ -128,7 +138,7 @@ const ClientList = () => {
       console.error('Error saving client:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de sauvegarder la demande client",
+        description: `Impossible de sauvegarder la demande client: ${error.message}`,
         variant: "destructive",
       });
     }
