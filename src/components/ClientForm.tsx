@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, MapPin, Calendar, Volume2, Euro, Mail, Phone } from 'lucide-react';
@@ -111,7 +112,7 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <User className="h-5 w-5 text-blue-600" />
-            <span>{isEditing ? 'Modifier le client' : 'Nouveau client'}</span>
+            <span>{isEditing ? 'Modifier la demande de déménagement' : 'Nouvelle demande de déménagement'}</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -352,7 +353,7 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
 
             <div className="flex space-x-4 pt-6 border-t">
               <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                {isEditing ? 'Mettre à jour' : 'Ajouter le client'}
+                {isEditing ? 'Mettre à jour' : 'Ajouter la demande'}
               </Button>
               <Button type="button" variant="outline">
                 Annuler
