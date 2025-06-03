@@ -22,6 +22,7 @@ export type Database = {
           id: number
           required_volume: number
           status: string
+          status_custom: string | null
         }
         Insert: {
           arrival_city: string
@@ -35,6 +36,7 @@ export type Database = {
           id?: number
           required_volume: number
           status?: string
+          status_custom?: string | null
         }
         Update: {
           arrival_city?: string
@@ -48,6 +50,7 @@ export type Database = {
           id?: number
           required_volume?: number
           status?: string
+          status_custom?: string | null
         }
         Relationships: [
           {
@@ -98,6 +101,7 @@ export type Database = {
           id: number
           mover_id: number
           status: string
+          status_custom: string | null
           truck_id: number
           used_volume: number
         }
@@ -112,6 +116,7 @@ export type Database = {
           id?: number
           mover_id: number
           status?: string
+          status_custom?: string | null
           truck_id: number
           used_volume: number
         }
@@ -126,6 +131,7 @@ export type Database = {
           id?: number
           mover_id?: number
           status?: string
+          status_custom?: string | null
           truck_id?: number
           used_volume?: number
         }
@@ -257,6 +263,44 @@ export type Database = {
         }
         Relationships: []
       }
+      public_links: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          link_token: string
+          mover_id: number | null
+          password: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          link_token: string
+          mover_id?: number | null
+          password: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          link_token?: string
+          mover_id?: number | null
+          password?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_links_mover_id_fkey"
+            columns: ["mover_id"]
+            isOneToOne: false
+            referencedRelation: "movers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trucks: {
         Row: {
           created_at: string
@@ -294,6 +338,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_public_link_token: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_random_password: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_all_profiles_admin: {
         Args: Record<PropertyKey, never>
         Returns: {

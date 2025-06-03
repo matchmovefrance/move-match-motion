@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, MapPin, Calendar, Users, Truck, ArrowRight, LogOut } from 'lucide-react';
@@ -10,6 +9,8 @@ import ClientList from '../components/ClientList';
 import MoverList from '../components/MoverList';
 import UserManagement from '../components/UserManagement';
 import MoverCalendar from '../components/MoverCalendar';
+import GoogleMap from '../components/GoogleMap';
+import PublicLinkManager from '../components/PublicLinkManager';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -40,6 +41,7 @@ const Index = () => {
         { id: 'moves', label: 'Déménagements', icon: Truck },
         { id: 'clients', label: 'Clients', icon: Users },
         { id: 'users', label: 'Utilisateurs', icon: Users },
+        { id: 'public-links', label: 'Liens publics', icon: Search },
       ];
     } else if (profile?.role === 'agent') {
       return [
@@ -47,6 +49,7 @@ const Index = () => {
         { id: 'matching', label: 'Matching', icon: Search },
         { id: 'moves', label: 'Déménagements', icon: Truck },
         { id: 'clients', label: 'Clients', icon: Users },
+        { id: 'public-links', label: 'Liens publics', icon: Search },
       ];
     } else if (profile?.role === 'demenageur') {
       return [
@@ -76,8 +79,12 @@ const Index = () => {
               animate={{ opacity: 1, x: 0 }}
               className="flex items-center space-x-3"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <Truck className="h-6 w-6 text-white" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
+                <img 
+                  src="https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png" 
+                  alt="MatchMove Logo" 
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -173,6 +180,12 @@ const Index = () => {
                   </motion.div>
                 ))}
               </div>
+
+              {/* Google Map */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Carte des trajets</h3>
+                <GoogleMap />
+              </div>
             </motion.div>
           )}
 
@@ -238,6 +251,19 @@ const Index = () => {
               transition={{ duration: 0.3 }}
             >
               <UserManagement />
+            </motion.div>
+          )}
+
+          {activeTab === 'public-links' && (
+            <motion.div
+              key="public-links"
+              variants={tabVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <PublicLinkManager />
             </motion.div>
           )}
         </AnimatePresence>

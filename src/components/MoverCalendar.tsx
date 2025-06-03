@@ -4,10 +4,10 @@ import { motion } from 'framer-motion';
 import { Calendar, Plus, MapPin, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import StatusToggle from './StatusToggle';
 
 interface Move {
   id: number;
@@ -17,6 +17,7 @@ interface Move {
   arrival_postal_code: string;
   arrival_city: string;
   used_volume: number;
+  status_custom: string;
 }
 
 const MoverCalendar = () => {
@@ -67,7 +68,8 @@ const MoverCalendar = () => {
           ...newMove,
           mover_id: 1, // Default mover for now
           truck_id: 1, // Default truck for now
-          created_by: user.id
+          created_by: user.id,
+          status_custom: 'en_cours'
         });
 
       if (error) throw error;
@@ -92,6 +94,31 @@ const MoverCalendar = () => {
       toast({
         title: "Erreur",
         description: "Impossible d'ajouter le trajet",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateMoveStatus = async (moveId: number, newStatus: 'en_cours' | 'termine') => {
+    try {
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .update({ status_custom: newStatus })
+        .eq('id', moveId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: `Statut mis à jour: ${newStatus === 'termine' ? 'Terminé' : 'En cours'}`,
+      });
+
+      fetchMoves();
+    } catch (error: any) {
+      console.error('Error updating move status:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut",
         variant: "destructive",
       });
     }
@@ -197,6 +224,11 @@ const MoverCalendar = () => {
                   </div>
                 </div>
               </div>
+              
+              <StatusToggle
+                status={move.status_custom || 'en_cours'}
+                onStatusChange={(newStatus) => updateMoveStatus(move.id, newStatus)}
+              />
             </div>
           </motion.div>
         ))}
