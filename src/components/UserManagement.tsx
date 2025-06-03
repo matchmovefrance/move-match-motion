@@ -80,24 +80,30 @@ const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      // Create the auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // Use regular signup instead of admin.createUser
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
-        email_confirm: true
+        options: {
+          data: {
+            role: newUser.role,
+            company_name: newUser.company_name || null
+          }
+        }
       });
 
       if (authError) throw authError;
 
-      // Update the profile with the correct role
+      // If signup succeeded, manually create/update the profile
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
-          .update({
+          .upsert({
+            id: authData.user.id,
+            email: authData.user.email,
             role: newUser.role,
             company_name: newUser.company_name || null
-          })
-          .eq('id', authData.user.id);
+          });
 
         if (profileError) throw profileError;
       }
@@ -124,13 +130,17 @@ const UserManagement = () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
 
     try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
+      // Note: We can only delete the profile, not the auth user without admin privileges
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
       
       if (error) throw error;
 
       toast({
         title: "Succès",
-        description: "Utilisateur supprimé avec succès",
+        description: "Profil utilisateur supprimé avec succès",
       });
 
       fetchUsers();
