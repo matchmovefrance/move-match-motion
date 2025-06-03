@@ -12,7 +12,7 @@ interface Move {
   arrival_postal_code: string;
   departure_date: string;
   status: string;
-  status_custom?: 'en_cours' | 'termine';
+  status_custom?: 'en_cours' | 'termine' | null;
   departure_lat?: number;
   departure_lng?: number;
   arrival_lat?: number;
@@ -27,6 +27,11 @@ interface Mover {
   phone: string;
   lat?: number;
   lng?: number;
+}
+
+interface GeocoderResponse {
+  results: google.maps.GeocoderResult[];
+  status: google.maps.GeocoderStatus;
 }
 
 const containerStyle = {
@@ -51,10 +56,10 @@ const GoogleMapComponent: React.FC = () => {
   const geocodePostalCode = async (postalCode: string, city: string): Promise<{ lat: number; lng: number }> => {
     try {
       const geocoder = new window.google.maps.Geocoder();
-      const response = await new Promise<google.maps.GeocoderResponse>((resolve, reject) => {
+      const response = await new Promise<GeocoderResponse>((resolve, reject) => {
         geocoder.geocode({ address: `${postalCode} ${city}, France` }, (results, status) => {
-          if (status === 'OK' && results?.[0]) {
-            resolve(results);
+          if (status === 'OK' && results) {
+            resolve({ results, status });
           } else {
             reject(new Error('Geocode failed'));
           }
@@ -62,12 +67,11 @@ const GoogleMapComponent: React.FC = () => {
       });
       
       return {
-        lat: response[0].geometry.location.lat(),
-        lng: response[0].geometry.location.lng()
+        lat: response.results[0].geometry.location.lat(),
+        lng: response.results[0].geometry.location.lng()
       };
     } catch (error) {
       console.error('Erreur de géocodage:', error);
-      // Retourne une position par défaut si le géocodage échoue
       return center;
     }
   };
@@ -84,17 +88,22 @@ const GoogleMapComponent: React.FC = () => {
       
       if (movesData) {
         // Géocoder les adresses de départ et d'arrivée
-        const movesWithCoords = await Promise.all(movesData.map(async (move) => {
+        const movesWithCoords: Move[] = [];
+        
+        for (const move of movesData) {
           const departure = await geocodePostalCode(move.departure_postal_code, move.departure_city);
           const arrival = await geocodePostalCode(move.arrival_postal_code, move.arrival_city);
-          return {
+          
+          movesWithCoords.push({
             ...move,
+            status_custom: move.status_custom as 'en_cours' | 'termine' | null,
             departure_lat: departure.lat,
             departure_lng: departure.lng,
             arrival_lat: arrival.lat,
             arrival_lng: arrival.lng
-          };
-        }));
+          });
+        }
+        
         setMoves(movesWithCoords);
       }
 
@@ -104,11 +113,9 @@ const GoogleMapComponent: React.FC = () => {
         .select('id, name, company_name, email, phone');
       
       if (moversData) {
-        // Pour simplifier, on place les déménageurs au centre de la France
-        // Dans une vraie app, vous voudriez géocoder leurs adresses
         setMovers(moversData.map(mover => ({
           ...mover,
-          lat: center.lat + (Math.random() * 2 - 1), // Un peu d'aléatoire pour la démo
+          lat: center.lat + (Math.random() * 2 - 1),
           lng: center.lng + (Math.random() * 2 - 1)
         })));
       }
@@ -123,12 +130,10 @@ const GoogleMapComponent: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // Gérer le chargement de la carte
   const onLoad = useCallback((mapInstance: google.maps.Map) => {
     setMap(mapInstance);
   }, []);
 
-  // Gérer la déconnexion de la carte
   const onUnmount = useCallback(() => {
     setMap(null);
   }, []);
