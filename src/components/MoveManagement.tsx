@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro } from 'lucide-react';
@@ -19,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import MoveForm from './MoveForm';
+import DateFilter from './DateFilter';
 
 interface Move {
   id: number;
@@ -51,6 +53,7 @@ interface Move {
 const MoveManagement = () => {
   const { user } = useAuth();
   const [moves, setMoves] = useState<Move[]>([]);
+  const [filteredMoves, setFilteredMoves] = useState<Move[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingMove, setEditingMove] = useState<Move | null>(null);
@@ -59,6 +62,10 @@ const MoveManagement = () => {
   useEffect(() => {
     fetchMoves();
   }, []);
+
+  useEffect(() => {
+    setFilteredMoves(moves);
+  }, [moves]);
 
   const fetchMoves = async () => {
     try {
@@ -84,15 +91,30 @@ const MoveManagement = () => {
     }
   };
 
+  const handleDateFilter = (filteredData: Move[]) => {
+    setFilteredMoves(filteredData);
+  };
+
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Convertir les valeurs string en nombres appropriés et nettoyer les champs time
+      // Convertir les valeurs string en nombres appropriés et nettoyer les champs
       const processedData = {
         ...formData,
-        max_volume: parseFloat(formData.max_volume) || 0,
-        used_volume: parseFloat(formData.used_volume) || 0,
-        price_per_m3: formData.price_per_m3 ? parseFloat(formData.price_per_m3) : null,
-        total_price: formData.total_price ? parseFloat(formData.total_price) : null,
+        max_volume: formData.max_volume && formData.max_volume !== '' ? parseFloat(formData.max_volume) : null,
+        used_volume: formData.used_volume && formData.used_volume !== '' ? parseFloat(formData.used_volume) : 0,
+        price_per_m3: formData.price_per_m3 && formData.price_per_m3 !== '' ? parseFloat(formData.price_per_m3) : null,
+        total_price: formData.total_price && formData.total_price !== '' ? parseFloat(formData.total_price) : null,
+        max_weight: formData.max_weight && formData.max_weight !== '' ? parseFloat(formData.max_weight) : null,
+        base_rate: formData.base_rate && formData.base_rate !== '' ? parseFloat(formData.base_rate) : null,
+        fuel_surcharge: formData.fuel_surcharge && formData.fuel_surcharge !== '' ? parseFloat(formData.fuel_surcharge) : null,
+        additional_fees: formData.additional_fees && formData.additional_fees !== '' ? parseFloat(formData.additional_fees) : null,
+        total_cost: formData.total_cost && formData.total_cost !== '' ? parseFloat(formData.total_cost) : null,
+        // Nettoyer les champs time
+        departure_time: formData.departure_time && formData.departure_time !== '' ? formData.departure_time : null,
+        arrival_time: formData.arrival_time && formData.arrival_time !== '' ? formData.arrival_time : null,
+        estimated_arrival_time: formData.estimated_arrival_time && formData.estimated_arrival_time !== '' ? formData.estimated_arrival_time : null,
+        // Nettoyer les champs date
+        estimated_arrival_date: formData.estimated_arrival_date && formData.estimated_arrival_date !== '' ? formData.estimated_arrival_date : null,
       };
 
       // Supprimer available_volume car c'est une colonne générée
@@ -398,8 +420,15 @@ const MoveManagement = () => {
         </Button>
       </div>
 
+      <DateFilter 
+        data={moves} 
+        onFilter={handleDateFilter}
+        dateField="departure_date"
+        label="Filtrer par date de départ"
+      />
+
       <ListView
-        items={moves}
+        items={filteredMoves}
         searchFields={['company_name', 'mover_name', 'departure_city', 'arrival_city']}
         renderCard={renderMoveCard}
         renderListItem={renderMoveListItem}
