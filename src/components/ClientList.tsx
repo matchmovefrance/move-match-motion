@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, Mail, Phone, Edit, Trash2, MapPin, Calendar, Volume2, Euro } from 'lucide-react';
@@ -12,29 +11,29 @@ import ClientForm from './ClientForm';
 
 interface Client {
   id: number;
-  name: string;
-  email: string;
-  phone: string;
-  departure_address: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  departure_address: string | null;
   departure_city: string;
   departure_postal_code: string;
-  departure_country: string;
-  arrival_address: string;
+  departure_country: string | null;
+  arrival_address: string | null;
   arrival_city: string;
   arrival_postal_code: string;
-  arrival_country: string;
+  arrival_country: string | null;
   desired_date: string;
-  flexible_dates: boolean;
-  date_range_start: string;
-  date_range_end: string;
-  estimated_volume: number;
-  description: string;
-  budget_min: number;
-  budget_max: number;
-  quote_amount?: number;
-  special_requirements: string;
-  access_conditions: string;
-  inventory_list: string;
+  flexible_dates: boolean | null;
+  date_range_start: string | null;
+  date_range_end: string | null;
+  estimated_volume: number | null;
+  description: string | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  quote_amount: number | null;
+  special_requirements: string | null;
+  access_conditions: string | null;
+  inventory_list: string | null;
   status: string;
   created_at: string;
 }
@@ -96,7 +95,8 @@ const ClientList = () => {
           .from('client_requests')
           .insert({
             ...processedData,
-            created_by: user?.id
+            created_by: user?.id,
+            client_id: Math.floor(Math.random() * 1000000) // Temporary client_id
           });
 
         if (error) throw error;
@@ -155,17 +155,21 @@ const ClientList = () => {
     >
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-800 mb-2">{client.name}</h3>
+          <h3 className="font-semibold text-gray-800 mb-2">{client.name || 'Nom non renseigné'}</h3>
           
           <div className="space-y-2 text-sm text-gray-600">
-            <div className="flex items-center space-x-2">
-              <Mail className="h-4 w-4 text-blue-600" />
-              <span>{client.email}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Phone className="h-4 w-4 text-blue-600" />
-              <span>{client.phone}</span>
-            </div>
+            {client.email && (
+              <div className="flex items-center space-x-2">
+                <Mail className="h-4 w-4 text-blue-600" />
+                <span>{client.email}</span>
+              </div>
+            )}
+            {client.phone && (
+              <div className="flex items-center space-x-2">
+                <Phone className="h-4 w-4 text-blue-600" />
+                <span>{client.phone}</span>
+              </div>
+            )}
             <div className="flex items-center space-x-2">
               <MapPin className="h-4 w-4 text-green-600" />
               <span>{client.departure_postal_code} {client.departure_city} → {client.arrival_postal_code} {client.arrival_city}</span>
@@ -174,10 +178,12 @@ const ClientList = () => {
               <Calendar className="h-4 w-4 text-purple-600" />
               <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <Volume2 className="h-4 w-4 text-orange-600" />
-              <span>{client.estimated_volume}m³</span>
-            </div>
+            {client.estimated_volume && (
+              <div className="flex items-center space-x-2">
+                <Volume2 className="h-4 w-4 text-orange-600" />
+                <span>{client.estimated_volume}m³</span>
+              </div>
+            )}
             {client.quote_amount && (
               <div className="flex items-center space-x-2">
                 <Euro className="h-4 w-4 text-green-600" />
@@ -224,8 +230,8 @@ const ClientList = () => {
       <div className="flex-1">
         <div className="flex items-center space-x-4">
           <div>
-            <h4 className="font-medium text-gray-800">{client.name}</h4>
-            <p className="text-sm text-gray-600">{client.email}</p>
+            <h4 className="font-medium text-gray-800">{client.name || 'Nom non renseigné'}</h4>
+            <p className="text-sm text-gray-600">{client.email || 'Email non renseigné'}</p>
           </div>
           <div className="text-sm text-gray-500">
             <span>{client.departure_city} → {client.arrival_city}</span>
@@ -233,9 +239,11 @@ const ClientList = () => {
           <div className="text-sm text-gray-500">
             <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
           </div>
-          <div className="text-sm text-gray-500">
-            <span>{client.estimated_volume}m³</span>
-          </div>
+          {client.estimated_volume && (
+            <div className="text-sm text-gray-500">
+              <span>{client.estimated_volume}m³</span>
+            </div>
+          )}
           <div className={`px-2 py-1 rounded-full text-xs font-medium ${
             client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
             client.status === 'matched' ? 'bg-green-100 text-green-800' :
@@ -299,7 +307,7 @@ const ClientList = () => {
           onSubmit={handleFormSubmit}
           initialData={editingClient ? {
             ...editingClient,
-            estimated_volume: editingClient.estimated_volume.toString(),
+            estimated_volume: editingClient.estimated_volume?.toString() || '',
             budget_min: editingClient.budget_min?.toString() || '',
             budget_max: editingClient.budget_max?.toString() || '',
             quote_amount: editingClient.quote_amount?.toString() || ''

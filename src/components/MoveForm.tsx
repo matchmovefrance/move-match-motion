@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, MapPin, Calendar, Volume2, User, FileText } from 'lucide-react';
@@ -58,6 +57,8 @@ interface MoveFormData {
   fuel_surcharge: string;
   additional_fees: string;
   total_cost: string;
+  price_per_m3: string;
+  total_price: string;
 }
 
 interface MoveFormProps {
@@ -103,6 +104,8 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
     fuel_surcharge: '',
     additional_fees: '',
     total_cost: '',
+    price_per_m3: '',
+    total_price: '',
     ...initialData
   });
 
@@ -502,6 +505,35 @@ const MoveForm = ({ onSubmit, initialData, isEditing = false }: MoveFormProps) =
                     onChange={(e) => handleInputChange('insurance_details', e.target.value)}
                     placeholder="Couverture, limites, conditions..."
                     rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Tarification */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Tarification</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="price_per_m3">Prix par m³ (€)</Label>
+                  <Input
+                    id="price_per_m3"
+                    type="number"
+                    step="0.01"
+                    value={formData.price_per_m3}
+                    onChange={(e) => handleInputChange('price_per_m3', e.target.value)}
+                    placeholder="50.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="total_price">Prix total (€)</Label>
+                  <Input
+                    id="total_price"
+                    type="number"
+                    step="0.01"
+                    value={formData.total_price}
+                    onChange={(e) => handleInputChange('total_price', e.target.value)}
+                    placeholder="1250.00"
                   />
                 </div>
               </div>

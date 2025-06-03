@@ -11,44 +11,98 @@ export type Database = {
     Tables: {
       client_requests: {
         Row: {
+          access_conditions: string | null
+          arrival_address: string | null
           arrival_city: string
+          arrival_country: string | null
           arrival_postal_code: string
+          budget_max: number | null
+          budget_min: number | null
           client_id: number
           created_at: string
           created_by: string
+          date_range_end: string | null
+          date_range_start: string | null
+          departure_address: string | null
           departure_city: string
+          departure_country: string | null
           departure_postal_code: string
+          description: string | null
           desired_date: string
+          email: string | null
+          estimated_volume: number | null
+          estimated_volume_backup: number
+          flexible_dates: boolean | null
           id: number
-          required_volume: number
+          inventory_list: string | null
+          name: string | null
+          phone: string | null
+          quote_amount: number | null
+          special_requirements: string | null
           status: string
           status_custom: string | null
         }
         Insert: {
+          access_conditions?: string | null
+          arrival_address?: string | null
           arrival_city: string
+          arrival_country?: string | null
           arrival_postal_code: string
+          budget_max?: number | null
+          budget_min?: number | null
           client_id: number
           created_at?: string
           created_by: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          departure_address?: string | null
           departure_city: string
+          departure_country?: string | null
           departure_postal_code: string
+          description?: string | null
           desired_date: string
+          email?: string | null
+          estimated_volume?: number | null
+          estimated_volume_backup: number
+          flexible_dates?: boolean | null
           id?: number
-          required_volume: number
+          inventory_list?: string | null
+          name?: string | null
+          phone?: string | null
+          quote_amount?: number | null
+          special_requirements?: string | null
           status?: string
           status_custom?: string | null
         }
         Update: {
+          access_conditions?: string | null
+          arrival_address?: string | null
           arrival_city?: string
+          arrival_country?: string | null
           arrival_postal_code?: string
+          budget_max?: number | null
+          budget_min?: number | null
           client_id?: number
           created_at?: string
           created_by?: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          departure_address?: string | null
           departure_city?: string
+          departure_country?: string | null
           departure_postal_code?: string
+          description?: string | null
           desired_date?: string
+          email?: string | null
+          estimated_volume?: number | null
+          estimated_volume_backup?: number
+          flexible_dates?: boolean | null
           id?: number
-          required_volume?: number
+          inventory_list?: string | null
+          name?: string | null
+          phone?: string | null
+          quote_amount?: number | null
+          special_requirements?: string | null
           status?: string
           status_custom?: string | null
         }
@@ -91,48 +145,93 @@ export type Database = {
       }
       confirmed_moves: {
         Row: {
+          access_conditions: string | null
+          arrival_address: string | null
           arrival_city: string
+          arrival_country: string | null
           arrival_postal_code: string
+          company_name: string | null
+          contact_email: string | null
+          contact_phone: string | null
           created_at: string
           created_by: string
+          departure_address: string | null
           departure_city: string
+          departure_country: string | null
           departure_date: string
           departure_postal_code: string
+          description: string | null
           id: number
+          max_volume: number | null
           mover_id: number
+          mover_name: string | null
+          price_per_m3: number | null
+          special_requirements: string | null
           status: string
           status_custom: string | null
+          total_price: number | null
           truck_id: number
+          truck_identifier: string | null
           used_volume: number
         }
         Insert: {
+          access_conditions?: string | null
+          arrival_address?: string | null
           arrival_city: string
+          arrival_country?: string | null
           arrival_postal_code: string
+          company_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           created_by: string
+          departure_address?: string | null
           departure_city: string
+          departure_country?: string | null
           departure_date: string
           departure_postal_code: string
+          description?: string | null
           id?: number
+          max_volume?: number | null
           mover_id: number
+          mover_name?: string | null
+          price_per_m3?: number | null
+          special_requirements?: string | null
           status?: string
           status_custom?: string | null
+          total_price?: number | null
           truck_id: number
+          truck_identifier?: string | null
           used_volume: number
         }
         Update: {
+          access_conditions?: string | null
+          arrival_address?: string | null
           arrival_city?: string
+          arrival_country?: string | null
           arrival_postal_code?: string
+          company_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           created_by?: string
+          departure_address?: string | null
           departure_city?: string
+          departure_country?: string | null
           departure_date?: string
           departure_postal_code?: string
+          description?: string | null
           id?: number
+          max_volume?: number | null
           mover_id?: number
+          mover_name?: string | null
+          price_per_m3?: number | null
+          special_requirements?: string | null
           status?: string
           status_custom?: string | null
+          total_price?: number | null
           truck_id?: number
+          truck_identifier?: string | null
           used_volume?: number
         }
         Relationships: [

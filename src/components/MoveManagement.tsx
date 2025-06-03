@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, Users } from 'lucide-react';
@@ -11,30 +10,30 @@ import MoveForm from './MoveForm';
 
 interface Move {
   id: number;
-  mover_name: string;
-  company_name: string;
-  truck_identifier: string;
+  mover_name: string | null;
+  company_name: string | null;
+  truck_identifier: string | null;
   departure_date: string;
-  departure_address: string;
+  departure_address: string | null;
   departure_city: string;
   departure_postal_code: string;
-  departure_country: string;
-  arrival_address: string;
+  departure_country: string | null;
+  arrival_address: string | null;
   arrival_city: string;
   arrival_postal_code: string;
-  arrival_country: string;
-  max_volume: number;
+  arrival_country: string | null;
+  max_volume: number | null;
   used_volume: number;
   available_volume?: number;
-  description: string;
-  special_requirements: string;
-  access_conditions: string;
-  price_per_m3: number;
-  total_price: number;
-  contact_phone: string;
-  contact_email: string;
+  description: string | null;
+  special_requirements: string | null;
+  access_conditions: string | null;
+  price_per_m3: number | null;
+  total_price: number | null;
+  contact_phone: string | null;
+  contact_email: string | null;
   status: 'confirmed' | 'pending' | 'completed';
-  status_custom?: string;
+  status_custom?: string | null;
   created_at: string;
 }
 
@@ -61,7 +60,7 @@ const MoveManagement = () => {
       
       const movesWithCalculations = (data || []).map(move => ({
         ...move,
-        available_volume: move.max_volume - move.used_volume
+        available_volume: (move.max_volume || 0) - move.used_volume
       }));
       
       setMoves(movesWithCalculations);
@@ -100,7 +99,9 @@ const MoveManagement = () => {
           .from('confirmed_moves')
           .insert({
             ...processedData,
-            created_by: user?.id
+            created_by: user?.id,
+            mover_id: Math.floor(Math.random() * 1000000), // Temporary mover_id
+            truck_id: Math.floor(Math.random() * 1000000)  // Temporary truck_id
           });
 
         if (error) throw error;
@@ -169,17 +170,19 @@ const MoveManagement = () => {
             <Truck className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">{move.company_name}</h3>
-            <p className="text-sm text-gray-500">{move.truck_identifier}</p>
+            <h3 className="font-semibold text-gray-800">{move.company_name || 'Entreprise non renseignée'}</h3>
+            <p className="text-sm text-gray-500">{move.truck_identifier || 'Camion non identifié'}</p>
           </div>
         </div>
       </div>
 
       <div className="p-4 space-y-4">
-        <div className="flex items-center space-x-2 text-gray-600">
-          <Users className="h-4 w-4" />
-          <span className="text-sm">{move.mover_name}</span>
-        </div>
+        {move.mover_name && (
+          <div className="flex items-center space-x-2 text-gray-600">
+            <Users className="h-4 w-4" />
+            <span className="text-sm">{move.mover_name}</span>
+          </div>
+        )}
 
         <div className="flex items-center space-x-2 text-gray-600">
           <Calendar className="h-4 w-4" />
@@ -191,31 +194,33 @@ const MoveManagement = () => {
           <span className="text-sm">{move.departure_city} → {move.arrival_city}</span>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-2">
-              <Volume2 className="h-4 w-4 text-gray-600" />
-              <span className="text-sm text-gray-600">Volume utilisé</span>
+        {move.max_volume && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Volume2 className="h-4 w-4 text-gray-600" />
+                <span className="text-sm text-gray-600">Volume utilisé</span>
+              </div>
+              <span className="text-sm font-medium text-gray-800">
+                {move.used_volume}m³ / {move.max_volume}m³
+              </span>
             </div>
-            <span className="text-sm font-medium text-gray-800">
-              {move.used_volume}m³ / {move.max_volume}m³
-            </span>
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${(move.used_volume / move.max_volume) * 100}%` }}
+                transition={{ duration: 0.8 }}
+                className={`h-full rounded-full ${
+                  (move.used_volume / move.max_volume) > 0.9 
+                    ? 'bg-red-500' 
+                    : (move.used_volume / move.max_volume) > 0.7 
+                    ? 'bg-yellow-500' 
+                    : 'bg-green-500'
+                }`}
+              />
+            </div>
           </div>
-          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(move.used_volume / move.max_volume) * 100}%` }}
-              transition={{ duration: 0.8 }}
-              className={`h-full rounded-full ${
-                (move.used_volume / move.max_volume) > 0.9 
-                  ? 'bg-red-500' 
-                  : (move.used_volume / move.max_volume) > 0.7 
-                  ? 'bg-yellow-500' 
-                  : 'bg-green-500'
-              }`}
-            />
-          </div>
-        </div>
+        )}
 
         <div className="flex space-x-2 pt-2">
           <button 
@@ -244,8 +249,8 @@ const MoveManagement = () => {
             <Truck className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h4 className="font-medium text-gray-800">{move.company_name}</h4>
-            <p className="text-sm text-gray-600">{move.truck_identifier}</p>
+            <h4 className="font-medium text-gray-800">{move.company_name || 'Entreprise non renseignée'}</h4>
+            <p className="text-sm text-gray-600">{move.truck_identifier || 'Camion non identifié'}</p>
           </div>
           <div className="text-sm text-gray-500">
             <span>{move.departure_city} → {move.arrival_city}</span>
@@ -253,9 +258,11 @@ const MoveManagement = () => {
           <div className="text-sm text-gray-500">
             <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
           </div>
-          <div className="text-sm text-gray-600">
-            {move.used_volume}m³ / {move.max_volume}m³
-          </div>
+          {move.max_volume && (
+            <div className="text-sm text-gray-600">
+              {move.used_volume}m³ / {move.max_volume}m³
+            </div>
+          )}
         </div>
       </div>
       <div className="flex space-x-2">
@@ -308,10 +315,10 @@ const MoveManagement = () => {
           onSubmit={handleFormSubmit}
           initialData={editingMove ? {
             ...editingMove,
-            max_volume: editingMove.max_volume.toString(),
+            max_volume: editingMove.max_volume?.toString() || '',
             used_volume: editingMove.used_volume.toString(),
-            price_per_m3: editingMove.price_per_m3.toString(),
-            total_price: editingMove.total_price.toString()
+            price_per_m3: editingMove.price_per_m3?.toString() || '',
+            total_price: editingMove.total_price?.toString() || ''
           } : undefined}
           isEditing={!!editingMove}
         />
