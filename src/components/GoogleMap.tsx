@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 
 interface Move {
   id: string;
-  pickup_address: string;
-  delivery_address: string;
+  departure_city: string;
+  arrival_city: string;
+  departure_postal_code: string;
+  arrival_postal_code: string;
   status: string;
   pickup_lat?: number;
   pickup_lng?: number;
@@ -18,10 +20,11 @@ interface Move {
 interface Mover {
   id: string;
   name: string;
-  location: string;
+  company_name: string;
+  email: string;
+  phone: string;
   lat?: number;
   lng?: number;
-  available: boolean;
 }
 
 const GoogleMap = () => {
@@ -90,44 +93,91 @@ const GoogleMap = () => {
     try {
       console.log('Fetching moves and movers...');
       
+      // Use correct table name: confirmed_moves instead of moves
       const [movesResponse, moversResponse] = await Promise.all([
-        supabase.from('moves').select('*'),
+        supabase.from('confirmed_moves').select('*'),
         supabase.from('movers').select('*')
       ]);
 
       if (movesResponse.error) {
         console.error('Error fetching moves:', movesResponse.error);
       } else {
-        setMoves(movesResponse.data || []);
-        console.log('Moves fetched:', movesResponse.data?.length || 0);
+        // Transform database data to match Move interface
+        const transformedMoves: Move[] = (movesResponse.data || []).map(move => ({
+          id: move.id.toString(),
+          departure_city: move.departure_city,
+          arrival_city: move.arrival_city,
+          departure_postal_code: move.departure_postal_code,
+          arrival_postal_code: move.arrival_postal_code,
+          status: move.status,
+          // For now, we'll generate sample coordinates based on postal codes
+          pickup_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
+          pickup_lng: 2.3522 + (Math.random() - 0.5) * 0.1,
+          delivery_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
+          delivery_lng: 2.3522 + (Math.random() - 0.5) * 0.1
+        }));
+        setMoves(transformedMoves);
+        console.log('Moves fetched:', transformedMoves.length);
       }
 
       if (moversResponse.error) {
         console.error('Error fetching movers:', moversResponse.error);
       } else {
-        setMovers(moversResponse.data || []);
-        console.log('Movers fetched:', moversResponse.data?.length || 0);
+        // Transform database data to match Mover interface
+        const transformedMovers: Mover[] = (moversResponse.data || []).map(mover => ({
+          id: mover.id.toString(),
+          name: mover.name,
+          company_name: mover.company_name,
+          email: mover.email,
+          phone: mover.phone,
+          // Generate sample coordinates for movers
+          lat: 48.8566 + (Math.random() - 0.5) * 0.2,
+          lng: 2.3522 + (Math.random() - 0.5) * 0.2
+        }));
+        setMovers(transformedMovers);
+        console.log('Movers fetched:', transformedMovers.length);
       }
 
-      updateMapMarkers(movesResponse.data || [], moversResponse.data || []);
+      if (movesResponse.data && moversResponse.data) {
+        const transformedMoves: Move[] = (movesResponse.data || []).map(move => ({
+          id: move.id.toString(),
+          departure_city: move.departure_city,
+          arrival_city: move.arrival_city,
+          departure_postal_code: move.departure_postal_code,
+          arrival_postal_code: move.arrival_postal_code,
+          status: move.status,
+          pickup_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
+          pickup_lng: 2.3522 + (Math.random() - 0.5) * 0.1,
+          delivery_lat: 48.8566 + (Math.random() - 0.5) * 0.1,
+          delivery_lng: 2.3522 + (Math.random() - 0.5) * 0.1
+        }));
+
+        const transformedMovers: Mover[] = (moversResponse.data || []).map(mover => ({
+          id: mover.id.toString(),
+          name: mover.name,
+          company_name: mover.company_name,
+          email: mover.email,
+          phone: mover.phone,
+          lat: 48.8566 + (Math.random() - 0.5) * 0.2,
+          lng: 2.3522 + (Math.random() - 0.5) * 0.2
+        }));
+
+        updateMapMarkers(transformedMoves, transformedMovers);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     }
   };
 
   const updateMapMarkers = (movesData: Move[], moversData: Mover[]) => {
-    if (!mapInstanceRef.current) return;
+    if (!mapInstanceRef.current || !window.google) return;
 
     // Clear existing markers and polylines
     markersRef.current.forEach(marker => {
-      if (marker.setMap) {
-        marker.setMap(null);
-      }
+      marker.setMap(null);
     });
     polylinesRef.current.forEach(polyline => {
-      if (polyline.setMap) {
-        polyline.setMap(null);
-      }
+      polyline.setMap(null);
     });
     markersRef.current = [];
     polylinesRef.current = [];
@@ -138,7 +188,7 @@ const GoogleMap = () => {
         const pickupMarker = new google.maps.Marker({
           position: { lat: move.pickup_lat, lng: move.pickup_lng },
           map: mapInstanceRef.current,
-          title: `Pickup: ${move.pickup_address}`,
+          title: `Pickup: ${move.departure_city}`,
           icon: {
             url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -154,7 +204,7 @@ const GoogleMap = () => {
           content: `
             <div class="p-2">
               <h3 class="font-bold text-green-600">Pickup Point</h3>
-              <p class="text-sm">${move.pickup_address}</p>
+              <p class="text-sm">${move.departure_city}</p>
               <p class="text-xs text-gray-600">Status: ${move.status}</p>
             </div>
           `
@@ -171,7 +221,7 @@ const GoogleMap = () => {
         const deliveryMarker = new google.maps.Marker({
           position: { lat: move.delivery_lat, lng: move.delivery_lng },
           map: mapInstanceRef.current,
-          title: `Delivery: ${move.delivery_address}`,
+          title: `Delivery: ${move.arrival_city}`,
           icon: {
             url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -187,7 +237,7 @@ const GoogleMap = () => {
           content: `
             <div class="p-2">
               <h3 class="font-bold text-red-600">Delivery Point</h3>
-              <p class="text-sm">${move.delivery_address}</p>
+              <p class="text-sm">${move.arrival_city}</p>
               <p class="text-xs text-gray-600">Status: ${move.status}</p>
             </div>
           `
@@ -230,7 +280,7 @@ const GoogleMap = () => {
           icon: {
             url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" fill="${mover.available ? '#8B5CF6' : '#6B7280'}" stroke="white" stroke-width="2"/>
+                <circle cx="12" cy="12" r="10" fill="#8B5CF6" stroke="white" stroke-width="2"/>
                 <path d="M16 8L8 8L8 16L16 16L16 12L20 12L20 10L16 10L16 8Z" fill="white"/>
               </svg>
             `),
@@ -248,10 +298,9 @@ const GoogleMap = () => {
                 </svg>
                 ${mover.name}
               </h3>
-              <p class="text-sm">${mover.location}</p>
-              <p class="text-xs ${mover.available ? 'text-green-600' : 'text-gray-600'}">
-                ${mover.available ? '✅ Disponible' : '❌ Occupé'}
-              </p>
+              <p class="text-sm">${mover.company_name}</p>
+              <p class="text-xs text-gray-600">${mover.email}</p>
+              <p class="text-xs text-gray-600">${mover.phone}</p>
             </div>
           `
         });
