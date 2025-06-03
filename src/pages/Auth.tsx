@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Truck, Mail, Lock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,9 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user, profile } = useAuth();
+  const navigate = useNavigate();
 
+  // If user is authenticated and has profile, redirect to home
   if (user && profile) {
     return <Navigate to="/" replace />;
   }
@@ -25,10 +27,18 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        await signIn(email, password);
+        const { error } = await signIn(email, password);
+        if (!error) {
+          // Wait a bit for auth state to update, then navigate
+          setTimeout(() => {
+            navigate('/', { replace: true });
+          }, 100);
+        }
       } else {
         await signUp(email, password, 'agent');
       }
+    } catch (error) {
+      console.error('Auth error:', error);
     } finally {
       setLoading(false);
     }

@@ -54,7 +54,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,7 +69,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Error getting session:', error);
           if (mounted) {
             setLoading(false);
-            setInitialized(true);
           }
           return;
         }
@@ -82,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Set a default admin profile for the admin user to prevent blocking
+            // Set a default admin profile for the admin user
             if (session.user.email === 'contact@matchmove.fr') {
               setProfile({
                 id: session.user.id,
@@ -90,25 +88,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 role: 'admin',
                 company_name: undefined
               });
+            } else {
+              // For other users, try to fetch profile
+              fetchUserProfile(session.user.id);
             }
           }
           
           setLoading(false);
-          setInitialized(true);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (mounted) {
           setLoading(false);
-          setInitialized(true);
         }
       }
     };
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted || !initialized) return;
+      async (event, session) => {
+        if (!mounted) return;
         
         console.log('Auth state changed:', event, session?.user?.email);
         
@@ -125,14 +124,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               company_name: undefined
             });
           } else {
-            // For other users, try to fetch profile but don't block the app
-            setTimeout(() => {
-              fetchUserProfile(session.user.id);
-            }, 100);
+            // For other users, try to fetch profile
+            await fetchUserProfile(session.user.id);
           }
         } else {
           setProfile(null);
         }
+        
+        setLoading(false);
       }
     );
 
@@ -186,9 +185,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: "destructive",
       });
       setLoading(false);
+      return { error };
     }
 
-    return { error };
+    // Don't set loading to false here, let the auth state change handle it
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, role: string) => {
@@ -210,10 +211,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     console.log('Signing out...');
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setProfile(null);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Sign out error:', error);
+      toast({
+        title: "Erreur de déconnexion",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+    // State will be cleared by the auth state change listener
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
