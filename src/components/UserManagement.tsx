@@ -56,13 +56,14 @@ const UserManagement = () => {
       setError(null);
       console.log('Fetching users...');
       
-      // Use RPC call to bypass RLS issues temporarily
-      const { data, error } = await supabase.rpc('get_all_profiles_admin');
+      // Use RPC call to bypass RLS issues
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_all_profiles_admin');
       
-      if (error) {
-        console.error('RPC call failed, falling back to direct query:', error);
+      if (rpcError) {
+        console.error('RPC call failed, falling back to direct query:', rpcError);
         
-        // Fallback to direct query with admin bypass
+        // Fallback to direct query
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('profiles')
           .select('*')
@@ -91,7 +92,7 @@ const UserManagement = () => {
           setUsers(sanitizedUsers);
         }
       } else {
-        const sanitizedUsers = (data || [])
+        const sanitizedUsers = (rpcData || [])
           .map(sanitizeProfile)
           .filter((profile): profile is Profile => profile !== null);
         

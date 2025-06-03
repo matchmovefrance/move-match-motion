@@ -294,6 +294,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_all_profiles_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          role: string
+          company_name: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
