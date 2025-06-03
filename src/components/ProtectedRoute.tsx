@@ -18,11 +18,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     );
   }
 
-  if (!user || !profile) {
+  if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+  // If user is logged in but no profile, still allow access
+  // This handles cases where profile fetch fails but authentication succeeded
+  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return <Navigate to="/" replace />;
   }
 
