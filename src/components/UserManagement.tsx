@@ -213,19 +213,23 @@ const UserManagement = () => {
     try {
       setResettingPassword(userId);
       
-      // Generate a new temporary password
-      const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-      
       console.log('Resetting password for user:', userId, userEmail);
       
-      // Use Supabase Admin API to update the user's password
-      const { data, error } = await supabase.auth.admin.updateUserById(userId, {
-        password: tempPassword
+      // Call the edge function to reset password with admin privileges
+      const { data, error } = await supabase.functions.invoke('reset-user-password', {
+        body: {
+          userId: userId,
+          userEmail: userEmail
+        }
       });
 
       if (error) {
         console.error('Password reset error:', error);
         throw error;
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Password reset failed');
       }
 
       console.log('Password updated successfully:', data);
@@ -234,20 +238,8 @@ const UserManagement = () => {
       setPasswordDialog({
         show: true,
         email: userEmail,
-        password: tempPassword
+        password: data.tempPassword
       });
-
-      // Try to send notification email
-      try {
-        await supabase.functions.invoke('send-password-reset', {
-          body: {
-            email: userEmail,
-            tempPassword: tempPassword
-          }
-        });
-      } catch (emailError) {
-        console.warn('Email notification failed:', emailError);
-      }
 
       toast({
         title: "Succès",
