@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Truck, Target, MapPin, Map, Calendar, UserCog, Link } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
@@ -13,17 +14,17 @@ import PublicLinkManager from '@/components/PublicLinkManager';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
-  const { user, isAuthenticated, userRole } = useAuth();
+  const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState('analytics');
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
+    if (!user || !profile) {
+      navigate('/auth');
     }
-  }, [isAuthenticated, router]);
+  }, [user, profile, navigate]);
 
-  if (!isAuthenticated) {
+  if (!user || !profile) {
     return null;
   }
 
@@ -50,7 +51,7 @@ const Index = () => {
     { id: 'providers', label: 'Prestataires', icon: MapPin, component: ServiceProviders },
     { id: 'map', label: 'Carte', icon: Map, component: GoogleMap },
     { id: 'calendar', label: 'Calendrier', icon: Calendar, component: MoverCalendar },
-    ...(userRole === 'admin' ? [
+    ...(profile?.role === 'admin' ? [
       { id: 'users', label: 'Utilisateurs', icon: UserCog, component: UserManagement },
       { id: 'links', label: 'Liens publics', icon: Link, component: PublicLinkManager }
     ] : [])

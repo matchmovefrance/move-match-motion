@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, Users } from 'lucide-react';
@@ -14,13 +15,24 @@ interface Move {
   company_name: string;
   truck_identifier: string;
   departure_date: string;
+  departure_address: string;
   departure_city: string;
   departure_postal_code: string;
+  departure_country: string;
+  arrival_address: string;
   arrival_city: string;
   arrival_postal_code: string;
+  arrival_country: string;
   max_volume: number;
   used_volume: number;
   available_volume?: number;
+  description: string;
+  special_requirements: string;
+  access_conditions: string;
+  price_per_m3: number;
+  total_price: number;
+  contact_phone: string;
+  contact_email: string;
   status: 'confirmed' | 'pending' | 'completed';
   status_custom?: string;
   created_at: string;
@@ -62,10 +74,19 @@ const MoveManagement = () => {
 
   const handleFormSubmit = async (formData: any) => {
     try {
+      // Convert string values to appropriate types
+      const processedData = {
+        ...formData,
+        max_volume: parseFloat(formData.max_volume) || 0,
+        used_volume: parseFloat(formData.used_volume) || 0,
+        price_per_m3: parseFloat(formData.price_per_m3) || 0,
+        total_price: parseFloat(formData.total_price) || 0
+      };
+
       if (editingMove) {
         const { error } = await supabase
           .from('confirmed_moves')
-          .update(formData)
+          .update(processedData)
           .eq('id', editingMove.id);
 
         if (error) throw error;
@@ -78,7 +99,7 @@ const MoveManagement = () => {
         const { error } = await supabase
           .from('confirmed_moves')
           .insert({
-            ...formData,
+            ...processedData,
             created_by: user?.id
           });
 
@@ -127,24 +148,6 @@ const MoveManagement = () => {
         description: "Impossible de supprimer le déménagement",
         variant: "destructive",
       });
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'green';
-      case 'pending': return 'yellow';
-      case 'completed': return 'blue';
-      default: return 'gray';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'Confirmé';
-      case 'pending': return 'En attente';
-      case 'completed': return 'Terminé';
-      default: return status;
     }
   };
 
@@ -303,7 +306,13 @@ const MoveManagement = () => {
         
         <MoveForm
           onSubmit={handleFormSubmit}
-          initialData={editingMove || undefined}
+          initialData={editingMove ? {
+            ...editingMove,
+            max_volume: editingMove.max_volume.toString(),
+            used_volume: editingMove.used_volume.toString(),
+            price_per_m3: editingMove.price_per_m3.toString(),
+            total_price: editingMove.total_price.toString()
+          } : undefined}
           isEditing={!!editingMove}
         />
       </div>

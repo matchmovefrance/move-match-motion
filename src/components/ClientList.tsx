@@ -15,13 +15,26 @@ interface Client {
   name: string;
   email: string;
   phone: string;
+  departure_address: string;
   departure_city: string;
   departure_postal_code: string;
+  departure_country: string;
+  arrival_address: string;
   arrival_city: string;
   arrival_postal_code: string;
+  arrival_country: string;
   desired_date: string;
+  flexible_dates: boolean;
+  date_range_start: string;
+  date_range_end: string;
   estimated_volume: number;
+  description: string;
+  budget_min: number;
+  budget_max: number;
   quote_amount?: number;
+  special_requirements: string;
+  access_conditions: string;
+  inventory_list: string;
   status: string;
   created_at: string;
 }
@@ -56,10 +69,20 @@ const ClientList = () => {
 
   const handleFormSubmit = async (formData: any) => {
     try {
+      // Convert string values to appropriate types
+      const processedData = {
+        ...formData,
+        estimated_volume: parseFloat(formData.estimated_volume) || 0,
+        budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
+        budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
+        quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
+        flexible_dates: Boolean(formData.flexible_dates)
+      };
+
       if (editingClient) {
         const { error } = await supabase
           .from('client_requests')
-          .update(formData)
+          .update(processedData)
           .eq('id', editingClient.id);
 
         if (error) throw error;
@@ -72,7 +95,7 @@ const ClientList = () => {
         const { error } = await supabase
           .from('client_requests')
           .insert({
-            ...formData,
+            ...processedData,
             created_by: user?.id
           });
 
@@ -274,7 +297,13 @@ const ClientList = () => {
         
         <ClientForm
           onSubmit={handleFormSubmit}
-          initialData={editingClient || undefined}
+          initialData={editingClient ? {
+            ...editingClient,
+            estimated_volume: editingClient.estimated_volume.toString(),
+            budget_min: editingClient.budget_min?.toString() || '',
+            budget_max: editingClient.budget_max?.toString() || '',
+            quote_amount: editingClient.quote_amount?.toString() || ''
+          } : undefined}
           isEditing={!!editingClient}
         />
       </div>
