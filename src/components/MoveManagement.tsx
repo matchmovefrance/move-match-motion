@@ -85,6 +85,11 @@ const MoveManagement = () => {
       setMoves(movesWithCalculatedVolume);
     } catch (error) {
       console.error('Error fetching moves:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les déménagements",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -94,132 +99,153 @@ const MoveManagement = () => {
     setFilteredMoves(filteredData);
   };
 
+  // Fonction pour nettoyer et valider les données avant sauvegarde
+  const cleanFormData = (formData: any) => {
+    console.log('Raw form data:', formData);
+
+    // Fonction helper pour convertir les valeurs numériques
+    const parseNumeric = (value: any): number | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(parsed) ? null : parsed;
+    };
+
+    // Fonction helper pour convertir les valeurs entières
+    const parseInteger = (value: any): number | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const parsed = typeof value === 'string' ? parseInt(value) : Number(value);
+      return isNaN(parsed) ? null : parsed;
+    };
+
+    // Fonction helper pour nettoyer les chaînes de caractères
+    const cleanString = (value: any): string | null => {
+      if (value === null || value === undefined || value === '') return null;
+      return String(value).trim() || null;
+    };
+
+    // Fonction helper pour nettoyer les dates
+    const cleanDate = (value: any): string | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const dateString = String(value).trim();
+      if (dateString === '') return null;
+      
+      // Valider le format de date
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      
+      return dateString;
+    };
+
+    // Fonction helper pour nettoyer les heures
+    const cleanTime = (value: any): string | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const timeString = String(value).trim();
+      if (timeString === '') return null;
+      
+      // Valider le format d'heure (HH:MM ou HH:MM:SS)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
+      if (!timeRegex.test(timeString)) return null;
+      
+      return timeString;
+    };
+
+    const cleanData = {
+      // Champs obligatoires - vérifier qu'ils ne sont pas vides
+      departure_city: cleanString(formData.departure_city) || 'Non renseigné',
+      departure_postal_code: cleanString(formData.departure_postal_code) || '00000',
+      arrival_city: cleanString(formData.arrival_city) || 'Non renseigné',
+      arrival_postal_code: cleanString(formData.arrival_postal_code) || '00000',
+      departure_date: cleanDate(formData.departure_date) || new Date().toISOString().split('T')[0],
+      used_volume: parseNumeric(formData.used_volume) || 0,
+      status: cleanString(formData.status) || 'confirmed',
+      created_by: user?.id,
+
+      // Champs optionnels - texte
+      mover_name: cleanString(formData.mover_name),
+      company_name: cleanString(formData.company_name),
+      truck_identifier: cleanString(formData.truck_identifier),
+      truck_type: cleanString(formData.truck_type) || 'Semi-remorque',
+      departure_address: cleanString(formData.departure_address),
+      departure_country: cleanString(formData.departure_country) || 'France',
+      arrival_address: cleanString(formData.arrival_address),
+      arrival_country: cleanString(formData.arrival_country) || 'France',
+      status_custom: cleanString(formData.status_custom) || 'en_cours',
+      route_type: cleanString(formData.route_type) || 'direct',
+      description: cleanString(formData.description),
+      special_conditions: cleanString(formData.special_conditions),
+      equipment_available: cleanString(formData.equipment_available),
+      insurance_details: cleanString(formData.insurance_details),
+      contact_phone: cleanString(formData.contact_phone),
+      contact_email: cleanString(formData.contact_email),
+      special_requirements: cleanString(formData.special_requirements),
+      access_conditions: cleanString(formData.access_conditions),
+
+      // Champs numériques optionnels
+      max_volume: parseNumeric(formData.max_volume),
+      price_per_m3: parseNumeric(formData.price_per_m3),
+      total_price: parseNumeric(formData.total_price),
+      max_weight: parseNumeric(formData.max_weight),
+      base_rate: parseNumeric(formData.base_rate),
+      fuel_surcharge: parseNumeric(formData.fuel_surcharge),
+      additional_fees: parseNumeric(formData.additional_fees),
+      total_cost: parseNumeric(formData.total_cost),
+      available_volume: parseNumeric(formData.available_volume),
+
+      // Champs entiers optionnels
+      number_of_clients: parseInteger(formData.number_of_clients) || 0,
+
+      // Champs de temps optionnels
+      departure_time: cleanTime(formData.departure_time),
+      arrival_time: cleanTime(formData.arrival_time),
+      estimated_arrival_time: cleanTime(formData.estimated_arrival_time),
+
+      // Champs de date optionnels
+      estimated_arrival_date: cleanDate(formData.estimated_arrival_date),
+
+      // Champs de référence optionnels (maintenant facultatifs grâce à la migration)
+      mover_id: parseInteger(formData.mover_id),
+      truck_id: parseInteger(formData.truck_id),
+    };
+
+    console.log('Cleaned data:', cleanData);
+    return cleanData;
+  };
+
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Créer un objet de données propre avec conversion appropriée
-      const cleanData = {
-        // Informations de base (toujours présentes)
-        mover_name: formData.mover_name || null,
-        company_name: formData.company_name || null,
-        departure_city: formData.departure_city,
-        departure_postal_code: formData.departure_postal_code,
-        arrival_city: formData.arrival_city,
-        arrival_postal_code: formData.arrival_postal_code,
-        departure_date: formData.departure_date,
-        used_volume: parseFloat(formData.used_volume) || 0,
-        status: formData.status || 'confirmed',
-        created_by: user?.id,
+      setLoading(true);
+      
+      // Nettoyer et valider les données
+      const cleanData = cleanFormData(formData);
 
-        // Valeurs numériques (conversion avec gestion des valeurs vides)
-        max_volume: formData.max_volume && formData.max_volume !== '' ? parseFloat(formData.max_volume) : null,
-        price_per_m3: formData.price_per_m3 && formData.price_per_m3 !== '' ? parseFloat(formData.price_per_m3) : null,
-        total_price: formData.total_price && formData.total_price !== '' ? parseFloat(formData.total_price) : null,
-        max_weight: formData.max_weight && formData.max_weight !== '' ? parseFloat(formData.max_weight) : null,
-        base_rate: formData.base_rate && formData.base_rate !== '' ? parseFloat(formData.base_rate) : null,
-        fuel_surcharge: formData.fuel_surcharge && formData.fuel_surcharge !== '' ? parseFloat(formData.fuel_surcharge) : null,
-        additional_fees: formData.additional_fees && formData.additional_fees !== '' ? parseFloat(formData.additional_fees) : null,
-        total_cost: formData.total_cost && formData.total_cost !== '' ? parseFloat(formData.total_cost) : null,
-        number_of_clients: formData.number_of_clients && formData.number_of_clients !== '' ? parseInt(formData.number_of_clients) : 0,
-
-        // Champs de temps (conversion avec gestion des valeurs vides)
-        departure_time: formData.departure_time && formData.departure_time !== '' ? formData.departure_time : null,
-        arrival_time: formData.arrival_time && formData.arrival_time !== '' ? formData.arrival_time : null,
-        estimated_arrival_time: formData.estimated_arrival_time && formData.estimated_arrival_time !== '' ? formData.estimated_arrival_time : null,
-
-        // Champs de date (conversion avec gestion des valeurs vides)
-        estimated_arrival_date: formData.estimated_arrival_date && formData.estimated_arrival_date !== '' ? formData.estimated_arrival_date : null,
-
-        // Champs texte
-        truck_identifier: formData.truck_identifier || null,
-        truck_type: formData.truck_type || 'Semi-remorque',
-        departure_address: formData.departure_address || null,
-        departure_country: formData.departure_country || 'France',
-        arrival_address: formData.arrival_address || null,
-        arrival_country: formData.arrival_country || 'France',
-        status_custom: formData.status_custom || 'en_cours',
-        route_type: formData.route_type || 'direct',
-        description: formData.description || null,
-        special_conditions: formData.special_conditions || null,
-        equipment_available: formData.equipment_available || null,
-        insurance_details: formData.insurance_details || null,
-        contact_phone: formData.contact_phone || null,
-        contact_email: formData.contact_email || null,
-        special_requirements: formData.special_requirements || null,
-        access_conditions: formData.access_conditions || null,
-      };
-
-      console.log('Clean data before save:', cleanData);
+      console.log('Final clean data for save:', cleanData);
 
       if (editingMove) {
+        // Mise à jour d'un déménagement existant
         const { error } = await supabase
           .from('confirmed_moves')
           .update(cleanData)
           .eq('id', editingMove.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
 
         toast({
           title: "Succès",
           description: "Déménagement mis à jour avec succès",
         });
       } else {
-        // Pour l'insertion, nous devons créer des entrées fictives pour mover_id et truck_id
-        // ou modifier la structure de la table pour rendre ces champs optionnels
-        
-        // Créer d'abord un mover fictif si nécessaire
-        let moverId = null;
-        if (cleanData.mover_name && cleanData.company_name) {
-          const { data: moverData, error: moverError } = await supabase
-            .from('movers')
-            .insert({
-              name: cleanData.mover_name,
-              company_name: cleanData.company_name,
-              email: cleanData.contact_email || 'non-renseigne@example.com',
-              phone: cleanData.contact_phone || '0000000000',
-              created_by: user?.id
-            })
-            .select()
-            .single();
-
-          if (moverError) {
-            console.error('Error creating mover:', moverError);
-            throw moverError;
-          }
-          moverId = moverData.id;
-        }
-
-        // Créer un truck fictif si nécessaire
-        let truckId = null;
-        if (moverId && cleanData.truck_identifier) {
-          const { data: truckData, error: truckError } = await supabase
-            .from('trucks')
-            .insert({
-              mover_id: moverId,
-              identifier: cleanData.truck_identifier,
-              max_volume: cleanData.max_volume || 1
-            })
-            .select()
-            .single();
-
-          if (truckError) {
-            console.error('Error creating truck:', truckError);
-            throw truckError;
-          }
-          truckId = truckData.id;
-        }
-
-        // Maintenant insérer le move avec les IDs appropriés
-        const moveData = {
-          ...cleanData,
-          mover_id: moverId,
-          truck_id: truckId
-        };
-
+        // Création d'un nouveau déménagement
         const { error } = await supabase
           .from('confirmed_moves')
-          .insert(moveData);
+          .insert(cleanData);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
 
         toast({
           title: "Succès",
@@ -232,11 +258,23 @@ const MoveManagement = () => {
       fetchMoves();
     } catch (error: any) {
       console.error('Error saving move:', error);
+      let errorMessage = "Impossible de sauvegarder le déménagement";
+      
+      if (error.message) {
+        errorMessage = `${errorMessage}: ${error.message}`;
+      }
+      
+      if (error.details) {
+        errorMessage = `${errorMessage} - ${error.details}`;
+      }
+      
       toast({
         title: "Erreur",
-        description: `Impossible de sauvegarder le déménagement: ${error.message}`,
+        description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
