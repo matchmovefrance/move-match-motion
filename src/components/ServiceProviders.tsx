@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Building2, Mail, Phone, MapPin, Edit, Trash2 } from 'lucide-react';
@@ -46,7 +47,8 @@ const ServiceProviders = () => {
     phone: '',
     address: '',
     city: '',
-    postal_code: ''
+    postal_code: '',
+    coordinates: ''
   });
   const { toast } = useToast();
 
