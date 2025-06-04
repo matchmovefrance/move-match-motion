@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, Mail, Phone, Building, Edit, Trash2 } from 'lucide-react';
@@ -211,72 +210,18 @@ const MoverList = () => {
     try {
       console.log('Deleting mover:', id);
       
-      // D'abord, supprimer tous les move_matches liés aux confirmed_moves de ce déménageur
-      const { error: matchActionsError } = await supabase
-        .from('match_actions')
-        .delete()
-        .in('match_id', 
-          supabase
-            .from('move_matches')
-            .select('id')
-            .in('move_id', 
-              supabase
-                .from('confirmed_moves')
-                .select('id')
-                .eq('mover_id', id)
-            )
-        );
-
-      if (matchActionsError) {
-        console.log('Note: No match actions to delete or error:', matchActionsError);
-      }
-
-      // Supprimer les move_matches liés aux confirmed_moves
-      const { error: moveMatchesError } = await supabase
-        .from('move_matches')
-        .delete()
-        .in('move_id', 
-          supabase
-            .from('confirmed_moves')
-            .select('id')
-            .eq('mover_id', id)
-        );
-
-      if (moveMatchesError) {
-        console.log('Note: No move matches to delete or error:', moveMatchesError);
-      }
-
-      // Supprimer tous les confirmed_moves associés à ce déménageur
-      const { error: movesError } = await supabase
-        .from('confirmed_moves')
-        .delete()
-        .eq('mover_id', id);
-
-      if (movesError) {
-        console.log('Note: No confirmed moves to delete or error:', movesError);
-      }
-
-      // Supprimer tous les camions associés à ce déménageur
+      // Supprimer d'abord tous les camions associés à ce déménageur
       const { error: trucksError } = await supabase
         .from('trucks')
         .delete()
         .eq('mover_id', id);
 
       if (trucksError) {
-        console.log('Note: No trucks to delete or error:', trucksError);
+        console.error('Error deleting trucks:', trucksError);
+        // Continue quand même pour supprimer le déménageur
       }
 
-      // Supprimer les liens publics associés à ce déménageur
-      const { error: publicLinksError } = await supabase
-        .from('public_links')
-        .delete()
-        .eq('mover_id', id);
-
-      if (publicLinksError) {
-        console.log('Note: No public links to delete or error:', publicLinksError);
-      }
-
-      // Enfin, supprimer le déménageur de la base de données
+      // Supprimer le déménageur de la base de données
       const { error: moverError } = await supabase
         .from('movers')
         .delete()

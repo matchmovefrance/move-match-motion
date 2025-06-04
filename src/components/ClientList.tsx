@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
@@ -165,32 +164,7 @@ const ClientList = () => {
     try {
       console.log('Deleting client request:', id, 'and client:', clientId);
       
-      // D'abord, supprimer toutes les données liées (move_matches, match_actions)
-      const { error: matchActionsError } = await supabase
-        .from('match_actions')
-        .delete()
-        .in('match_id', 
-          supabase
-            .from('move_matches')
-            .select('id')
-            .eq('client_request_id', id)
-        );
-
-      if (matchActionsError) {
-        console.log('Note: No match actions to delete or error:', matchActionsError);
-      }
-
-      // Supprimer les move_matches
-      const { error: moveMatchesError } = await supabase
-        .from('move_matches')
-        .delete()
-        .eq('client_request_id', id);
-
-      if (moveMatchesError) {
-        console.log('Note: No move matches to delete or error:', moveMatchesError);
-      }
-
-      // Supprimer la demande client
+      // Supprimer d'abord la demande client
       const { error: requestError } = await supabase
         .from('client_requests')
         .delete()
@@ -201,7 +175,7 @@ const ClientList = () => {
         throw requestError;
       }
 
-      // Enfin supprimer le client de la table clients
+      // Ensuite supprimer le client de la table clients
       if (clientId) {
         const { error: clientError } = await supabase
           .from('clients')
