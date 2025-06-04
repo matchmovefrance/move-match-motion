@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, MapPin, Phone, Mail, Edit, Trash2 } from 'lucide-react';
+import { Plus, Building2, Mail, Phone, MapPin, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,9 +27,9 @@ interface ServiceProvider {
   email: string;
   phone: string;
   address: string;
-  postal_code: string;
   city: string;
-  coordinates?: string;
+  postal_code: string;
+  coordinates: string | null;
   created_at: string;
 }
 
@@ -45,9 +45,8 @@ const ServiceProviders = () => {
     email: '',
     phone: '',
     address: '',
-    postal_code: '',
     city: '',
-    coordinates: ''
+    postal_code: ''
   });
   const { toast } = useToast();
 
@@ -141,24 +140,36 @@ const ServiceProviders = () => {
 
   const deleteProvider = async (id: number) => {
     try {
+      console.log('Deleting service provider:', id);
+      
+      // Supprimer le prestataire de service de la base de données
       const { error } = await supabase
         .from('service_providers')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting service provider:', error);
+        throw error;
+      }
+
+      // Mettre à jour l'état local immédiatement après la suppression réussie
+      setProviders(prevProviders => {
+        const updatedProviders = prevProviders.filter(p => p.id !== id);
+        console.log('Updated providers list:', updatedProviders);
+        return updatedProviders;
+      });
 
       toast({
         title: "Succès",
-        description: "Prestataire supprimé avec succès",
+        description: "Prestataire supprimé avec succès de la base de données et de l'application",
       });
 
-      fetchProviders();
     } catch (error: any) {
-      console.error('Error deleting provider:', error);
+      console.error('Error deleting service provider:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le prestataire",
+        description: `Impossible de supprimer le prestataire: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -305,7 +316,7 @@ const ServiceProviders = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <MapPin className="h-6 w-6 text-blue-600" />
+          <Building2 className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Prestataires</h2>
         </div>
         <Button

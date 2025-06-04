@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, Mail, Phone, Building, Edit, Trash2 } from 'lucide-react';
@@ -233,8 +232,12 @@ const MoverList = () => {
         throw moverError;
       }
 
-      // Mettre à jour l'état local pour retirer le déménageur de l'interface
-      setMovers(prevMovers => prevMovers.filter(m => m.id !== id));
+      // Mettre à jour l'état local immédiatement après la suppression réussie
+      setMovers(prevMovers => {
+        const updatedMovers = prevMovers.filter(m => m.id !== id);
+        console.log('Updated movers list:', updatedMovers);
+        return updatedMovers;
+      });
 
       toast({
         title: "Succès",
@@ -245,7 +248,7 @@ const MoverList = () => {
       console.error('Error deleting mover:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le déménageur",
+        description: `Impossible de supprimer le déménageur: ${error.message}`,
         variant: "destructive",
       });
     }

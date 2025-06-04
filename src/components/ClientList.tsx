@@ -188,8 +188,12 @@ const ClientList = () => {
         }
       }
 
-      // Mettre à jour l'état local pour retirer le client de l'interface
-      setClients(prevClients => prevClients.filter(c => c.id !== id));
+      // Mettre à jour l'état local immédiatement après la suppression réussie
+      setClients(prevClients => {
+        const updatedClients = prevClients.filter(c => c.id !== id);
+        console.log('Updated clients list:', updatedClients);
+        return updatedClients;
+      });
 
       toast({
         title: "Succès",
@@ -200,7 +204,7 @@ const ClientList = () => {
       console.error('Error deleting client:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le client",
+        description: `Impossible de supprimer le client: ${error.message}`,
         variant: "destructive",
       });
     }
