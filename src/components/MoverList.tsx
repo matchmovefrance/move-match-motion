@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, Mail, Phone, Building, Edit, Trash2 } from 'lucide-react';
@@ -208,19 +209,38 @@ const MoverList = () => {
 
   const deleteMover = async (id: number) => {
     try {
-      const { error } = await supabase
+      console.log('Deleting mover:', id);
+      
+      // Supprimer d'abord tous les camions associés à ce déménageur
+      const { error: trucksError } = await supabase
+        .from('trucks')
+        .delete()
+        .eq('mover_id', id);
+
+      if (trucksError) {
+        console.error('Error deleting trucks:', trucksError);
+        // Continue quand même pour supprimer le déménageur
+      }
+
+      // Supprimer le déménageur de la base de données
+      const { error: moverError } = await supabase
         .from('movers')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (moverError) {
+        console.error('Error deleting mover:', moverError);
+        throw moverError;
+      }
+
+      // Mettre à jour l'état local pour retirer le déménageur de l'interface
+      setMovers(prevMovers => prevMovers.filter(m => m.id !== id));
 
       toast({
         title: "Succès",
-        description: "Déménageur supprimé avec succès",
+        description: "Déménageur supprimé avec succès de la base de données et de l'application",
       });
 
-      fetchMovers();
     } catch (error: any) {
       console.error('Error deleting mover:', error);
       toast({
@@ -280,7 +300,7 @@ const MoverList = () => {
                 <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
-                  Cette action est irréversible.
+                  Cette action supprimera définitivement le déménageur et ses camions associés de la base de données et de l'application.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -338,7 +358,7 @@ const MoverList = () => {
               <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
               <AlertDialogDescription>
                 Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
-                Cette action est irréversible.
+                Cette action supprimera définitivement le déménageur et ses camions associés de la base de données et de l'application.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

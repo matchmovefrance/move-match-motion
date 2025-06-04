@@ -49,6 +49,7 @@ interface ClientRequest {
   is_matched: boolean | null;
   match_status: string | null;
   created_at: string;
+  client_id: number;
 }
 
 const ClientList = () => {
@@ -159,26 +160,47 @@ const ClientList = () => {
     }
   };
 
-  const deleteClient = async (id: number) => {
+  const deleteClient = async (id: number, clientId: number) => {
     try {
-      const { error } = await supabase
+      console.log('Deleting client request:', id, 'and client:', clientId);
+      
+      // Supprimer d'abord la demande client
+      const { error: requestError } = await supabase
         .from('client_requests')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (requestError) {
+        console.error('Error deleting client request:', requestError);
+        throw requestError;
+      }
+
+      // Ensuite supprimer le client de la table clients
+      if (clientId) {
+        const { error: clientError } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', clientId);
+
+        if (clientError) {
+          console.error('Error deleting client:', clientError);
+          throw clientError;
+        }
+      }
+
+      // Mettre à jour l'état local pour retirer le client de l'interface
+      setClients(prevClients => prevClients.filter(c => c.id !== id));
 
       toast({
         title: "Succès",
-        description: "Demande client supprimée avec succès",
+        description: "Client supprimé avec succès de la base de données et de l'application",
       });
 
-      fetchClients();
     } catch (error: any) {
       console.error('Error deleting client:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer la demande client",
+        description: "Impossible de supprimer le client",
         variant: "destructive",
       });
     }
@@ -277,13 +299,13 @@ const ClientList = () => {
                 <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
-                  Cette action est irréversible.
+                  Cette action supprimera définitivement le client de la base de données et de l'application.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() => deleteClient(client.id)}
+                  onClick={() => deleteClient(client.id, client.client_id)}
                   className="bg-red-600 hover:bg-red-700"
                 >
                   Supprimer
@@ -350,13 +372,13 @@ const ClientList = () => {
               <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
               <AlertDialogDescription>
                 Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
-                Cette action est irréversible.
+                Cette action supprimera définitivement le client de la base de données et de l'application.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Annuler</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => deleteClient(client.id)}
+                onClick={() => deleteClient(client.id, client.client_id)}
                 className="bg-red-600 hover:bg-red-700"
               >
                 Supprimer

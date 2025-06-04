@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Trash2, Users, AlertCircle, RefreshCw, Copy, Check } from 'lucide-react';
@@ -310,22 +311,43 @@ const UserManagement = () => {
   };
 
   const deleteUser = async (userId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
-
     try {
-      const { error } = await supabase
+      console.log('Deleting user:', userId);
+      
+      // D'abord supprimer le profil de la table profiles
+      const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', userId);
       
-      if (error) throw error;
+      if (profileError) {
+        console.error('Error deleting profile:', profileError);
+        throw profileError;
+      }
+
+      // Ensuite supprimer l'utilisateur de la table auth.users via edge function
+      try {
+        const { data, error: authError } = await supabase.functions.invoke('delete-user', {
+          body: { userId: userId }
+        });
+
+        if (authError) {
+          console.warn('Auth user deletion failed, but profile was deleted:', authError);
+        } else {
+          console.log('User deleted from auth:', data);
+        }
+      } catch (authDeleteError) {
+        console.warn('Could not delete from auth.users (edge function may not exist):', authDeleteError);
+      }
+
+      // Mettre à jour l'état local pour retirer l'utilisateur de l'interface
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
 
       toast({
         title: "Succès",
-        description: "Profil utilisateur supprimé avec succès",
+        description: "Utilisateur supprimé avec succès",
       });
 
-      fetchUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast({
