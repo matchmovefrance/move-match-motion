@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, Mail, Shield, Edit, Trash2 } from 'lucide-react';
+import { Plus, Users, Mail, Shield, Edit, Trash2, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,6 +17,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -35,12 +45,14 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
     role: 'agent',
     company_name: ''
   });
+  const [tempPassword, setTempPassword] = useState<string>('');
   const { toast } = useToast();
 
   const isAdmin = profile?.role === 'admin' || loggedInUser?.email === 'contact@matchmove.fr';
@@ -133,27 +145,13 @@ const UserManagement = () => {
     try {
       console.log('Creating user:', newUser.email);
       
-      // Créer un client Supabase temporaire pour éviter d'affecter la session courante
-      const { createClient } = await import('@supabase/supabase-js');
-      const tempSupabase = createClient(
-        'https://kazwfyuwlvkcntphcxsc.supabase.co',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthendmeXV3bHZrY250cGhjeHNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjMxODYsImV4cCI6MjA2NDUzOTE4Nn0.ZBrm3aGVY5_ZQYeKVFyfVudrdpLqJAatfnFtrC4O75g',
-        {
-          auth: {
-            persistSession: false, // Important: ne pas persister la session
-            autoRefreshToken: false
-          }
-        }
-      );
-      
-      const { data, error } = await tempSupabase.auth.signUp({
-        email: newUser.email.trim().toLowerCase(),
-        password: newUser.password.trim(),
-        options: {
-          data: { 
-            role: newUser.role,
-            company_name: newUser.company_name.trim() || null
-          }
+      // Utiliser l'edge function pour créer l'utilisateur
+      const { data, error } = await supabase.functions.invoke('confirm-user-signup', {
+        body: {
+          email: newUser.email.trim().toLowerCase(),
+          password: newUser.password.trim(),
+          role: newUser.role,
+          company_name: newUser.company_name.trim() || null
         }
       });
 
@@ -162,7 +160,7 @@ const UserManagement = () => {
         throw error;
       }
 
-      if (data.user) {
+      if (data?.success) {
         toast({
           title: "Succès",
           description: `L'utilisateur ${newUser.email} a été créé avec succès`,
@@ -175,6 +173,8 @@ const UserManagement = () => {
         setTimeout(() => {
           fetchUsers();
         }, 1000);
+      } else {
+        throw new Error(data?.error || 'Erreur inconnue');
       }
     } catch (error: any) {
       console.error('Error adding user:', error);
@@ -233,6 +233,50 @@ const UserManagement = () => {
       toast({
         title: "Erreur",
         description: `Impossible de mettre à jour: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetUserPassword = async () => {
+    if (!resetPasswordUser || !isAdmin) {
+      toast({
+        title: "Erreur",
+        description: "Accès refusé",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      console.log('Resetting password for user:', resetPasswordUser.id);
+      
+      const { data, error } = await supabase.functions.invoke('reset-user-password', {
+        body: {
+          userId: resetPasswordUser.id,
+          userEmail: resetPasswordUser.email
+        }
+      });
+
+      if (error) {
+        console.error('Error resetting password:', error);
+        throw error;
+      }
+
+      if (data?.success) {
+        setTempPassword(data.tempPassword);
+        toast({
+          title: "Succès",
+          description: "Mot de passe réinitialisé avec succès",
+        });
+      } else {
+        throw new Error(data?.error || 'Erreur lors de la réinitialisation');
+      }
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      toast({
+        title: "Erreur",
+        description: `Impossible de réinitialiser le mot de passe: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -315,6 +359,51 @@ const UserManagement = () => {
             >
               <Edit className="h-4 w-4" />
             </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setResetPasswordUser(user)}
+                  className="text-orange-600 hover:text-orange-700"
+                >
+                  <Key className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Réinitialiser le mot de passe</DialogTitle>
+                  <DialogDescription>
+                    Générer un nouveau mot de passe temporaire pour {user.email}
+                  </DialogDescription>
+                </DialogHeader>
+                {tempPassword && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="font-medium text-yellow-800">Nouveau mot de passe temporaire:</p>
+                    <p className="text-yellow-900 font-mono bg-yellow-100 p-2 rounded mt-2 break-all">
+                      {tempPassword}
+                    </p>
+                    <p className="text-sm text-yellow-700 mt-2">
+                      Communiquez ce mot de passe à l'utilisateur. Il devra le changer lors de sa prochaine connexion.
+                    </p>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button
+                    onClick={() => {
+                      setResetPasswordUser(null);
+                      setTempPassword('');
+                    }}
+                    variant="outline"
+                  >
+                    Fermer
+                  </Button>
+                  <Button onClick={resetUserPassword}>
+                    Réinitialiser
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -329,7 +418,7 @@ const UserManagement = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Êtes-vous sûr de vouloir supprimer {user.email} ?
+                    Êtes-vous sûr de vouloir supprimer {user.email} ? Cette action supprimera également toutes les données associées à cet utilisateur.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -374,6 +463,51 @@ const UserManagement = () => {
           >
             <Edit className="h-3 w-3" />
           </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setResetPasswordUser(user)}
+                className="text-orange-600 hover:text-orange-700"
+              >
+                <Key className="h-3 w-3" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Réinitialiser le mot de passe</DialogTitle>
+                <DialogDescription>
+                  Générer un nouveau mot de passe temporaire pour {user.email}
+                </DialogDescription>
+              </DialogHeader>
+              {tempPassword && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="font-medium text-yellow-800">Nouveau mot de passe temporaire:</p>
+                  <p className="text-yellow-900 font-mono bg-yellow-100 p-2 rounded mt-2 break-all">
+                    {tempPassword}
+                  </p>
+                  <p className="text-sm text-yellow-700 mt-2">
+                    Communiquez ce mot de passe à l'utilisateur. Il devra le changer lors de sa prochaine connexion.
+                  </p>
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  onClick={() => {
+                    setResetPasswordUser(null);
+                    setTempPassword('');
+                  }}
+                  variant="outline"
+                >
+                  Fermer
+                </Button>
+                <Button onClick={resetUserPassword}>
+                  Réinitialiser
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -388,7 +522,7 @@ const UserManagement = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer {user.email} ?
+                  Êtes-vous sûr de vouloir supprimer {user.email} ? Cette action supprimera également toutes les données associées à cet utilisateur.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

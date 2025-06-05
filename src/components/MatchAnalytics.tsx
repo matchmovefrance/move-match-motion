@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,9 +7,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Activity, CheckCircle, XCircle, Filter, Calendar, Search } from 'lucide-react';
+import { TrendingUp, Activity, CheckCircle, XCircle, Filter, Calendar, Search, Trash2, Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import DateFilter from './DateFilter';
+import StatusToggle from './StatusToggle';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface MatchWithDetails {
   id: number;
@@ -37,6 +50,10 @@ interface MatchWithDetails {
     user_id: string;
   }>;
   status?: string;
+  move_status?: string;
+  move_status_custom?: string;
+  flexible_dates?: boolean;
+  route_type?: string;
 }
 
 interface AnalyticsData {
@@ -53,6 +70,8 @@ interface AnalyticsData {
 const COLORS = ['#10B981', '#EF4444', '#F59E0B', '#8B5CF6'];
 
 const MatchAnalytics = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [matches, setMatches] = useState<MatchWithDetails[]>([]);
   const [filteredMatches, setFilteredMatches] = useState<MatchWithDetails[]>([]);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
@@ -113,7 +132,8 @@ const MatchAnalytics = () => {
           arrival_city,
           desired_date,
           status,
-          client_id
+          client_id,
+          flexible_dates
         `);
 
       if (clientError) {
@@ -129,7 +149,10 @@ const MatchAnalytics = () => {
           company_name,
           departure_city,
           arrival_city,
-          departure_date
+          departure_date,
+          status,
+          status_custom,
+          route_type
         `);
 
       if (movesError) {
@@ -159,7 +182,11 @@ const MatchAnalytics = () => {
           mover_name: confirmedMove?.mover_name,
           company_name: confirmedMove?.company_name,
           actions: matchActions,
-          status
+          status,
+          move_status: confirmedMove?.status,
+          move_status_custom: confirmedMove?.status_custom,
+          flexible_dates: clientRequest?.flexible_dates,
+          route_type: confirmedMove?.route_type
         };
       });
 
@@ -225,6 +252,94 @@ const MatchAnalytics = () => {
     setFilteredMatches(filtered);
   };
 
+  const handleMatchAction = async (matchId: number, actionType: 'accepted' | 'rejected') => {
+    try {
+      const { error } = await supabase
+        .from('match_actions')
+        .insert({
+          match_id: matchId,
+          action_type: actionType,
+          user_id: user?.id,
+          action_date: new Date().toISOString(),
+          notes: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} par l'utilisateur`
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
+      });
+
+      // Rafraîchir les données
+      fetchMatchesData();
+    } catch (error: any) {
+      console.error('Error processing match action:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de traiter l'action",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStatusChange = async (moveId: number, newStatus: 'en_cours' | 'termine') => {
+    try {
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .update({ status_custom: newStatus })
+        .eq('id', moveId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: `Statut du trajet mis à jour`,
+      });
+
+      fetchMatchesData();
+    } catch (error: any) {
+      console.error('Error updating move status:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteMatch = async (matchId: number) => {
+    try {
+      // Supprimer d'abord les actions liées
+      await supabase
+        .from('match_actions')
+        .delete()
+        .eq('match_id', matchId);
+
+      // Puis supprimer le match
+      const { error } = await supabase
+        .from('move_matches')
+        .delete()
+        .eq('id', matchId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Match supprimé avec succès",
+      });
+
+      fetchMatchesData();
+    } catch (error: any) {
+      console.error('Error deleting match:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le match",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'accepted':
@@ -241,7 +356,10 @@ const MatchAnalytics = () => {
       'grouped': { label: 'Groupé', color: 'bg-blue-100 text-blue-800' },
       'return': { label: 'Retour', color: 'bg-purple-100 text-purple-800' },
       'loop': { label: 'Boucle', color: 'bg-indigo-100 text-indigo-800' },
-      'direct': { label: 'Direct', color: 'bg-gray-100 text-gray-800' }
+      'direct': { label: 'Direct', color: 'bg-gray-100 text-gray-800' },
+      'perfect': { label: 'Parfait', color: 'bg-green-100 text-green-800' },
+      'good': { label: 'Bon', color: 'bg-blue-100 text-blue-800' },
+      'partial': { label: 'Partiel', color: 'bg-yellow-100 text-yellow-800' }
     };
     
     const typeInfo = types[type as keyof typeof types] || { label: type, color: 'bg-gray-100 text-gray-800' };
@@ -451,7 +569,9 @@ const MatchAnalytics = () => {
                   <TableHead>Distance</TableHead>
                   <TableHead>Volume</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead>Statut Trajet</TableHead>
                   <TableHead>Date</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -468,8 +588,11 @@ const MatchAnalytics = () => {
                       <div className="text-sm">
                         <div>{match.departure_city} → {match.arrival_city}</div>
                         {match.desired_date && (
-                          <div className="text-gray-500">
-                            {new Date(match.desired_date).toLocaleDateString('fr-FR')}
+                          <div className="text-gray-500 flex items-center space-x-1">
+                            <span>{new Date(match.desired_date).toLocaleDateString('fr-FR')}</span>
+                            {match.flexible_dates && (
+                              <Badge variant="outline" className="text-xs">Flexible</Badge>
+                            )}
                           </div>
                         )}
                       </div>
@@ -478,12 +601,46 @@ const MatchAnalytics = () => {
                       <div>
                         <div className="font-medium">{match.mover_name || 'Non défini'}</div>
                         <div className="text-sm text-gray-500">{match.company_name}</div>
+                        {match.route_type && (
+                          <Badge variant="outline" className="text-xs mt-1">
+                            {match.route_type === 'flexible' ? 'Flexible' : 'Fixe'}
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>{getMatchTypeBadge(match.match_type)}</TableCell>
                     <TableCell>{match.distance_km?.toFixed(0)} km</TableCell>
                     <TableCell>{match.combined_volume?.toFixed(1)} m³</TableCell>
-                    <TableCell>{getStatusBadge(match.status || 'pending')}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col space-y-1">
+                        {getStatusBadge(match.status || 'pending')}
+                        {match.status === 'pending' && (
+                          <div className="flex space-x-1">
+                            <Button
+                              size="sm"
+                              onClick={() => handleMatchAction(match.id, 'accepted')}
+                              className="bg-green-600 hover:bg-green-700 h-6 text-xs"
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleMatchAction(match.id, 'rejected')}
+                              className="text-red-600 hover:text-red-700 h-6 text-xs"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <StatusToggle
+                        status={match.move_status_custom || 'en_cours'}
+                        onStatusChange={(newStatus) => handleStatusChange(match.move_id, newStatus)}
+                      />
+                    </TableCell>
                     <TableCell>
                       {new Date(match.created_at).toLocaleDateString('fr-FR', {
                         day: 'numeric',
@@ -491,6 +648,36 @@ const MatchAnalytics = () => {
                         hour: '2-digit',
                         minute: '2-digit'
                       })}
+                    </TableCell>
+                    <TableCell>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Supprimer le match</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteMatch(match.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </TableCell>
                   </TableRow>
                 ))}

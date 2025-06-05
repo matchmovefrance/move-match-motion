@@ -1,8 +1,10 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +25,7 @@ interface ClientRequest {
   status: string;
   is_matched: boolean | null;
   match_status: string | null;
+  flexible_dates: boolean | null;
 }
 
 interface Move {
@@ -40,6 +43,8 @@ interface Move {
   price_per_m3: number | null;
   total_price: number | null;
   status: string;
+  status_custom: string | null;
+  route_type: string | null;
 }
 
 interface Match {
@@ -53,6 +58,13 @@ interface Match {
   volume_ok: boolean;
   is_valid: boolean;
   created_at: string;
+  status?: string;
+  actions?: Array<{
+    action_type: string;
+    action_date: string;
+    notes: string;
+    user_id: string;
+  }>;
 }
 
 const MatchFinder = () => {
@@ -72,25 +84,26 @@ const MatchFinder = () => {
     try {
       setLoading(true);
       
-      // Récupérer les demandes clients
+      // Récupérer les demandes clients (seulement celles en attente et non terminées)
       const { data: clientData, error: clientError } = await supabase
         .from('client_requests')
         .select('*')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'confirmed'])
         .order('created_at', { ascending: false });
 
       if (clientError) throw clientError;
 
-      // Récupérer les déménagements confirmés
+      // Récupérer les déménagements confirmés (seulement ceux en cours)
       const { data: moveData, error: moveError } = await supabase
         .from('confirmed_moves')
         .select('*')
         .eq('status', 'confirmed')
+        .neq('status_custom', 'termine')
         .order('created_at', { ascending: false });
 
       if (moveError) throw moveError;
 
-      // Récupérer les matches existants
+      // Récupérer les matches existants avec leurs actions
       const { data: matchData, error: matchError } = await supabase
         .from('move_matches')
         .select('*')
@@ -98,9 +111,37 @@ const MatchFinder = () => {
 
       if (matchError) throw matchError;
 
+      // Récupérer les actions pour chaque match
+      const { data: actionsData, error: actionsError } = await supabase
+        .from('match_actions')
+        .select('*')
+        .order('action_date', { ascending: false });
+
+      if (actionsError) {
+        console.error('Erreur lors de la récupération des actions:', actionsError);
+      }
+
+      // Enrichir les matches avec leurs actions et statuts
+      const enrichedMatches = (matchData || []).map(match => {
+        const matchActions = actionsData?.filter(action => action.match_id === match.id) || [];
+        
+        // Déterminer le statut basé sur les actions
+        let status = 'pending';
+        const latestAction = matchActions[0];
+        if (latestAction) {
+          status = latestAction.action_type;
+        }
+
+        return {
+          ...match,
+          actions: matchActions,
+          status
+        };
+      });
+
       setClientRequests(clientData || []);
       setMoves(moveData || []);
-      setMatches(matchData || []);
+      setMatches(enrichedMatches);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -154,8 +195,11 @@ const MatchFinder = () => {
         setIsSearching(false);
       }, 4000);
       
-      // Supprimer les anciens matches
-      await supabase.from('move_matches').delete().neq('id', 0);
+      // Supprimer les anciens matches sans action (pending)
+      await supabase
+        .from('move_matches')
+        .delete()
+        .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
 
       // Calculer les nouveaux matches
       for (const client of clientRequests) {
@@ -189,22 +233,29 @@ const MatchFinder = () => {
             matchType = 'good';
           }
 
-          // Insérer le match
-          const { error } = await supabase
-            .from('move_matches')
-            .insert({
-              move_id: move.id,
-              client_request_id: client.id,
-              match_type: matchType,
-              distance_km: distanceKm,
-              date_diff_days: Math.round(dateDiffDays),
-              combined_volume: combinedVolume,
-              volume_ok: volumeOk,
-              is_valid: isValid
-            });
+          // Vérifier s'il existe déjà un match pour cette combinaison
+          const existingMatch = matches.find(m => 
+            m.client_request_id === client.id && m.move_id === move.id
+          );
 
-          if (error) {
-            console.error('Error inserting match:', error);
+          if (!existingMatch) {
+            // Insérer le match
+            const { error } = await supabase
+              .from('move_matches')
+              .insert({
+                move_id: move.id,
+                client_request_id: client.id,
+                match_type: matchType,
+                distance_km: distanceKm,
+                date_diff_days: Math.round(dateDiffDays),
+                combined_volume: combinedVolume,
+                volume_ok: volumeOk,
+                is_valid: isValid
+              });
+
+            if (error) {
+              console.error('Error inserting match:', error);
+            }
           }
         }
       }
@@ -232,6 +283,33 @@ const MatchFinder = () => {
     const move = moves.find(m => m.id === match.move_id);
     return { client, move };
   };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'accepted':
+        return <Badge className="bg-green-100 text-green-800">Accepté</Badge>;
+      case 'rejected':
+        return <Badge className="bg-red-100 text-red-800">Rejeté</Badge>;
+      default:
+        return <Badge className="bg-yellow-100 text-yellow-800">En attente</Badge>;
+    }
+  };
+
+  // Filtrer les matches pour n'afficher que ceux pertinents
+  const displayMatches = matches.filter(match => {
+    const { client, move } = getMatchDetails(match);
+    
+    // Ne pas afficher si le client ou le déménagement n'existe plus
+    if (!client || !move) return false;
+    
+    // Ne pas afficher les trajets terminés
+    if (move.status_custom === 'termine') return false;
+    
+    // Ne pas afficher les demandes clients terminées
+    if (client.status === 'completed') return false;
+    
+    return true;
+  });
 
   if (loading) {
     return (
@@ -306,7 +384,7 @@ const MatchFinder = () => {
               <Search className="h-5 w-5 text-purple-600" />
               <div>
                 <p className="text-sm text-gray-600">Correspondances</p>
-                <p className="text-2xl font-bold">{matches.length}</p>
+                <p className="text-2xl font-bold">{displayMatches.length}</p>
               </div>
             </div>
           </CardContent>
@@ -318,7 +396,7 @@ const MatchFinder = () => {
               <Check className="h-5 w-5 text-orange-600" />
               <div>
                 <p className="text-sm text-gray-600">Correspondances valides</p>
-                <p className="text-2xl font-bold">{matches.filter(m => m.is_valid).length}</p>
+                <p className="text-2xl font-bold">{displayMatches.filter(m => m.is_valid).length}</p>
               </div>
             </div>
           </CardContent>
@@ -329,7 +407,7 @@ const MatchFinder = () => {
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Correspondances trouvées</h3>
         
-        {matches.length === 0 ? (
+        {displayMatches.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -341,7 +419,7 @@ const MatchFinder = () => {
           </Card>
         ) : (
           <div className="space-y-4">
-            {matches.map((match) => {
+            {displayMatches.map((match) => {
               const { client, move } = getMatchDetails(match);
               
               if (!client || !move) return null;
@@ -353,7 +431,7 @@ const MatchFinder = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className={`bg-white rounded-xl p-6 shadow-lg border ${
                     match.is_valid ? 'border-green-200 bg-green-50' : 'border-gray-200'
-                  }`}
+                  } ${match.status === 'rejected' ? 'opacity-60' : ''}`}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -371,6 +449,9 @@ const MatchFinder = () => {
                           <div className="flex items-center space-x-2">
                             <Calendar className="h-3 w-3" />
                             <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+                            {client.flexible_dates && (
+                              <Badge variant="outline" className="text-xs">Flexible</Badge>
+                            )}
                           </div>
                           <div className="flex items-center space-x-2">
                             <Volume2 className="h-3 w-3" />
@@ -404,6 +485,11 @@ const MatchFinder = () => {
                           {move.price_per_m3 && (
                             <div className="text-green-600">{move.price_per_m3}€/m³</div>
                           )}
+                          {move.route_type && (
+                            <Badge variant="outline" className="text-xs">
+                              {move.route_type === 'flexible' ? 'Trajet flexible' : 'Trajet fixe'}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -418,25 +504,29 @@ const MatchFinder = () => {
                          match.match_type === 'good' ? 'Bon' : 'Partiel'}
                       </span>
                       
-                      <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleMatchAction(match.id, 'accepted')}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          <Check className="h-3 w-3 mr-1" />
-                          Accepter
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleMatchAction(match.id, 'rejected')}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <X className="h-3 w-3 mr-1" />
-                          Rejeter
-                        </Button>
-                      </div>
+                      {getStatusBadge(match.status || 'pending')}
+                      
+                      {match.status === 'pending' && (
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleMatchAction(match.id, 'accepted')}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <Check className="h-3 w-3 mr-1" />
+                            Accepter
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleMatchAction(match.id, 'rejected')}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="h-3 w-3 mr-1" />
+                            Rejeter
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
