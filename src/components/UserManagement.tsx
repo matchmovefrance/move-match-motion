@@ -453,8 +453,125 @@ const UserManagement = () => {
       <ListView
         items={users}
         searchFields={['email', 'role']}
-        renderCard={renderUserCard}
-        renderListItem={renderUserListItem}
+        renderCard={(user: User) => (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-800 mb-2">{user.email}</h3>
+                
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    <span>{user.email}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Shield className="h-4 w-4 text-blue-600" />
+                    <span>Role: {user.role || 'Non défini'}</span>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-3">
+                    Créé le {new Date(user.created_at).toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingUser(user)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
+                        Cette action supprimera définitivement l'utilisateur et toutes ses données associées de la base de données.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteUser(user.id)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        renderListItem={(user: User) => (
+          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <div>
+                  <h4 className="font-medium text-gray-800">{user.email}</h4>
+                  <p className="text-sm text-gray-600">Role: {user.role || 'Non défini'}</p>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {new Date(user.created_at).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingUser(user)}
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
+                      Cette action supprimera définitivement l'utilisateur et toutes ses données associées de la base de données.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteUser(user.id)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Supprimer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        )}
         searchPlaceholder="Rechercher par email ou rôle..."
         emptyStateMessage="Aucun utilisateur trouvé"
         emptyStateIcon={<Users className="h-12 w-12 text-gray-400 mx-auto" />}

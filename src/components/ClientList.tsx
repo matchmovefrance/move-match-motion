@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
@@ -483,8 +484,191 @@ const ClientList = () => {
       <ListView
         items={clients}
         searchFields={['name', 'email', 'departure_city', 'arrival_city']}
-        renderCard={renderClientCard}
-        renderListItem={renderClientListItem}
+        renderCard={(client: ClientRequest) => (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-800 mb-2">
+                  {client.name || 'Client non renseigné'}
+                </h3>
+                
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="h-4 w-4 text-green-600" />
+                    <span>{client.departure_postal_code} {client.departure_city} → {client.arrival_postal_code} {client.arrival_city}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-purple-600" />
+                    <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+                    {client.departure_time && <span>à {client.departure_time}</span>}
+                  </div>
+                  {client.estimated_volume && (
+                    <div className="flex items-center space-x-2">
+                      <Volume2 className="h-4 w-4 text-orange-600" />
+                      <span>Volume: {client.estimated_volume}m³</span>
+                    </div>
+                  )}
+                  {client.budget_max && (
+                    <div className="flex items-center space-x-2">
+                      <Euro className="h-4 w-4 text-green-600" />
+                      <span>Budget: {client.budget_min || 0}€ - {client.budget_max}€</span>
+                    </div>
+                  )}
+                  {client.email && (
+                    <div className="text-blue-600">
+                      <span>{client.email}</span>
+                    </div>
+                  )}
+                  {client.phone && (
+                    <div className="text-blue-600">
+                      <span>{client.phone}</span>
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-400 mt-3">
+                    Créé le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+                
+                <div className="mt-3 flex space-x-2">
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                    client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    client.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                    client.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {client.status === 'pending' ? 'En attente' : 
+                     client.status === 'confirmed' ? 'Confirmé' :
+                     client.status === 'rejected' ? 'Rejeté' : client.status}
+                  </span>
+                  {client.is_matched && (
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                      client.match_status === 'accepted' ? 'bg-green-100 text-green-800' :
+                      client.match_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-blue-100 text-blue-800'
+                    }`}>
+                      Match: {client.match_status === 'accepted' ? 'Accepté' :
+                             client.match_status === 'rejected' ? 'Rejeté' : 'En attente'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingClient(client)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
+                        Cette action supprimera définitivement la demande client de la base de données.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteClient(client.id, client.client_id)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        renderListItem={(client: ClientRequest) => (
+          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <div>
+                  <h4 className="font-medium text-gray-800">{client.name || 'Client non renseigné'}</h4>
+                  <p className="text-sm text-gray-600">{client.email}</p>
+                </div>
+                <div className="text-sm text-gray-500">
+                  <span>{client.departure_city} → {client.arrival_city}</span>
+                </div>
+                <div className="text-sm text-gray-500">
+                  <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
+                </div>
+                {client.estimated_volume && (
+                  <div className="text-sm text-gray-500">
+                    <span>{client.estimated_volume}m³</span>
+                  </div>
+                )}
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  client.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                  client.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {client.status === 'pending' ? 'En attente' : 
+                   client.status === 'confirmed' ? 'Confirmé' :
+                   client.status === 'rejected' ? 'Rejeté' : client.status}
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingClient(client)}
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
+                      Cette action supprimera définitivement la demande client de la base de données.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteClient(client.id, client.client_id)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Supprimer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        )}
         searchPlaceholder="Rechercher par nom, email ou ville..."
         emptyStateMessage="Aucune demande client trouvée"
         emptyStateIcon={<Users className="h-12 w-12 text-gray-400 mx-auto" />}

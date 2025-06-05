@@ -1,10 +1,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Building2, Mail, Phone, MapPin, Edit, Trash2 } from 'lucide-react';
+import { Plus, Building, Mail, Phone, MapPin, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ListView } from '@/components/ui/list-view';
 import {
   AlertDialog,
@@ -66,10 +65,10 @@ const ServiceProviders = () => {
       if (error) throw error;
       setProviders(data || []);
     } catch (error) {
-      console.error('Error fetching providers:', error);
+      console.error('Error fetching service providers:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les prestataires",
+        description: "Impossible de charger les fournisseurs de services",
         variant: "destructive",
       });
     } finally {
@@ -81,7 +80,7 @@ const ServiceProviders = () => {
     if (!user) {
       toast({
         title: "Erreur",
-        description: "Vous devez être connecté pour ajouter un prestataire",
+        description: "Vous devez être connecté pour ajouter un fournisseur",
         variant: "destructive",
       });
       return;
@@ -93,7 +92,7 @@ const ServiceProviders = () => {
         !newProvider.postal_code.trim()) {
       toast({
         title: "Erreur",
-        description: "Tous les champs sont obligatoires sauf les coordonnées GPS",
+        description: "Tous les champs sont obligatoires",
         variant: "destructive",
       });
       return;
@@ -111,7 +110,7 @@ const ServiceProviders = () => {
     }
 
     try {
-      console.log('Adding provider:', newProvider);
+      console.log('Adding service provider:', newProvider);
       
       const { data, error } = await supabase
         .from('service_providers')
@@ -134,32 +133,32 @@ const ServiceProviders = () => {
         throw error;
       }
 
-      console.log('Provider added successfully:', data);
+      console.log('Service provider added successfully:', data);
 
       toast({
         title: "Succès",
-        description: "Prestataire ajouté avec succès",
+        description: "Fournisseur de services ajouté avec succès",
       });
 
-      setNewProvider({
-        name: '',
-        company_name: '',
-        email: '',
-        phone: '',
-        address: '',
-        city: '',
-        postal_code: '',
-        coordinates: ''
+      setNewProvider({ 
+        name: '', 
+        company_name: '', 
+        email: '', 
+        phone: '', 
+        address: '', 
+        city: '', 
+        postal_code: '', 
+        coordinates: '' 
       });
       setShowAddForm(false);
       fetchProviders();
     } catch (error: any) {
-      console.error('Error adding provider:', error);
+      console.error('Error adding service provider:', error);
       
-      let errorMessage = "Impossible d'ajouter le prestataire";
+      let errorMessage = "Impossible d'ajouter le fournisseur de services";
       
       if (error.code === '23505') {
-        errorMessage = "Un prestataire avec cette adresse email existe déjà";
+        errorMessage = "Un fournisseur avec cette adresse email existe déjà";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -176,12 +175,13 @@ const ServiceProviders = () => {
     if (!editingProvider) return;
 
     // Validation des champs obligatoires
-    if (!editingProvider.name.trim() || !editingProvider.company_name.trim() || !editingProvider.email.trim() || 
-        !editingProvider.phone.trim() || !editingProvider.address.trim() || !editingProvider.city.trim() || 
+    if (!editingProvider.name.trim() || !editingProvider.company_name.trim() || 
+        !editingProvider.email.trim() || !editingProvider.phone.trim() || 
+        !editingProvider.address.trim() || !editingProvider.city.trim() || 
         !editingProvider.postal_code.trim()) {
       toast({
         title: "Erreur",
-        description: "Tous les champs sont obligatoires sauf les coordonnées GPS",
+        description: "Tous les champs sont obligatoires",
         variant: "destructive",
       });
       return;
@@ -217,18 +217,18 @@ const ServiceProviders = () => {
 
       toast({
         title: "Succès",
-        description: "Prestataire mis à jour avec succès",
+        description: "Fournisseur de services mis à jour avec succès",
       });
 
       setEditingProvider(null);
       fetchProviders();
     } catch (error: any) {
-      console.error('Error updating provider:', error);
+      console.error('Error updating service provider:', error);
       
-      let errorMessage = "Impossible de mettre à jour le prestataire";
+      let errorMessage = "Impossible de mettre à jour le fournisseur de services";
       
       if (error.code === '23505') {
-        errorMessage = "Un prestataire avec cette adresse email existe déjà";
+        errorMessage = "Un fournisseur avec cette adresse email existe déjà";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -245,7 +245,6 @@ const ServiceProviders = () => {
     try {
       console.log('Deleting service provider:', id);
       
-      // Supprimer le prestataire de service de la base de données
       const { error } = await supabase
         .from('service_providers')
         .delete()
@@ -265,14 +264,14 @@ const ServiceProviders = () => {
 
       toast({
         title: "Succès",
-        description: "Prestataire supprimé avec succès de la base de données et de l'application",
+        description: "Fournisseur de services supprimé avec succès",
       });
 
     } catch (error: any) {
       console.error('Error deleting service provider:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de supprimer le prestataire: ${error.message}`,
+        description: `Impossible de supprimer le fournisseur: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -302,9 +301,6 @@ const ServiceProviders = () => {
               <MapPin className="h-4 w-4 text-blue-600" />
               <span>{provider.address}, {provider.postal_code} {provider.city}</span>
             </div>
-            {provider.coordinates && (
-              <div className="text-xs text-blue-600">{provider.coordinates}</div>
-            )}
             <div className="text-xs text-gray-400 mt-3">
               Créé le {new Date(provider.created_at).toLocaleDateString('fr-FR')}
             </div>
@@ -331,10 +327,10 @@ const ServiceProviders = () => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
+                <AlertDialogTitle>Supprimer le fournisseur</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
-                  Cette action supprimera définitivement le prestataire de la base de données et de l'application.
+                  Êtes-vous sûr de vouloir supprimer le fournisseur {provider.name} de {provider.company_name} ? 
+                  Cette action est irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -365,7 +361,7 @@ const ServiceProviders = () => {
             <span>{provider.email}</span> • <span>{provider.phone}</span>
           </div>
           <div className="text-sm text-gray-500">
-            {provider.postal_code} {provider.city}
+            <span>{provider.city}</span>
           </div>
           <div className="text-xs text-gray-400">
             {new Date(provider.created_at).toLocaleDateString('fr-FR')}
@@ -392,10 +388,10 @@ const ServiceProviders = () => {
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
+              <AlertDialogTitle>Supprimer le fournisseur</AlertDialogTitle>
               <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
-                Cette action supprimera définitivement le prestataire de la base de données et de l'application.
+                Êtes-vous sûr de vouloir supprimer le fournisseur {provider.name} de {provider.company_name} ? 
+                Cette action est irréversible.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -425,15 +421,15 @@ const ServiceProviders = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <Building2 className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Prestataires</h2>
+          <Building className="h-6 w-6 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-800">Fournisseurs de services</h2>
         </div>
         <Button
           onClick={() => setShowAddForm(true)}
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Ajouter un prestataire
+          Ajouter un fournisseur
         </Button>
       </div>
 
@@ -445,7 +441,7 @@ const ServiceProviders = () => {
           className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
         >
           <h3 className="text-lg font-semibold mb-4">
-            {editingProvider ? 'Modifier le prestataire' : 'Nouveau prestataire'}
+            {editingProvider ? 'Modifier le fournisseur' : 'Nouveau fournisseur'}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
@@ -490,14 +486,6 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Code postal *"
-              value={editingProvider ? editingProvider.postal_code : newProvider.postal_code}
-              onChange={(e) => editingProvider 
-                ? setEditingProvider({...editingProvider, postal_code: e.target.value})
-                : setNewProvider({...newProvider, postal_code: e.target.value})
-              }
-            />
-            <Input
               placeholder="Ville *"
               value={editingProvider ? editingProvider.city : newProvider.city}
               onChange={(e) => editingProvider 
@@ -506,8 +494,16 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Coordonnées GPS (optionnel)"
-              value={editingProvider ? editingProvider.coordinates || '' : newProvider.coordinates}
+              placeholder="Code postal *"
+              value={editingProvider ? editingProvider.postal_code : newProvider.postal_code}
+              onChange={(e) => editingProvider 
+                ? setEditingProvider({...editingProvider, postal_code: e.target.value})
+                : setNewProvider({...newProvider, postal_code: e.target.value})
+              }
+            />
+            <Input
+              placeholder="Coordonnées (optionnel)"
+              value={editingProvider ? (editingProvider.coordinates || '') : newProvider.coordinates}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, coordinates: e.target.value})
                 : setNewProvider({...newProvider, coordinates: e.target.value})
@@ -538,8 +534,8 @@ const ServiceProviders = () => {
         renderCard={renderProviderCard}
         renderListItem={renderProviderListItem}
         searchPlaceholder="Rechercher par nom, entreprise, email ou ville..."
-        emptyStateMessage="Aucun prestataire trouvé"
-        emptyStateIcon={<MapPin className="h-12 w-12 text-gray-400 mx-auto" />}
+        emptyStateMessage="Aucun fournisseur de services trouvé"
+        emptyStateIcon={<Building className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
       />
     </div>

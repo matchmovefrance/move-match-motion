@@ -216,8 +216,7 @@ const MoverList = () => {
     try {
       console.log('Deleting mover:', id);
       
-      // Supprimer d'abord tous les camions associés à ce déménageur (maintenant automatique avec CASCADE)
-      // Supprimer le déménageur de la base de données
+      // Supprimer le déménageur de la base de données (CASCADE s'occupera des camions et déménagements)
       const { error: moverError } = await supabase
         .from('movers')
         .delete()
@@ -465,8 +464,129 @@ const MoverList = () => {
       <ListView
         items={movers}
         searchFields={['name', 'company_name', 'email', 'phone']}
-        renderCard={renderMoverCard}
-        renderListItem={renderMoverListItem}
+        renderCard={(mover: Mover) => (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-800 mb-2">{mover.name}</h3>
+                <p className="text-gray-600 mb-3">{mover.company_name}</p>
+                
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    <span>{mover.email}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Phone className="h-4 w-4 text-blue-600" />
+                    <span>{mover.phone}</span>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-3">
+                    Créé le {new Date(mover.created_at).toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingMover(mover)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
+                        Cette action supprimera définitivement le déménageur et ses camions associés de la base de données.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteMover(mover.id)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        renderListItem={(mover: Mover) => (
+          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <div>
+                  <h4 className="font-medium text-gray-800">{mover.name}</h4>
+                  <p className="text-sm text-gray-600">{mover.company_name}</p>
+                </div>
+                <div className="text-sm text-gray-500">
+                  <span>{mover.email}</span> • <span>{mover.phone}</span>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {new Date(mover.created_at).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingMover(mover)}
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
+                      Cette action supprimera définitivement le déménageur et ses camions associés de la base de données.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteMover(mover.id)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Supprimer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        )}
         searchPlaceholder="Rechercher par nom, entreprise, email ou téléphone..."
         emptyStateMessage="Aucun déménageur trouvé"
         emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
