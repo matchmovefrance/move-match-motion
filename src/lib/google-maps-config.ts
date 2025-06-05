@@ -1,8 +1,8 @@
 
 // Configuration pour Google Maps API
 export const GOOGLE_MAPS_CONFIG = {
-  // Utiliser la clé API directement depuis l'environnement ou une valeur par défaut
-  apiKey: 'AIzaSyBm8gQ-VgVcT3jYt9ZCJ1K2vN4xRpDcW8s', // Remplacez par votre vraie clé API
+  // Utiliser la clé API Google Maps valide
+  apiKey: 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y',
   libraries: ['places', 'geometry'] as const,
   region: 'FR',
   language: 'fr'

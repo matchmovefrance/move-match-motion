@@ -6,33 +6,22 @@ declare namespace google {
       addListener(eventName: string, handler: () => void): void;
       getCenter(): LatLng;
       getZoom(): number;
-      easeTo(options: { center: LatLng; duration: number; easing: (n: number) => number }): void;
-      setFog(options: {
-        color: string;
-        'high-color': string;
-        'horizon-blend': number;
-      }): void;
-      on(eventName: string, handler: () => void): void;
-      scrollZoom: {
-        disable(): void;
-      };
-      addControl(control: any, position: string): void;
-      remove(): void;
+      setCenter(latLng: LatLng | LatLngLiteral): void;
+      setZoom(zoom: number): void;
+      fitBounds(bounds: LatLngBounds): void;
     }
 
     interface MapOptions {
       center?: LatLng | LatLngLiteral;
       zoom?: number;
       styles?: any[];
-      projection?: string;
-      pitch?: number;
+      mapTypeId?: string;
     }
 
     class LatLng {
       constructor(lat: number, lng: number);
       lat(): number;
       lng(): number;
-      lng: number;
     }
 
     interface LatLngLiteral {
@@ -40,14 +29,20 @@ declare namespace google {
       lng: number;
     }
 
+    class LatLngBounds {
+      constructor();
+      extend(point: LatLng): void;
+    }
+
     class Marker {
       constructor(opts: MarkerOptions);
       addListener(eventName: string, handler: () => void): void;
+      setMap(map: Map | null): void;
     }
 
     interface MarkerOptions {
       position: LatLng | LatLngLiteral;
-      map: Map;
+      map?: Map;
       icon?: {
         url: string;
         scaledSize: Size;
@@ -61,37 +56,60 @@ declare namespace google {
 
     class Polyline {
       constructor(opts: PolylineOptions);
+      setMap(map: Map | null): void;
     }
 
     interface PolylineOptions {
       path: (LatLng | LatLngLiteral)[];
-      geodesic: boolean;
-      strokeColor: string;
-      strokeOpacity: number;
-      strokeWeight: number;
-      map: Map;
-      icons?: Array<{
-        icon: { path: string; strokeOpacity: number; scale: number };
-        offset: string;
-        repeat: string;
-      }>;
+      geodesic?: boolean;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeWeight?: number;
+      map?: Map;
+    }
+
+    class InfoWindow {
+      constructor(opts?: InfoWindowOptions);
+      open(map: Map, anchor?: Marker): void;
+      close(): void;
+    }
+
+    interface InfoWindowOptions {
+      content?: string;
+      position?: LatLng | LatLngLiteral;
     }
 
     class Geocoder {
       geocode(
-        request: { address: string },
-        callback: (results: GeocoderResult[] | null, status: string) => void
+        request: GeocoderRequest,
+        callback: (results: GeocoderResult[] | null, status: GeocoderStatus) => void
       ): void;
+    }
+
+    interface GeocoderRequest {
+      address?: string;
+      location?: LatLng | LatLngLiteral;
     }
 
     interface GeocoderResult {
       geometry: {
         location: LatLng;
       };
+      formatted_address: string;
     }
 
-    class NavigationControl {
-      constructor(options?: { visualizePitch: boolean });
+    enum GeocoderStatus {
+      OK = 'OK',
+      ZERO_RESULTS = 'ZERO_RESULTS',
+      OVER_QUERY_LIMIT = 'OVER_QUERY_LIMIT',
+      REQUEST_DENIED = 'REQUEST_DENIED',
+      INVALID_REQUEST = 'INVALID_REQUEST',
+      UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+    }
+
+    interface GeocoderResponse {
+      results: GeocoderResult[];
+      status: GeocoderStatus;
     }
   }
 }
