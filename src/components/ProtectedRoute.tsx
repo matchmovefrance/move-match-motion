@@ -58,7 +58,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   if (allowedRoles && allowedRoles.length > 0) {
     if (!allowedRoles.includes(profile.role)) {
       console.log('❌ User role not allowed:', profile.role, 'required:', allowedRoles);
-      return <Navigate to="/" replace />;
+      return <Navigate to="/dashboard" replace />;
     }
   }
 

@@ -16,10 +16,10 @@ const Auth = () => {
   const { signIn, signUp, user, profile } = useAuth();
   const navigate = useNavigate();
 
-  // If user is authenticated and has profile, redirect to home
+  // If user is authenticated and has profile, redirect to dashboard
   if (user && profile) {
-    console.log('✅ User authenticated, redirecting to home');
-    return <Navigate to="/" replace />;
+    console.log('✅ User authenticated, redirecting to dashboard');
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,11 +31,8 @@ const Auth = () => {
         console.log('🔐 Attempting login for:', email);
         const { error } = await signIn(email, password);
         if (!error) {
-          console.log('✅ Login successful, navigating to home');
-          // Wait a bit for auth state to update, then navigate
-          setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 500);
+          console.log('✅ Login successful, navigating to dashboard');
+          navigate('/dashboard', { replace: true });
         }
       } else {
         console.log('📝 Attempting signup for:', email);
@@ -170,7 +167,7 @@ const Auth = () => {
               
               <div className="text-center">
                 <p className="text-sm text-gray-600">
-                  Contactez votre admin en cas de problème de login
+                  Base de données nettoyée - Seul le compte admin existe
                 </p>
               </div>
             </div>
