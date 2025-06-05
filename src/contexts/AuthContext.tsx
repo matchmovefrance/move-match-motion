@@ -42,31 +42,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
+    const getSession = async () => {
       try {
-        console.log('Initializing auth...');
-        
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-          if (mounted) setLoading(false);
           return;
         }
 
-        console.log('Initial session:', session?.user?.email || 'No session');
-        
         if (mounted) {
           setSession(session);
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            await handleUserProfile(session.user);
+            await loadUserProfile(session.user);
           }
-          
-          setLoading(false);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('Session error:', error);
+      } finally {
         if (mounted) setLoading(false);
       }
     };
@@ -81,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await handleUserProfile(session.user);
+          await loadUserProfile(session.user);
         } else {
           setProfile(null);
         }
@@ -90,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    initializeAuth();
+    getSession();
 
     return () => {
       mounted = false;
@@ -98,44 +92,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const handleUserProfile = async (user: User) => {
+  const loadUserProfile = async (user: User) => {
     try {
-      console.log('Handling profile for user:', user.email);
+      console.log('Loading profile for:', user.email);
       
-      // For admin user, set profile immediately
+      // For admin user, create profile if needed
       if (user.email === 'contact@matchmove.fr') {
         const adminProfile: Profile = {
           id: user.id,
           email: user.email,
           role: 'admin',
-          company_name: undefined
+          company_name: 'MatchMove'
         };
         setProfile(adminProfile);
-        console.log('Admin profile set successfully');
         return;
       }
 
-      // For other users, try to fetch from database
-      console.log('Fetching profile from database for:', user.id);
-      
+      // For other users, fetch from database
       const { data: profileData, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
-        // Create default profile on error
-        const defaultProfile: Profile = {
-          id: user.id,
-          email: user.email,
-          role: 'agent',
-          company_name: undefined
-        };
-        setProfile(defaultProfile);
-        console.log('Default profile created due to fetch error');
-        return;
       }
 
       if (profileData) {
@@ -146,9 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           company_name: profileData.company_name
         };
         setProfile(profile);
-        console.log('Profile loaded successfully:', profile);
       } else {
-        // No profile found, create default
+        // Create default profile for new users
         const defaultProfile: Profile = {
           id: user.id,
           email: user.email,
@@ -156,19 +136,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           company_name: undefined
         };
         setProfile(defaultProfile);
-        console.log('Default profile created - no data found');
       }
     } catch (error) {
-      console.error('Error in handleUserProfile:', error);
-      // Always provide a fallback profile
-      const fallbackProfile: Profile = {
+      console.error('Error loading profile:', error);
+      // Always provide a fallback
+      setProfile({
         id: user.id,
         email: user.email,
-        role: 'agent',
+        role: user.email === 'contact@matchmove.fr' ? 'admin' : 'agent',
         company_name: undefined
-      };
-      setProfile(fallbackProfile);
-      console.log('Fallback profile created due to error');
+      });
     }
   };
 

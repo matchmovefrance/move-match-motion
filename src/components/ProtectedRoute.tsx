@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const { user, profile, loading } = useAuth();
 
-  // Show loading state briefly
+  // Show loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -28,7 +28,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   }
 
   // Admin always has access
-  if (user.email === 'contact@matchmove.fr' || profile?.role === 'admin') {
+  if (user.email === 'contact@matchmove.fr') {
     return <>{children}</>;
   }
 

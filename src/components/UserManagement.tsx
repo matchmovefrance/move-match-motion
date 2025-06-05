@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, Mail, Shield, Edit, Trash2 } from 'lucide-react';
@@ -57,7 +56,7 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      console.log('Fetching users as admin...');
+      console.log('Fetching users...');
       
       if (!isAdmin) {
         console.log('Not admin, skipping fetch');
@@ -65,33 +64,20 @@ const UserManagement = () => {
         return;
       }
 
-      // Try the admin function first
-      const { data: functionData, error: functionError } = await supabase.rpc('get_all_profiles');
+      // Use the get_all_profiles function
+      const { data, error } = await supabase.rpc('get_all_profiles');
 
-      if (functionError) {
-        console.log('Admin function failed, trying direct query:', functionError);
-        
-        // Fallback to direct query
-        const { data: directData, error: directError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (directError) {
-          console.error('Direct query failed:', directError);
-          toast({
-            title: "Erreur",
-            description: "Impossible de charger les utilisateurs",
-            variant: "destructive",
-          });
-          setUsers([]);
-        } else {
-          console.log('Users loaded via direct query:', directData?.length);
-          setUsers(directData || []);
-        }
+      if (error) {
+        console.error('Error fetching users:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les utilisateurs",
+          variant: "destructive",
+        });
+        setUsers([]);
       } else {
-        console.log('Users loaded via admin function:', functionData?.length);
-        setUsers(functionData || []);
+        console.log('Users loaded:', data?.length);
+        setUsers(data || []);
       }
     } catch (error: any) {
       console.error('Error fetching users:', error);
@@ -172,6 +158,7 @@ const UserManagement = () => {
         setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
         setShowAddForm(false);
         
+        // Refresh the users list
         setTimeout(() => {
           fetchUsers();
         }, 1000);
