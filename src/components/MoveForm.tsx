@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import AddressAutocomplete from './AddressAutocomplete';
+import ServiceProviderSuggestions from './ServiceProviderSuggestions';
 
 interface MoveFormData {
   mover_name: string;
@@ -83,6 +84,21 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
         arrival_address: value
       }));
     }
+  };
+
+  const handleProviderSelect = (provider: any) => {
+    setFormData(prev => ({
+      ...prev,
+      mover_name: provider.name,
+      company_name: provider.company_name,
+      contact_phone: provider.phone,
+      contact_email: provider.email
+    }));
+    
+    toast({
+      title: "Fournisseur sélectionné",
+      description: `Les informations de ${provider.company_name} ont été remplies`,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,6 +199,13 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Suggestions de fournisseurs */}
+          <ServiceProviderSuggestions
+            onSelectProvider={handleProviderSelect}
+            label="Sélectionner un fournisseur existant (optionnel)"
+            placeholder="Rechercher un fournisseur pour pré-remplir les informations..."
+          />
+
           {/* Informations du déménageur */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

@@ -44,16 +44,13 @@ const Index = () => {
       case 'moves': return <MoveManagement />;
       case 'matching': return <MatchFinder />;
       case 'match-analytics': return <MatchAnalytics />;
+      case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
       case 'calendar': return <MoverCalendar />;
       case 'admin-actions': return <AdminActions />;
       case 'management': 
         return (
           <div className="space-y-8">
-            <div>
-              <h2 className="text-2xl font-bold mb-6">Gestion des Services</h2>
-              <ServiceProviders />
-            </div>
             {profile?.role === 'admin' && (
               <>
                 <div>
@@ -88,6 +85,7 @@ const Index = () => {
       { id: 'moves', label: 'Déménagements', icon: Truck },
       { id: 'matching', label: 'Matching', icon: Target },
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
+      { id: 'providers', label: 'Fournisseurs', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
     ];
 
