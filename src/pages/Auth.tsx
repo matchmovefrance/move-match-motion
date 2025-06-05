@@ -2,18 +2,17 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Truck, Mail, Lock } from 'lucide-react';
+import { Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, user, profile } = useAuth();
+  const { signIn, user, profile } = useAuth();
   const navigate = useNavigate();
 
   // If user is authenticated and has profile, redirect to dashboard
@@ -27,36 +26,17 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        console.log('🔐 Attempting login for:', email);
-        const { error } = await signIn(email, password);
-        if (!error) {
-          console.log('✅ Login successful, navigating to dashboard');
-          navigate('/dashboard', { replace: true });
-        }
-      } else {
-        console.log('📝 Attempting signup for:', email);
-        const { error } = await signUp(email, password, 'agent');
-        if (!error) {
-          console.log('✅ Signup successful');
-          setIsLogin(true); // Switch to login after successful signup
-        }
+      console.log('🔐 Attempting login for:', email);
+      const { error } = await signIn(email, password);
+      if (!error) {
+        console.log('✅ Login successful, navigating to dashboard');
+        navigate('/dashboard', { replace: true });
       }
     } catch (error) {
       console.error('❌ Auth error:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAdminLogin = () => {
-    setEmail('contact@matchmove.fr');
-    setPassword('Azzyouman@90');
-  };
-
-  const clearForm = () => {
-    setEmail('');
-    setPassword('');
   };
 
   return (
@@ -102,7 +82,7 @@ const Auth = () => {
         <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">
-              {isLogin ? 'Connexion' : 'Inscription'}
+              Connexion
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -140,36 +120,14 @@ const Auth = () => {
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                 disabled={loading}
               >
-                {loading ? 'Chargement...' : (isLogin ? 'Se connecter' : "S'inscrire")}
+                {loading ? 'Chargement...' : 'Se connecter'}
               </Button>
             </form>
 
-            <div className="mt-4 space-y-3">
-              <div className="flex justify-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    clearForm();
-                  }}
-                >
-                  {isLogin ? "Créer un compte" : "Se connecter"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAdminLogin}
-                >
-                  Login Admin
-                </Button>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-sm text-gray-600">
-                  Base de données nettoyée - Seul le compte admin existe
-                </p>
-              </div>
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600">
+                Contactez votre administrateur
+              </p>
             </div>
           </CardContent>
         </Card>
