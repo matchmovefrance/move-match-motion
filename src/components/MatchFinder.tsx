@@ -101,7 +101,7 @@ const MatchFinder = () => {
 
       if (moveError) throw moveError;
 
-      // Récupérer les matches existants avec leurs actions
+      // Récupérer TOUS les matches existants (même ceux terminés)
       const { data: matchData, error: matchError } = await supabase
         .from('move_matches')
         .select('*')
@@ -557,28 +557,14 @@ const MatchFinder = () => {
     return true;
   });
 
-  // Calculer le total des correspondances incluant les matches acceptés et terminés
+  // Calculer le total des correspondances (TOUS les matches créés)
   const getTotalMatches = () => {
-    // Compter les matches affichés (en cours)
-    const currentMatches = displayMatches.length;
+    // Compter TOUS les matches qui existent dans la base de données
+    // Cela inclut : en attente, acceptés, rejetés, même ceux avec des trajets/demandes terminés
+    console.log(`Total des matches en base: ${matches.length}`);
+    console.log('Détail des matches:', matches.map(m => ({ id: m.id, status: m.status })));
     
-    // Compter les matches acceptés (même si les trajets/demandes sont terminés)
-    const acceptedMatches = matches.filter(match => 
-      match.status === 'accepted'
-    ).length;
-    
-    // Retourner le total unique (éviter les doublons)
-    const uniqueMatches = new Set();
-    
-    // Ajouter les matches en cours
-    displayMatches.forEach(match => uniqueMatches.add(match.id));
-    
-    // Ajouter les matches acceptés
-    matches.filter(match => match.status === 'accepted').forEach(match => 
-      uniqueMatches.add(match.id)
-    );
-    
-    return uniqueMatches.size;
+    return matches.length;
   };
 
   if (loading) {
