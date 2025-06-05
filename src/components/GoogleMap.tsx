@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { loadGoogleMapsScript } from '@/lib/google-maps-config';
@@ -294,7 +293,7 @@ const GoogleMapComponent: React.FC = () => {
         }
       });
 
-      // Ligne de trajet client (orange)
+      // Ligne de trajet client (orange, plus fine pour différencier)
       new google.maps.Polyline({
         path: [
           { lat: request.departure_lat, lng: request.departure_lng },
@@ -304,7 +303,6 @@ const GoogleMapComponent: React.FC = () => {
         strokeColor: '#F97316',
         strokeOpacity: 0.7,
         strokeWeight: 2,
-        strokeStyle: 'dashed',
         map: map
       });
 
@@ -461,7 +459,7 @@ const GoogleMapComponent: React.FC = () => {
               <span>Arrivée client</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-6 h-0.5 bg-orange-500 border-dashed border-t-2"></div>
+              <div className="w-6 h-0.5 bg-orange-500"></div>
               <span>Trajet client</span>
             </div>
           </div>
