@@ -557,6 +557,30 @@ const MatchFinder = () => {
     return true;
   });
 
+  // Calculer le total des correspondances incluant les matches acceptés et terminés
+  const getTotalMatches = () => {
+    // Compter les matches affichés (en cours)
+    const currentMatches = displayMatches.length;
+    
+    // Compter les matches acceptés (même si les trajets/demandes sont terminés)
+    const acceptedMatches = matches.filter(match => 
+      match.status === 'accepted'
+    ).length;
+    
+    // Retourner le total unique (éviter les doublons)
+    const uniqueMatches = new Set();
+    
+    // Ajouter les matches en cours
+    displayMatches.forEach(match => uniqueMatches.add(match.id));
+    
+    // Ajouter les matches acceptés
+    matches.filter(match => match.status === 'accepted').forEach(match => 
+      uniqueMatches.add(match.id)
+    );
+    
+    return uniqueMatches.size;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -630,7 +654,7 @@ const MatchFinder = () => {
               <Search className="h-5 w-5 text-purple-600" />
               <div>
                 <p className="text-sm text-gray-600">Correspondances</p>
-                <p className="text-2xl font-bold">{displayMatches.length}</p>
+                <p className="text-2xl font-bold">{getTotalMatches()}</p>
               </div>
             </div>
           </CardContent>
