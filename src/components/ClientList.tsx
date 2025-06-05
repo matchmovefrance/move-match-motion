@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
@@ -199,17 +198,17 @@ const ClientList = () => {
 
   const deleteClient = async (id: number, clientId: number) => {
     try {
-      console.log('Deleting client request:', id, 'and client:', clientId);
+      console.log('Deleting client:', clientId, 'and client request:', id);
       
-      // Supprimer la demande client (le client sera supprimé automatiquement avec CASCADE)
-      const { error: requestError } = await supabase
-        .from('client_requests')
+      // Supprimer le client (cela supprimera automatiquement la demande client avec CASCADE)
+      const { error: clientError } = await supabase
+        .from('clients')
         .delete()
-        .eq('id', id);
+        .eq('id', clientId);
 
-      if (requestError) {
-        console.error('Error deleting client request:', requestError);
-        throw requestError;
+      if (clientError) {
+        console.error('Error deleting client:', clientError);
+        throw clientError;
       }
 
       // Mettre à jour l'état local immédiatement après la suppression réussie
@@ -221,14 +220,14 @@ const ClientList = () => {
 
       toast({
         title: "Succès",
-        description: "Demande client supprimée avec succès de la base de données",
+        description: "Client supprimé avec succès de la base de données",
       });
 
     } catch (error: any) {
       console.error('Error deleting client:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de supprimer la demande client: ${error.message}`,
+        description: `Impossible de supprimer le client: ${error.message}`,
         variant: "destructive",
       });
     }
