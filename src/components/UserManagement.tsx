@@ -133,7 +133,20 @@ const UserManagement = () => {
     try {
       console.log('Creating user:', newUser.email);
       
-      const { data, error } = await supabase.auth.signUp({
+      // Créer un client Supabase temporaire pour éviter d'affecter la session courante
+      const { createClient } = await import('@supabase/supabase-js');
+      const tempSupabase = createClient(
+        'https://kazwfyuwlvkcntphcxsc.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthendmeXV3bHZrY250cGhjeHNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjMxODYsImV4cCI6MjA2NDUzOTE4Nn0.ZBrm3aGVY5_ZQYeKVFyfVudrdpLqJAatfnFtrC4O75g',
+        {
+          auth: {
+            persistSession: false, // Important: ne pas persister la session
+            autoRefreshToken: false
+          }
+        }
+      );
+      
+      const { data, error } = await tempSupabase.auth.signUp({
         email: newUser.email.trim().toLowerCase(),
         password: newUser.password.trim(),
         options: {
@@ -152,13 +165,13 @@ const UserManagement = () => {
       if (data.user) {
         toast({
           title: "Succès",
-          description: "Utilisateur ajouté avec succès",
+          description: `L'utilisateur ${newUser.email} a été créé avec succès`,
         });
 
         setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
         setShowAddForm(false);
         
-        // Refresh the users list
+        // Actualiser la liste des utilisateurs
         setTimeout(() => {
           fetchUsers();
         }, 1000);
