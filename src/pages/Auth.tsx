@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Truck, Mail, Lock, User } from 'lucide-react';
+import { Truck, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,7 @@ const Auth = () => {
 
   // If user is authenticated and has profile, redirect to home
   if (user && profile) {
+    console.log('✅ User authenticated, redirecting to home');
     return <Navigate to="/" replace />;
   }
 
@@ -27,18 +28,25 @@ const Auth = () => {
 
     try {
       if (isLogin) {
+        console.log('🔐 Attempting login for:', email);
         const { error } = await signIn(email, password);
         if (!error) {
+          console.log('✅ Login successful, navigating to home');
           // Wait a bit for auth state to update, then navigate
           setTimeout(() => {
             navigate('/', { replace: true });
-          }, 100);
+          }, 500);
         }
       } else {
-        await signUp(email, password, 'agent');
+        console.log('📝 Attempting signup for:', email);
+        const { error } = await signUp(email, password, 'agent');
+        if (!error) {
+          console.log('✅ Signup successful');
+          setIsLogin(true); // Switch to login after successful signup
+        }
       }
     } catch (error) {
-      console.error('Auth error:', error);
+      console.error('❌ Auth error:', error);
     } finally {
       setLoading(false);
     }
@@ -47,6 +55,11 @@ const Auth = () => {
   const handleAdminLogin = () => {
     setEmail('contact@matchmove.fr');
     setPassword('Azzyouman@90');
+  };
+
+  const clearForm = () => {
+    setEmail('');
+    setPassword('');
   };
 
   return (
@@ -89,13 +102,13 @@ const Auth = () => {
           </p>
         </div>
 
-        <Card className="shadow-2xl border-0 bg-white/50">
-          <CardHeader className="space-y-1 bg-white rounded-t-lg">
+        <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
+          <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">
               {isLogin ? 'Connexion' : 'Inscription'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="bg-white rounded-b-lg">
+          <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <div className="relative">
@@ -130,14 +143,36 @@ const Auth = () => {
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                 disabled={loading}
               >
-                {loading ? 'Connexion...' : (isLogin ? 'Se connecter' : "S'inscrire")}
+                {loading ? 'Chargement...' : (isLogin ? 'Se connecter' : "S'inscrire")}
               </Button>
             </form>
 
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-600">
-                Contactez votre admin en cas de problème de login
-              </p>
+            <div className="mt-4 space-y-3">
+              <div className="flex justify-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    clearForm();
+                  }}
+                >
+                  {isLogin ? "Créer un compte" : "Se connecter"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAdminLogin}
+                >
+                  Login Admin
+                </Button>
+              </div>
+              
+              <div className="text-center">
+                <p className="text-sm text-gray-600">
+                  Contactez votre admin en cas de problème de login
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

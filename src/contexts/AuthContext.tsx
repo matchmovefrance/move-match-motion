@@ -44,12 +44,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...');
+        console.log('🔄 Initializing auth...');
         
         // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
-          console.error('Error getting session:', error);
+          console.error('❌ Error getting session:', error);
+        } else {
+          console.log('✅ Session retrieved:', session?.user?.email || 'No session');
         }
 
         if (mounted) {
@@ -58,11 +60,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           if (session?.user) {
             await loadUserProfile(session.user);
+          } else {
+            setProfile(null);
           }
           setLoading(false);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('❌ Auth initialization error:', error);
         if (mounted) {
           setLoading(false);
         }
@@ -74,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         if (!mounted) return;
         
-        console.log('Auth state changed:', event);
+        console.log('🔄 Auth state changed:', event, session?.user?.email || 'No user');
         
         setSession(session);
         setUser(session?.user ?? null);
@@ -101,10 +105,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfile = async (user: User) => {
     try {
-      console.log('Loading profile for:', user.email);
+      console.log('👤 Loading profile for:', user.email);
       
       // Special handling for admin
       if (user.email === 'contact@matchmove.fr') {
+        console.log('👑 Admin user detected');
         const adminProfile: Profile = {
           id: user.id,
           email: user.email,
@@ -112,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           company_name: 'MatchMove'
         };
         setProfile(adminProfile);
+        console.log('✅ Admin profile set:', adminProfile);
         return;
       }
 
@@ -120,18 +126,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        console.error('Error fetching profile:', error);
-        // Create fallback profile
-        const fallbackProfile: Profile = {
-          id: user.id,
-          email: user.email,
-          role: 'agent',
-          company_name: undefined
-        };
-        setProfile(fallbackProfile);
+        console.error('❌ Error fetching profile:', error);
+        await createDefaultProfile(user);
         return;
       }
 
@@ -143,21 +142,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           company_name: profileData.company_name
         };
         setProfile(profile);
+        console.log('✅ Profile loaded from DB:', profile);
+      } else {
+        console.log('📝 No profile found, creating default...');
+        await createDefaultProfile(user);
       }
     } catch (error) {
-      console.error('Profile loading error:', error);
+      console.error('❌ Profile loading error:', error);
+      await createDefaultProfile(user);
+    }
+  };
+
+  const createDefaultProfile = async (user: User) => {
+    try {
+      console.log('📝 Creating default profile for:', user.email);
+      
+      const defaultProfile = {
+        id: user.id,
+        email: user.email,
+        role: 'agent' as const,
+        company_name: null
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .insert(defaultProfile);
+
+      if (error) {
+        console.error('❌ Error creating profile:', error);
+        // Use fallback profile even if insertion fails
+        setProfile({
+          id: user.id,
+          email: user.email,
+          role: 'agent',
+          company_name: undefined
+        });
+      } else {
+        console.log('✅ Default profile created successfully');
+        setProfile({
+          id: user.id,
+          email: user.email,
+          role: 'agent',
+          company_name: undefined
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error creating default profile:', error);
       // Always provide fallback
       setProfile({
         id: user.id,
         email: user.email,
-        role: user.email === 'contact@matchmove.fr' ? 'admin' : 'agent',
+        role: 'agent',
         company_name: undefined
       });
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    console.log('Attempting sign in for:', email);
+    console.log('🔐 Attempting sign in for:', email);
     setLoading(true);
     
     const { error } = await supabase.auth.signInWithPassword({
@@ -166,7 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
-      console.error('Sign in error:', error);
+      console.error('❌ Sign in error:', error);
       toast({
         title: "Erreur de connexion",
         description: error.message,
@@ -176,11 +218,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error };
     }
 
+    console.log('✅ Sign in successful');
     // Loading will be set to false by the auth state change listener
     return { error: null };
   };
 
   const signUp = async (email: string, password: string, role: string) => {
+    console.log('📝 Attempting sign up for:', email);
+    
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -192,10 +237,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
+      console.error('❌ Sign up error:', error);
       toast({
         title: "Erreur d'inscription",
         description: error.message,
         variant: "destructive",
+      });
+    } else {
+      console.log('✅ Sign up successful');
+      toast({
+        title: "Inscription réussie",
+        description: "Votre compte a été créé avec succès",
       });
     }
 
@@ -203,20 +255,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    console.log('Signing out...');
+    console.log('🚪 Signing out...');
+    setLoading(true);
+    
     const { error } = await supabase.auth.signOut();
+    
     if (error) {
-      console.error('Sign out error:', error);
+      console.error('❌ Sign out error:', error);
       toast({
         title: "Erreur de déconnexion",
         description: error.message,
         variant: "destructive",
       });
+    } else {
+      console.log('✅ Sign out successful');
+      // Clear local state immediately
+      setUser(null);
+      setSession(null);
+      setProfile(null);
     }
+    
+    setLoading(false);
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: 'No user' };
+
+    console.log('🔄 Updating profile:', updates);
 
     const { error } = await supabase
       .from('profiles')
@@ -226,6 +291,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!error && profile) {
       const updatedProfile = { ...profile, ...updates };
       setProfile(updatedProfile);
+      console.log('✅ Profile updated:', updatedProfile);
+    } else if (error) {
+      console.error('❌ Profile update error:', error);
     }
 
     return { error };
