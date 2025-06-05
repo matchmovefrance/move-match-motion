@@ -31,7 +31,7 @@ interface User {
 }
 
 const UserManagement = () => {
-  const { user: loggedInUser } = useAuth();
+  const { user: loggedInUser, profile } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -44,6 +44,9 @@ const UserManagement = () => {
   });
   const { toast } = useToast();
 
+  // Vérifier si l'utilisateur connecté est admin
+  const isAdmin = profile?.role === 'admin' || loggedInUser?.email === 'contact@matchmove.fr';
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -53,9 +56,18 @@ const UserManagement = () => {
       setLoading(true);
       console.log('Fetching users...');
       
-      // Utiliser la nouvelle fonction sécurisée
-      const { data, error } = await supabase
-        .rpc('get_all_profiles');
+      if (!isAdmin) {
+        toast({
+          title: "Accès refusé",
+          description: "Vous devez être administrateur pour voir les utilisateurs",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Utiliser la fonction sécurisée get_all_profiles
+      const { data, error } = await supabase.rpc('get_all_profiles');
 
       if (error) {
         console.error('Supabase error:', error);
@@ -67,7 +79,6 @@ const UserManagement = () => {
     } catch (error: any) {
       console.error('Error fetching users:', error);
       
-      // Gestion d'erreurs spécifique
       let errorMessage = "Impossible de charger les utilisateurs";
       
       if (error.message?.includes('Access denied')) {
@@ -87,10 +98,10 @@ const UserManagement = () => {
   };
 
   const addUser = async () => {
-    if (!loggedInUser) {
+    if (!loggedInUser || !isAdmin) {
       toast({
         title: "Erreur",
-        description: "Vous devez être connecté pour ajouter un utilisateur",
+        description: "Vous devez être administrateur pour ajouter un utilisateur",
         variant: "destructive",
       });
       return;
@@ -137,8 +148,7 @@ const UserManagement = () => {
         options: {
           data: { 
             role: newUser.role,
-            company_name: newUser.company_name.trim() || null,
-            email_confirm: false
+            company_name: newUser.company_name.trim() || null
           }
         }
       });
@@ -149,20 +159,7 @@ const UserManagement = () => {
       }
 
       if (data.user) {
-        // Créer/mettre à jour le profil utilisateur
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            email: newUser.email.trim().toLowerCase(),
-            role: newUser.role,
-            company_name: newUser.company_name.trim() || null,
-          });
-
-        if (profileError) {
-          console.error('Supabase error creating profile:', profileError);
-          throw profileError;
-        }
+        console.log('User created successfully:', data.user.id);
 
         toast({
           title: "Succès",
@@ -171,7 +168,11 @@ const UserManagement = () => {
 
         setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
         setShowAddForm(false);
-        fetchUsers();
+        
+        // Attendre un peu avant de recharger la liste pour que le trigger se soit exécuté
+        setTimeout(() => {
+          fetchUsers();
+        }, 1000);
       }
     } catch (error: any) {
       console.error('Error adding user:', error);
@@ -182,6 +183,8 @@ const UserManagement = () => {
         errorMessage = "Un utilisateur avec cette adresse email existe déjà";
       } else if (error.message?.includes('User already registered')) {
         errorMessage = "Un utilisateur avec cette adresse email existe déjà";
+      } else if (error.message?.includes('Signup is disabled')) {
+        errorMessage = "L'inscription est désactivée. Veuillez contacter l'administrateur.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -195,17 +198,25 @@ const UserManagement = () => {
   };
 
   const updateUser = async () => {
-    if (!editingUser) return;
+    if (!editingUser || !isAdmin) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être administrateur pour modifier un utilisateur",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      console.log('Updating user role:', editingUser.id, editingUser.role);
+      console.log('Updating user:', editingUser.id, editingUser.role);
       
-      // Mettre à jour le rôle de l'utilisateur dans la table profiles
+      // Mettre à jour le profil utilisateur
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
           role: editingUser.role,
-          company_name: editingUser.company_name
+          company_name: editingUser.company_name,
+          updated_at: new Date().toISOString()
         })
         .eq('id', editingUser.id);
 
@@ -232,6 +243,15 @@ const UserManagement = () => {
   };
 
   const deleteUser = async (userId: string) => {
+    if (!isAdmin) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être administrateur pour supprimer un utilisateur",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       console.log('Deleting user and all associated data:', userId);
       
@@ -245,14 +265,12 @@ const UserManagement = () => {
         throw functionError;
       }
 
-      // Mettre à jour l'état local
-      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
-
       toast({
         title: "Succès",
         description: "Utilisateur et toutes ses données supprimés avec succès",
       });
 
+      fetchUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
       
@@ -301,13 +319,74 @@ const UserManagement = () => {
           </div>
         </div>
         
+        {isAdmin && (
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditingUser(user)}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
+                    Cette action supprimera définitivement l'utilisateur et toutes ses données associées.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteUser(user.id)}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Supprimer
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+
+  const renderUserListItem = (user: User) => (
+    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+      <div className="flex-1">
+        <div className="flex items-center space-x-4">
+          <div>
+            <h4 className="font-medium text-gray-800">{user.email}</h4>
+            <p className="text-sm text-gray-600">Rôle: {user.role || 'Non défini'}</p>
+            {user.company_name && (
+              <p className="text-xs text-gray-500">Entreprise: {user.company_name}</p>
+            )}
+          </div>
+          <div className="text-xs text-gray-400">
+            {new Date(user.created_at).toLocaleDateString('fr-FR')}
+          </div>
+        </div>
+      </div>
+      {isAdmin && (
         <div className="flex space-x-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setEditingUser(user)}
           >
-            <Edit className="h-4 w-4" />
+            <Edit className="h-3 w-3" />
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -316,7 +395,7 @@ const UserManagement = () => {
                 size="sm"
                 className="text-red-600 hover:text-red-700"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3 w-3" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -339,64 +418,7 @@ const UserManagement = () => {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-      </div>
-    </motion.div>
-  );
-
-  const renderUserListItem = (user: User) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex-1">
-        <div className="flex items-center space-x-4">
-          <div>
-            <h4 className="font-medium text-gray-800">{user.email}</h4>
-            <p className="text-sm text-gray-600">Rôle: {user.role || 'Non défini'}</p>
-            {user.company_name && (
-              <p className="text-xs text-gray-500">Entreprise: {user.company_name}</p>
-            )}
-          </div>
-          <div className="text-xs text-gray-400">
-            {new Date(user.created_at).toLocaleDateString('fr-FR')}
-          </div>
-        </div>
-      </div>
-      <div className="flex space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setEditingUser(user)}
-        >
-          <Edit className="h-3 w-3" />
-        </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
-              <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
-                Cette action supprimera définitivement l'utilisateur et toutes ses données associées.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annuler</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deleteUser(user.id)}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Supprimer
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+      )}
     </div>
   );
 
@@ -405,6 +427,18 @@ const UserManagement = () => {
       <div className="flex flex-col items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
         <p className="text-gray-600">Chargement des utilisateurs...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <Shield className="h-16 w-16 text-gray-400 mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Accès refusé</h3>
+        <p className="text-gray-600 text-center">
+          Vous devez être administrateur pour accéder à la gestion des utilisateurs.
+        </p>
       </div>
     );
   }
@@ -505,7 +539,7 @@ const UserManagement = () => {
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun utilisateur trouvé</h3>
           <p className="text-gray-600">
-            Vérifiez que vous avez les permissions d'administrateur pour voir les utilisateurs.
+            Commencez par ajouter des utilisateurs à votre système.
           </p>
         </div>
       )}
