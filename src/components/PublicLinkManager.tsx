@@ -32,7 +32,7 @@ const PublicLinkManager = () => {
       const { data, error } = await supabase
         .from('public_links')
         .select('*')
-        .is('mover_id', null) // Seulement les liens génériques
+        .is('mover_id', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -44,19 +44,41 @@ const PublicLinkManager = () => {
     }
   };
 
+  // Fonction pour générer un token directement côté client
+  const generateToken = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 32; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  // Fonction pour générer un mot de passe directement côté client
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
   const createLink = async () => {
     if (!user) return;
 
     try {
-      const { data: tokenData } = await supabase.rpc('generate_public_link_token');
-      const { data: passwordData } = await supabase.rpc('generate_random_password');
+      const linkToken = generateToken();
+      const password = generatePassword();
+
+      console.log('Generating link with token:', linkToken, 'and password:', password);
 
       const { error } = await supabase
         .from('public_links')
         .insert({
-          link_token: tokenData,
-          password: passwordData,
-          mover_id: null, // Toujours null pour les liens génériques
+          link_token: linkToken,
+          password: password,
+          mover_id: null,
           created_by: user.id
         });
 
