@@ -670,13 +670,22 @@ const MatchFinder = () => {
               
               if (!client || !move) return null;
 
+              // Recalculer la compatibilité pour l'affichage avec la logique corrigée
+              const isDistanceOk = match.distance_km <= 100;
+              const isVolumeOk = match.volume_ok;
+              const isDateOk = client.flexible_dates ? 
+                (match.date_diff_days === 0 || match.date_diff_days <= 15) : 
+                match.date_diff_days <= 15;
+              
+              const isCompatible = isDistanceOk && isVolumeOk && isDateOk;
+
               return (
                 <motion.div
                   key={match.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`bg-white rounded-xl p-6 shadow-lg border ${
-                    match.is_valid ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                    isCompatible ? 'border-green-200 bg-green-50' : 'border-gray-200'
                   } ${match.status === 'rejected' ? 'opacity-60' : ''}`}
                 >
                   <div className="flex justify-between items-start mb-4">
@@ -780,13 +789,13 @@ const MatchFinder = () => {
                     </div>
                   </div>
 
-                  {/* Détails du match - mise à jour pour afficher la compatibilité correcte */}
+                  {/* Détails du match - logique de compatibilité corrigée */}
                   <div className="border-t pt-3 mt-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-gray-500">Distance:</span>
                         <span className={`ml-2 font-medium ${
-                          match.distance_km <= 100 ? 'text-green-600' : 'text-red-600'
+                          isDistanceOk ? 'text-green-600' : 'text-red-600'
                         }`}>
                           {match.distance_km}km
                         </span>
@@ -794,9 +803,7 @@ const MatchFinder = () => {
                       <div>
                         <span className="text-gray-500">Diff. dates:</span>
                         <span className={`ml-2 font-medium ${
-                          client.flexible_dates ? 
-                            (match.date_diff_days === 0 ? 'text-green-600' : match.date_diff_days <= 15 ? 'text-orange-600' : 'text-red-600') :
-                            (match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600')
+                          isDateOk ? 'text-green-600' : 'text-red-600'
                         }`}>
                           {match.date_diff_days} jours
                           {client.flexible_dates && match.date_diff_days === 0 && ' (dans la plage)'}
@@ -809,9 +816,9 @@ const MatchFinder = () => {
                       <div>
                         <span className="text-gray-500">Compatible:</span>
                         <span className={`ml-2 font-medium ${
-                          match.distance_km <= 100 && match.volume_ok && match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600'
+                          isCompatible ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {match.distance_km <= 100 && match.volume_ok && match.date_diff_days <= 15 ? 'Oui' : 'Non'}
+                          {isCompatible ? 'Oui' : 'Non'}
                         </span>
                       </div>
                     </div>
