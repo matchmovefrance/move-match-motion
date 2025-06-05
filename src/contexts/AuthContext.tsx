@@ -258,23 +258,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🚪 Signing out...');
     setLoading(true);
     
-    const { error } = await supabase.auth.signOut();
-    
-    if (error) {
+    try {
+      // Check if we have a session before attempting to sign out
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        console.log('📤 Active session found, signing out...');
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          console.error('❌ Sign out error:', error);
+          // Don't show error toast for session missing errors as they're expected
+          if (!error.message?.includes('session') && !error.message?.includes('Session')) {
+            toast({
+              title: "Erreur de déconnexion",
+              description: error.message,
+              variant: "destructive",
+            });
+          }
+        } else {
+          console.log('✅ Sign out successful');
+        }
+      } else {
+        console.log('📭 No active session found, clearing local state...');
+      }
+    } catch (error: any) {
       console.error('❌ Sign out error:', error);
-      toast({
-        title: "Erreur de déconnexion",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      console.log('✅ Sign out successful');
-      // Clear local state immediately
-      setUser(null);
-      setSession(null);
-      setProfile(null);
+      // Don't show error toast for session missing errors as they're expected
+      if (!error.message?.includes('session') && !error.message?.includes('Session')) {
+        toast({
+          title: "Erreur de déconnexion",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     }
     
+    // Always clear local state regardless of signOut success/failure
+    console.log('🧹 Clearing local auth state...');
+    setUser(null);
+    setSession(null);
+    setProfile(null);
     setLoading(false);
   };
 
