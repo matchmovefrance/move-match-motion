@@ -10,6 +10,8 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const { user, profile, loading } = useAuth();
 
+  console.log('ProtectedRoute - loading:', loading, 'user:', user?.email, 'profile:', profile?.role);
+
   // Show loading state
   if (loading) {
     return (
@@ -24,22 +26,26 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
 
   // If no user, redirect to auth
   if (!user) {
+    console.log('No user, redirecting to auth');
     return <Navigate to="/auth" replace />;
   }
 
   // Admin always has access
   if (user.email === 'contact@matchmove.fr') {
+    console.log('Admin user detected, allowing access');
     return <>{children}</>;
   }
 
   // Check role requirements if specified
   if (allowedRoles && allowedRoles.length > 0 && profile) {
     if (!allowedRoles.includes(profile.role)) {
+      console.log('User role not allowed:', profile.role, 'required:', allowedRoles);
       return <Navigate to="/" replace />;
     }
   }
 
   // Allow access for authenticated users
+  console.log('User authenticated, allowing access');
   return <>{children}</>;
 };
 

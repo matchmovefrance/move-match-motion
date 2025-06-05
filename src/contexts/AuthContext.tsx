@@ -42,12 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    const getSession = async () => {
+    const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
+        
+        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-          return;
         }
 
         if (mounted) {
@@ -57,34 +59,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (session?.user) {
             await loadUserProfile(session.user);
           }
+          setLoading(false);
         }
       } catch (error) {
-        console.error('Session error:', error);
-      } finally {
-        if (mounted) setLoading(false);
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
+    // Set up auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
         
-        console.log('Auth state changed:', event, session?.user?.email);
+        console.log('Auth state changed:', event);
         
         setSession(session);
         setUser(session?.user ?? null);
         
-        if (session?.user) {
+        if (session?.user && event !== 'TOKEN_REFRESHED') {
           await loadUserProfile(session.user);
-        } else {
+        } else if (!session) {
           setProfile(null);
         }
         
-        setLoading(false);
+        if (event !== 'TOKEN_REFRESHED') {
+          setLoading(false);
+        }
       }
     );
 
-    getSession();
+    initializeAuth();
 
     return () => {
       mounted = false;
@@ -96,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading profile for:', user.email);
       
-      // For admin user, create profile if needed
+      // Special handling for admin
       if (user.email === 'contact@matchmove.fr') {
         const adminProfile: Profile = {
           id: user.id,
@@ -108,15 +115,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // For other users, fetch from database
+      // Try to fetch from database
       const { data: profileData, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error fetching profile:', error);
+        // Create fallback profile
+        const fallbackProfile: Profile = {
+          id: user.id,
+          email: user.email,
+          role: 'agent',
+          company_name: undefined
+        };
+        setProfile(fallbackProfile);
+        return;
       }
 
       if (profileData) {
@@ -127,19 +143,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           company_name: profileData.company_name
         };
         setProfile(profile);
-      } else {
-        // Create default profile for new users
-        const defaultProfile: Profile = {
-          id: user.id,
-          email: user.email,
-          role: 'agent',
-          company_name: undefined
-        };
-        setProfile(defaultProfile);
       }
     } catch (error) {
-      console.error('Error loading profile:', error);
-      // Always provide a fallback
+      console.error('Profile loading error:', error);
+      // Always provide fallback
       setProfile({
         id: user.id,
         email: user.email,
@@ -169,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error };
     }
 
+    // Loading will be set to false by the auth state change listener
     return { error: null };
   };
 
