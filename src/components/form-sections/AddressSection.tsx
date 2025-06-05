@@ -30,7 +30,7 @@ const AddressSection = ({ title, icon, formData, onInputChange, addressPrefix }:
             label="Adresse complète"
             value={formData.address}
             onChange={(value) => onInputChange(`${addressPrefix}_address`, value)}
-            placeholder="123 Rue de la Paix, Paris"
+            placeholder=""
             required
             id={`${addressPrefix}_address`}
           />
@@ -41,7 +41,7 @@ const AddressSection = ({ title, icon, formData, onInputChange, addressPrefix }:
             id={`${addressPrefix}_city`}
             value={formData.city}
             onChange={(e) => onInputChange(`${addressPrefix}_city`, e.target.value)}
-            placeholder="Paris"
+            placeholder=""
             required
           />
         </div>
@@ -51,7 +51,7 @@ const AddressSection = ({ title, icon, formData, onInputChange, addressPrefix }:
             id={`${addressPrefix}_postal_code`}
             value={formData.postal_code}
             onChange={(e) => onInputChange(`${addressPrefix}_postal_code`, e.target.value)}
-            placeholder="75001"
+            placeholder=""
             required
           />
         </div>

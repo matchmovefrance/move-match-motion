@@ -26,7 +26,7 @@ const PersonalInfoSection = ({ formData, onInputChange }: PersonalInfoSectionPro
             id="name"
             value={formData.name}
             onChange={(e) => onInputChange('name', e.target.value)}
-            placeholder="Jean Dupont"
+            placeholder=""
             required
           />
         </div>
@@ -37,7 +37,7 @@ const PersonalInfoSection = ({ formData, onInputChange }: PersonalInfoSectionPro
             type="email"
             value={formData.email}
             onChange={(e) => onInputChange('email', e.target.value)}
-            placeholder="jean.dupont@email.com"
+            placeholder=""
             required
           />
         </div>
@@ -47,7 +47,7 @@ const PersonalInfoSection = ({ formData, onInputChange }: PersonalInfoSectionPro
             id="phone"
             value={formData.phone}
             onChange={(e) => onInputChange('phone', e.target.value)}
-            placeholder="06 12 34 56 78"
+            placeholder=""
             required
           />
         </div>

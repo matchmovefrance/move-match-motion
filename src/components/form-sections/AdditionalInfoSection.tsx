@@ -22,7 +22,7 @@ const AdditionalInfoSection = ({ formData, onInputChange }: AdditionalInfoSectio
             id="special_requirements"
             value={formData.special_requirements}
             onChange={(e) => onInputChange('special_requirements', e.target.value)}
-            placeholder="Piano, objets fragiles, démontage..."
+            placeholder=""
             rows={3}
           />
         </div>
@@ -32,7 +32,7 @@ const AdditionalInfoSection = ({ formData, onInputChange }: AdditionalInfoSectio
             id="access_conditions"
             value={formData.access_conditions}
             onChange={(e) => onInputChange('access_conditions', e.target.value)}
-            placeholder="3ème étage sans ascenseur, parking..."
+            placeholder=""
             rows={3}
           />
         </div>
@@ -42,7 +42,7 @@ const AdditionalInfoSection = ({ formData, onInputChange }: AdditionalInfoSectio
             id="inventory_list"
             value={formData.inventory_list}
             onChange={(e) => onInputChange('inventory_list', e.target.value)}
-            placeholder="Détail des meubles et objets à déménager..."
+            placeholder=""
             rows={4}
           />
         </div>

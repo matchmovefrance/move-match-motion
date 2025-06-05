@@ -27,7 +27,7 @@ const BudgetSection = ({ formData, onInputChange }: BudgetSectionProps) => {
             type="number"
             value={formData.budget_min}
             onChange={(e) => onInputChange('budget_min', e.target.value)}
-            placeholder="1000"
+            placeholder=""
           />
         </div>
         <div>
@@ -37,7 +37,7 @@ const BudgetSection = ({ formData, onInputChange }: BudgetSectionProps) => {
             type="number"
             value={formData.budget_max}
             onChange={(e) => onInputChange('budget_max', e.target.value)}
-            placeholder="1500"
+            placeholder=""
           />
         </div>
         <div>
@@ -47,7 +47,7 @@ const BudgetSection = ({ formData, onInputChange }: BudgetSectionProps) => {
             type="number"
             value={formData.quote_amount}
             onChange={(e) => onInputChange('quote_amount', e.target.value)}
-            placeholder="1200"
+            placeholder=""
           />
         </div>
       </div>

@@ -154,7 +154,7 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
             step="0.1"
             value={formData.estimated_volume}
             onChange={(e) => onInputChange('estimated_volume', e.target.value)}
-            placeholder="15.0"
+            placeholder=""
             required
           />
         </div>
@@ -164,7 +164,7 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
             id="description"
             value={formData.description}
             onChange={(e) => onInputChange('description', e.target.value)}
-            placeholder="Détails supplémentaires sur le déménagement..."
+            placeholder=""
             rows={3}
           />
         </div>

@@ -203,7 +203,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
           <ServiceProviderSuggestions
             onSelectProvider={handleProviderSelect}
             label="Sélectionner un fournisseur existant (optionnel)"
-            placeholder="Rechercher un fournisseur pour pré-remplir les informations..."
+            placeholder=""
           />
 
           {/* Informations du déménageur */}
@@ -214,6 +214,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                 id="mover_name"
                 value={formData.mover_name}
                 onChange={(e) => handleInputChange('mover_name', e.target.value)}
+                placeholder=""
                 required
               />
             </div>
@@ -223,6 +224,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                 id="company_name"
                 value={formData.company_name}
                 onChange={(e) => handleInputChange('company_name', e.target.value)}
+                placeholder=""
                 required
               />
             </div>
@@ -236,6 +238,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                 id="contact_phone"
                 value={formData.contact_phone}
                 onChange={(e) => handleInputChange('contact_phone', e.target.value)}
+                placeholder=""
               />
             </div>
             <div>
@@ -245,6 +248,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                 type="email"
                 value={formData.contact_email}
                 onChange={(e) => handleInputChange('contact_email', e.target.value)}
+                placeholder=""
               />
             </div>
           </div>
@@ -262,19 +266,19 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                   label="Adresse de départ *"
                   value={formData.departure_address}
                   onChange={(value) => handleAddressChange('departure', value)}
-                  placeholder="Rechercher l'adresse de départ"
+                  placeholder=""
                   required
                   id="departure_address"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Input
-                    placeholder="Ville"
+                    placeholder=""
                     value={formData.departure_city}
                     onChange={(e) => handleInputChange('departure_city', e.target.value)}
                     required
                   />
                   <Input
-                    placeholder="Code postal"
+                    placeholder=""
                     value={formData.departure_postal_code}
                     onChange={(e) => handleInputChange('departure_postal_code', e.target.value)}
                     required
@@ -287,19 +291,19 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                   label="Adresse d'arrivée *"
                   value={formData.arrival_address}
                   onChange={(value) => handleAddressChange('arrival', value)}
-                  placeholder="Rechercher l'adresse d'arrivée"
+                  placeholder=""
                   required
                   id="arrival_address"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Input
-                    placeholder="Ville"
+                    placeholder=""
                     value={formData.arrival_city}
                     onChange={(e) => handleInputChange('arrival_city', e.target.value)}
                     required
                   />
                   <Input
-                    placeholder="Code postal"
+                    placeholder=""
                     value={formData.arrival_postal_code}
                     onChange={(e) => handleInputChange('arrival_postal_code', e.target.value)}
                     required
@@ -384,6 +388,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                   min="0"
                   value={formData.max_volume}
                   onChange={(e) => handleInputChange('max_volume', parseFloat(e.target.value) || 0)}
+                  placeholder=""
                   required
                 />
               </div>
@@ -396,6 +401,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                   min="0"
                   value={formData.price_per_m3}
                   onChange={(e) => handleInputChange('price_per_m3', parseFloat(e.target.value) || 0)}
+                  placeholder=""
                 />
               </div>
             </div>
@@ -408,7 +414,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
               id="description"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder="Informations supplémentaires sur le déménagement"
+              placeholder=""
             />
           </div>
 
