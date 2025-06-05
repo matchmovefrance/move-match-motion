@@ -1,9 +1,9 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Link, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -12,30 +12,19 @@ interface PublicLink {
   id: string;
   link_token: string;
   password: string;
-  mover_id: number;
   expires_at: string;
   created_at: string;
-}
-
-interface Mover {
-  id: number;
-  name: string;
-  company_name: string;
 }
 
 const PublicLinkManager = () => {
   const { user } = useAuth();
   const [links, setLinks] = useState<PublicLink[]>([]);
-  const [movers, setMovers] = useState<Mover[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedMoverId, setSelectedMoverId] = useState<number | null>(null);
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
   const { toast } = useToast();
 
   useEffect(() => {
     fetchLinks();
-    fetchMovers();
   }, []);
 
   const fetchLinks = async () => {
@@ -43,6 +32,7 @@ const PublicLinkManager = () => {
       const { data, error } = await supabase
         .from('public_links')
         .select('*')
+        .is('mover_id', null) // Seulement les liens génériques
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -51,20 +41,6 @@ const PublicLinkManager = () => {
       console.error('Error fetching links:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchMovers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('movers')
-        .select('id, name, company_name')
-        .order('name');
-
-      if (error) throw error;
-      setMovers(data || []);
-    } catch (error) {
-      console.error('Error fetching movers:', error);
     }
   };
 
@@ -80,7 +56,7 @@ const PublicLinkManager = () => {
         .insert({
           link_token: tokenData,
           password: passwordData,
-          mover_id: selectedMoverId, // Can be null now
+          mover_id: null, // Toujours null pour les liens génériques
           created_by: user.id
         });
 
@@ -91,8 +67,6 @@ const PublicLinkManager = () => {
         description: "Lien public créé avec succès",
       });
 
-      setShowCreateForm(false);
-      setSelectedMoverId(null);
       fetchLinks();
     } catch (error: any) {
       console.error('Error creating link:', error);
@@ -160,10 +134,13 @@ const PublicLinkManager = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Link className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Liens publics déménageurs</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Liens publics - Saisie de trajets</h2>
+            <p className="text-gray-600">Créez des liens pour que les déménageurs saisissent leurs trajets</p>
+          </div>
         </div>
         <Button
-          onClick={() => setShowCreateForm(true)}
+          onClick={createLink}
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -171,46 +148,8 @@ const PublicLinkManager = () => {
         </Button>
       </div>
 
-      {showCreateForm && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-        >
-          <h3 className="text-lg font-semibold mb-4">Créer un lien public</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sélectionner un déménageur (optionnel)
-              </label>
-              <select
-                value={selectedMoverId || ''}
-                onChange={(e) => setSelectedMoverId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Lien générique (sans déménageur spécifique)</option>
-                {movers.map((mover) => (
-                  <option key={mover.id} value={mover.id}>
-                    {mover.name} - {mover.company_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex space-x-2">
-              <Button onClick={createLink}>
-                Créer
-              </Button>
-              <Button variant="outline" onClick={() => setShowCreateForm(false)}>
-                Annuler
-              </Button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       <div className="grid gap-4">
         {links.map((link) => {
-          const mover = movers.find(m => m.id === link.mover_id);
           const publicUrl = getPublicUrl(link.link_token);
           
           return (
@@ -223,13 +162,13 @@ const PublicLinkManager = () => {
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-800 mb-2">
-                    {mover ? `${mover.name} - ${mover.company_name}` : 'Lien générique'}
+                    Lien de saisie de trajet
                   </h3>
                   
                   <div className="space-y-2 text-sm text-gray-600">
                     <div>
                       <span className="font-medium">Lien: </span>
-                      <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                      <span className="font-mono bg-gray-100 px-2 py-1 rounded text-xs">
                         {publicUrl}
                       </span>
                       <Button
@@ -270,6 +209,11 @@ const PublicLinkManager = () => {
                       <span className="font-medium">Expire le: </span>
                       {new Date(link.expires_at).toLocaleDateString('fr-FR')}
                     </div>
+                    
+                    <div>
+                      <span className="font-medium">Créé le: </span>
+                      {new Date(link.created_at).toLocaleDateString('fr-FR')}
+                    </div>
                   </div>
                 </div>
                 
@@ -290,6 +234,9 @@ const PublicLinkManager = () => {
           <div className="text-center py-8">
             <Link className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">Aucun lien public créé</p>
+            <p className="text-gray-400 text-sm mt-2">
+              Créez un lien pour permettre aux déménageurs de saisir leurs trajets
+            </p>
           </div>
         )}
       </div>
