@@ -1,10 +1,12 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import PersonalInfoSection from './form-sections/PersonalInfoSection';
 import AddressSection from './form-sections/AddressSection';
 import MovingDetailsSection from './form-sections/MovingDetailsSection';
@@ -37,7 +39,7 @@ interface ClientFormData {
   estimated_volume: string;
   description: string;
   
-  // Nouvelles options pour dates flexibles
+  // Options pour dates flexibles
   flexible_dates: boolean;
   date_range_start: string;
   date_range_end: string;
@@ -57,10 +59,13 @@ interface ClientFormProps {
   onSubmit: (data: ClientFormData) => void;
   initialData?: Partial<ClientFormData>;
   isEditing?: boolean;
+  clientId?: number;
 }
 
-const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProps) => {
+const ClientForm = ({ onSubmit, initialData, isEditing = false, clientId }: ClientFormProps) => {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<ClientFormData>({
     name: '',
     email: '',
@@ -91,11 +96,65 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
     ...initialData
   });
 
+  // Auto-save pour synchronisation temps réel
+  useEffect(() => {
+    if (isEditing && clientId && user) {
+      const autoSave = async () => {
+        try {
+          // Préparer les données pour l'update
+          const updateData = {
+            name: formData.name || null,
+            email: formData.email || null,
+            phone: formData.phone || null,
+            departure_address: formData.departure_address || null,
+            departure_city: formData.departure_city,
+            departure_postal_code: formData.departure_postal_code,
+            departure_country: formData.departure_country || 'France',
+            departure_time: formData.departure_time || null,
+            arrival_address: formData.arrival_address || null,
+            arrival_city: formData.arrival_city,
+            arrival_postal_code: formData.arrival_postal_code,
+            arrival_country: formData.arrival_country || 'France',
+            desired_date: formData.desired_date,
+            estimated_arrival_date: formData.estimated_arrival_date || null,
+            estimated_arrival_time: formData.estimated_arrival_time || null,
+            estimated_volume: formData.estimated_volume ? parseFloat(formData.estimated_volume) : null,
+            description: formData.description || null,
+            flexible_dates: formData.flexible_dates,
+            date_range_start: formData.date_range_start || null,
+            date_range_end: formData.date_range_end || null,
+            budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
+            budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
+            quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
+            special_requirements: formData.special_requirements || null,
+            access_conditions: formData.access_conditions || null,
+            inventory_list: formData.inventory_list || null,
+          };
+
+          const { error } = await supabase
+            .from('client_requests')
+            .update(updateData)
+            .eq('id', clientId);
+
+          if (error) {
+            console.error('Auto-save error:', error);
+          }
+        } catch (error) {
+          console.error('Auto-save failed:', error);
+        }
+      };
+
+      // Debounce auto-save
+      const timeoutId = setTimeout(autoSave, 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData, isEditing, clientId, user]);
+
   const handleInputChange = (field: keyof ClientFormData, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation basique
@@ -108,7 +167,48 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
       return;
     }
 
-    onSubmit(formData);
+    // Validation des dates flexibles
+    if (formData.flexible_dates) {
+      if (!formData.date_range_start || !formData.date_range_end) {
+        toast({
+          title: "Erreur",
+          description: "Les dates de début et fin sont requises pour les dates flexibles",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const startDate = new Date(formData.date_range_start);
+      const endDate = new Date(formData.date_range_end);
+      const desiredDate = new Date(formData.desired_date);
+      
+      if (startDate > desiredDate || endDate < desiredDate) {
+        toast({
+          title: "Erreur",
+          description: "La date souhaitée doit être entre les dates de début et fin",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      await onSubmit(formData);
+      toast({
+        title: "Succès",
+        description: isEditing ? "Demande mise à jour avec succès" : "Demande créée avec succès",
+      });
+    } catch (error) {
+      console.error('Submit error:', error);
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors de l'enregistrement",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -122,6 +222,9 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
           <CardTitle className="flex items-center space-x-2">
             <User className="h-5 w-5 text-blue-600" />
             <span>{isEditing ? 'Modifier la demande de déménagement' : 'Nouvelle demande de déménagement'}</span>
+            {isEditing && (
+              <span className="text-sm text-green-600 ml-2">(Sauvegarde automatique)</span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -195,8 +298,12 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
             />
 
             <div className="flex space-x-4 pt-6 border-t">
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                {isEditing ? 'Mettre à jour' : 'Ajouter la demande'}
+              <Button 
+                type="submit" 
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={loading}
+              >
+                {loading ? 'Enregistrement...' : (isEditing ? 'Mettre à jour' : 'Ajouter la demande')}
               </Button>
               <Button type="button" variant="outline">
                 Annuler

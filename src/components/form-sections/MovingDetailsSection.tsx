@@ -21,6 +21,27 @@ interface MovingDetailsSectionProps {
 }
 
 const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionProps) => {
+  // Calculer automatiquement les dates min/max quand flexible_dates est activé
+  const handleFlexibleDatesChange = (checked: boolean) => {
+    onInputChange('flexible_dates', checked);
+    
+    if (checked && formData.desired_date) {
+      // Calculer automatiquement ±15 jours autour de la date souhaitée
+      const desiredDate = new Date(formData.desired_date);
+      const startDate = new Date(desiredDate);
+      startDate.setDate(desiredDate.getDate() - 15);
+      const endDate = new Date(desiredDate);
+      endDate.setDate(desiredDate.getDate() + 15);
+      
+      onInputChange('date_range_start', startDate.toISOString().split('T')[0]);
+      onInputChange('date_range_end', endDate.toISOString().split('T')[0]);
+    } else if (!checked) {
+      // Effacer les dates de plage si désactivé
+      onInputChange('date_range_start', '');
+      onInputChange('date_range_end', '');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center space-x-2">
@@ -34,7 +55,20 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
             id="desired_date"
             type="date"
             value={formData.desired_date}
-            onChange={(e) => onInputChange('desired_date', e.target.value)}
+            onChange={(e) => {
+              onInputChange('desired_date', e.target.value);
+              // Recalculer les dates flexibles si activées
+              if (formData.flexible_dates && e.target.value) {
+                const desiredDate = new Date(e.target.value);
+                const startDate = new Date(desiredDate);
+                startDate.setDate(desiredDate.getDate() - 15);
+                const endDate = new Date(desiredDate);
+                endDate.setDate(desiredDate.getDate() + 15);
+                
+                onInputChange('date_range_start', startDate.toISOString().split('T')[0]);
+                onInputChange('date_range_end', endDate.toISOString().split('T')[0]);
+              }
+            }}
             required
           />
         </div>
@@ -48,20 +82,20 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
           />
         </div>
         
-        {/* Nouvelle section pour les dates flexibles */}
+        {/* Section pour les dates flexibles */}
         <div className="md:col-span-2">
           <div className="flex items-center space-x-2">
             <Checkbox
               id="flexible_dates"
               checked={formData.flexible_dates || false}
-              onCheckedChange={(checked) => onInputChange('flexible_dates', checked)}
+              onCheckedChange={handleFlexibleDatesChange}
             />
             <Label htmlFor="flexible_dates" className="text-sm font-medium">
-              Dates flexibles (±15 jours)
+              Dates flexibles (±15 jours autour de la date souhaitée)
             </Label>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Cochez cette option si vous êtes flexible sur les dates de déménagement
+            Cochez cette option si vous êtes flexible sur les dates de déménagement (calcul automatique de la plage)
           </p>
         </div>
 
@@ -74,7 +108,10 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
                 type="date"
                 value={formData.date_range_start || ''}
                 onChange={(e) => onInputChange('date_range_start', e.target.value)}
+                className="bg-gray-50"
+                readOnly
               />
+              <p className="text-xs text-gray-400 mt-1">Calculé automatiquement</p>
             </div>
             <div>
               <Label htmlFor="date_range_end">Date la plus tard</Label>
@@ -83,7 +120,10 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
                 type="date"
                 value={formData.date_range_end || ''}
                 onChange={(e) => onInputChange('date_range_end', e.target.value)}
+                className="bg-gray-50"
+                readOnly
               />
+              <p className="text-xs text-gray-400 mt-1">Calculé automatiquement</p>
             </div>
           </>
         )}

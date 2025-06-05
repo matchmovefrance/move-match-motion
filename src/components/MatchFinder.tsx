@@ -25,6 +25,8 @@ interface ClientRequest {
   is_matched: boolean | null;
   match_status: string | null;
   flexible_dates: boolean | null;
+  date_range_start?: string;
+  date_range_end?: string;
 }
 
 interface Move {
@@ -185,17 +187,47 @@ const MatchFinder = () => {
     }
   }, [user?.id, toast, fetchData]);
 
-  // Fonction améliorée pour calculer si les dates sont compatibles (±15 jours max)
-  const areDatesCompatible = (clientDate: string, moveDate: string, isFlexible: boolean = false) => {
-    const client = new Date(clientDate);
+  // Fonction améliorée pour calculer si les dates sont compatibles avec gestion des dates flexibles
+  const areDatesCompatible = (client: ClientRequest, moveDate: string) => {
     const move = new Date(moveDate);
-    const timeDiff = Math.abs(client.getTime() - move.getTime());
-    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
     
-    // Limite stricte de 15 jours
-    const maxDays = 15;
+    if (client.flexible_dates && client.date_range_start && client.date_range_end) {
+      // Si le client a des dates flexibles, vérifier si la date du trajet est dans la plage
+      const rangeStart = new Date(client.date_range_start);
+      const rangeEnd = new Date(client.date_range_end);
+      
+      return move >= rangeStart && move <= rangeEnd;
+    } else {
+      // Si pas de dates flexibles, utiliser la logique standard ±15 jours
+      const clientDate = new Date(client.desired_date);
+      const timeDiff = Math.abs(clientDate.getTime() - move.getTime());
+      const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+      
+      return daysDiff <= 15;
+    }
+  };
+
+  // Fonction pour calculer la différence de jours (améliorée pour dates flexibles)
+  const calculateDateDifference = (client: ClientRequest, moveDate: string) => {
+    const move = new Date(moveDate);
     
-    return daysDiff <= maxDays;
+    if (client.flexible_dates && client.date_range_start && client.date_range_end) {
+      // Pour les dates flexibles, calculer la différence la plus petite possible
+      const rangeStart = new Date(client.date_range_start);
+      const rangeEnd = new Date(client.date_range_end);
+      
+      if (move >= rangeStart && move <= rangeEnd) {
+        return 0; // Parfaitement dans la plage
+      } else if (move < rangeStart) {
+        return Math.ceil((rangeStart.getTime() - move.getTime()) / (1000 * 60 * 60 * 24));
+      } else {
+        return Math.ceil((move.getTime() - rangeEnd.getTime()) / (1000 * 60 * 60 * 24));
+      }
+    } else {
+      // Logique standard
+      const clientDate = new Date(client.desired_date);
+      return Math.abs((clientDate.getTime() - move.getTime()) / (1000 * 60 * 60 * 24));
+    }
   };
 
   const findMatches = useCallback(async () => {
@@ -214,24 +246,22 @@ const MatchFinder = () => {
         .delete()
         .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
 
-      // Calculer les nouveaux matches avec la règle des 15 jours
+      // Calculer les nouveaux matches avec gestion améliorée des dates flexibles
       for (const client of clientRequests) {
         for (const move of moves) {
           // Calculer la distance approximative (simulation basée sur les codes postaux)
           const distanceKm = Math.abs(parseInt(client.departure_postal_code.substring(0, 2)) - 
                                      parseInt(move.departure_postal_code.substring(0, 2))) * 50;
           
-          // Vérifier la compatibilité des dates (±15 jours max)
-          const datesCompatible = areDatesCompatible(client.desired_date, move.departure_date, client.flexible_dates);
+          // Vérifier la compatibilité des dates avec gestion des dates flexibles
+          const datesCompatible = areDatesCompatible(client, move.departure_date);
           
           if (!datesCompatible) {
             continue; // Ignorer ce match si les dates ne sont pas compatibles
           }
           
-          // Calculer la différence de dates exacte
-          const clientDate = new Date(client.desired_date);
-          const moveDate = new Date(move.departure_date);
-          const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
+          // Calculer la différence de dates avec gestion des dates flexibles
+          const dateDiffDays = calculateDateDifference(client, move.departure_date);
           
           // Vérifier si le volume est compatible
           const clientVolume = client.estimated_volume || 0;
@@ -241,16 +271,30 @@ const MatchFinder = () => {
           // Calculer le volume combiné
           const combinedVolume = (move.used_volume || 0) + clientVolume;
           
-          // Déterminer si c'est un match valide (distance ≤ 200km, dates ≤ 15 jours, volume OK)
-          const isValid = distanceKm <= 200 && dateDiffDays <= 15 && volumeOk;
+          // Déterminer si c'est un match valide
+          // Pour les dates flexibles, la différence peut être de 0 si dans la plage
+          const maxAllowedDays = client.flexible_dates ? 
+            (dateDiffDays === 0 ? 0 : 15) : 15;
           
-          // Déterminer le type de match
+          const isValid = distanceKm <= 200 && dateDiffDays <= maxAllowedDays && volumeOk;
+          
+          // Déterminer le type de match (amélioré pour dates flexibles)
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
               client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
-            matchType = 'perfect';
+            if (client.flexible_dates && dateDiffDays === 0) {
+              matchType = 'perfect'; // Date parfaite dans la plage flexible
+            } else if (!client.flexible_dates && dateDiffDays <= 3) {
+              matchType = 'perfect'; // Date proche pour non-flexible
+            } else {
+              matchType = 'good';
+            }
           } else if (distanceKm <= 50) {
-            matchType = 'good';
+            if (client.flexible_dates && dateDiffDays === 0) {
+              matchType = 'good'; // Bonne correspondance avec date flexible
+            } else if (dateDiffDays <= 7) {
+              matchType = 'good';
+            }
           }
 
           // Vérifier s'il existe déjà un match pour cette combinaison
@@ -282,7 +326,7 @@ const MatchFinder = () => {
 
       toast({
         title: "Succès",
-        description: "Recherche de correspondances terminée",
+        description: "Recherche de correspondances terminée (dates flexibles prises en compte)",
       });
 
       fetchData();
@@ -470,7 +514,11 @@ const MatchFinder = () => {
                             <Calendar className="h-3 w-3" />
                             <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
                             {client.flexible_dates && (
-                              <Badge variant="outline" className="text-xs">Flexible</Badge>
+                              <Badge variant="outline" className="text-xs">
+                                Flexible ({client.date_range_start && client.date_range_end ? 
+                                  `${new Date(client.date_range_start).toLocaleDateString('fr-FR')} - ${new Date(client.date_range_end).toLocaleDateString('fr-FR')}` : 
+                                  '±15 jours'})
+                              </Badge>
                             )}
                           </div>
                           <div className="flex items-center space-x-2">
@@ -550,7 +598,7 @@ const MatchFinder = () => {
                     </div>
                   </div>
 
-                  {/* Détails du match - mise à jour pour refléter la limite de 15 jours */}
+                  {/* Détails du match - mise à jour pour refléter les dates flexibles */}
                   <div className="border-t pt-3 mt-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
@@ -559,8 +607,13 @@ const MatchFinder = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Diff. dates:</span>
-                        <span className={`ml-2 font-medium ${match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600'}`}>
+                        <span className={`ml-2 font-medium ${
+                          client.flexible_dates ? 
+                            (match.date_diff_days === 0 ? 'text-green-600' : match.date_diff_days <= 15 ? 'text-orange-600' : 'text-red-600') :
+                            (match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600')
+                        }`}>
                           {match.date_diff_days} jours
+                          {client.flexible_dates && match.date_diff_days === 0 && ' (dans la plage)'}
                         </span>
                       </div>
                       <div>
@@ -569,8 +622,14 @@ const MatchFinder = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Compatible:</span>
-                        <span className={`ml-2 font-medium ${match.volume_ok && match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600'}`}>
-                          {match.volume_ok && match.date_diff_days <= 15 ? 'Oui' : 'Non'}
+                        <span className={`ml-2 font-medium ${
+                          match.volume_ok && (client.flexible_dates ? 
+                            match.date_diff_days <= 15 : 
+                            match.date_diff_days <= 15) ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {match.volume_ok && (client.flexible_dates ? 
+                            match.date_diff_days <= 15 : 
+                            match.date_diff_days <= 15) ? 'Oui' : 'Non'}
                         </span>
                       </div>
                     </div>
