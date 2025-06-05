@@ -26,25 +26,58 @@ interface QuoteGeneratorProps {
 }
 
 const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
-  const generatePDF = () => {
+  const generatePDF = async () => {
     const doc = new jsPDF();
     
-    // Couleurs
-    const primaryColor = '#1e40af'; // bleu
+    // Couleurs vertes
+    const primaryColor = '#22c55e'; // vert
     const secondaryColor = '#64748b'; // gris
     
-    // En-tête avec logo (texte stylisé)
-    doc.setFillColor(30, 64, 175); // bleu
-    doc.rect(0, 0, 210, 40, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MatchMove', 20, 25);
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Solutions de déménagement', 20, 32);
+    // Charger le logo
+    try {
+      const logoUrl = 'https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png';
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = reject;
+        logoImg.src = logoUrl;
+      });
+      
+      // En-tête avec fond vert
+      doc.setFillColor(34, 197, 94); // vert
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      // Ajouter le logo
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = logoImg.width;
+      canvas.height = logoImg.height;
+      ctx?.drawImage(logoImg, 0, 0);
+      const logoDataUrl = canvas.toDataURL('image/png');
+      
+      doc.addImage(logoDataUrl, 'PNG', 20, 8, 50, 25);
+      
+      // Texte de l'en-tête
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Solutions de déménagement', 80, 25);
+    } catch (error) {
+      // En cas d'erreur de chargement du logo, utiliser uniquement le texte
+      doc.setFillColor(34, 197, 94); // vert
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('MatchMove', 20, 25);
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Solutions de déménagement', 20, 32);
+    }
     
     // Titre du document
     doc.setTextColor(0, 0, 0);
@@ -65,7 +98,7 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     doc.line(20, 85, 190, 85);
     
     // Informations client
-    doc.setTextColor(30, 64, 175);
+    doc.setTextColor(34, 197, 94);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('INFORMATIONS CLIENT', 20, 100);
@@ -92,7 +125,7 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     
     // Détails du déménagement
     yPos += 10;
-    doc.setTextColor(30, 64, 175);
+    doc.setTextColor(34, 197, 94);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('DÉTAILS DU DÉMÉNAGEMENT', 20, yPos);
@@ -126,19 +159,19 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     if (client.quote_amount) {
       yPos += 20;
       
-      // Encadré pour le prix
-      doc.setFillColor(248, 250, 252);
+      // Encadré pour le prix avec fond vert clair
+      doc.setFillColor(240, 253, 244);
       doc.rect(20, yPos - 5, 170, 25, 'F');
-      doc.setDrawColor(226, 232, 240);
+      doc.setDrawColor(34, 197, 94);
       doc.rect(20, yPos - 5, 170, 25);
       
-      doc.setTextColor(30, 64, 175);
+      doc.setTextColor(34, 197, 94);
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.text('MONTANT DU DEVIS', 25, yPos + 5);
       
       doc.setFontSize(20);
-      doc.text(`${client.quote_amount.toLocaleString('fr-FR')} €`, 25, yPos + 15);
+      doc.text(`${client.quote_amount.toFixed(2).replace('.', ',')} €`, 25, yPos + 15);
     }
     
     // Conditions
