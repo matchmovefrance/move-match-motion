@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
@@ -12,6 +12,7 @@ import GoogleMap from '@/components/GoogleMap';
 import MoverCalendar from '@/components/MoverCalendar';
 import UserManagement from '@/components/UserManagement';
 import PublicLinkManager from '@/components/PublicLinkManager';
+import AdminActions from '@/components/AdminActions';
 import Header from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -45,6 +46,7 @@ const Index = () => {
       case 'match-analytics': return <MatchAnalytics />;
       case 'map': return <GoogleMap />;
       case 'calendar': return <MoverCalendar />;
+      case 'admin-actions': return <AdminActions />;
       case 'management': 
         return (
           <div className="space-y-8">
@@ -89,9 +91,12 @@ const Index = () => {
       { id: 'map', label: 'Carte', icon: Map },
     ];
 
-    // Add management tab for admin users
+    // Add management and admin tabs for admin users
     if (profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') {
-      baseTabs.push({ id: 'management', label: 'Gestion', icon: Settings });
+      baseTabs.push(
+        { id: 'management', label: 'Gestion', icon: Settings },
+        { id: 'admin-actions', label: 'Admin', icon: Shield }
+      );
     }
 
     return baseTabs;

@@ -10,6 +10,7 @@ import UserManagement from './UserManagement';
 import MoverList from './MoverList';
 import DatabaseTestPanel from './DatabaseTestPanel';
 import MatchAnalytics from './MatchAnalytics';
+import AdminActions from './AdminActions';
 
 const Dashboard = () => {
   return (
@@ -19,7 +20,7 @@ const Dashboard = () => {
       </h1>
       
       <Tabs defaultValue="test-db" className="w-full">
-        <TabsList className="grid w-full grid-cols-9">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="test-db">Tests DB</TabsTrigger>
           <TabsTrigger value="clients">Clients</TabsTrigger>
           <TabsTrigger value="movers">Déménageurs</TabsTrigger>
@@ -29,6 +30,7 @@ const Dashboard = () => {
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="links">Liens publics</TabsTrigger>
           <TabsTrigger value="users">Utilisateurs</TabsTrigger>
+          <TabsTrigger value="admin">Admin</TabsTrigger>
         </TabsList>
         
         <TabsContent value="test-db" className="mt-6">
@@ -65,6 +67,10 @@ const Dashboard = () => {
         
         <TabsContent value="users" className="mt-6">
           <UserManagement />
+        </TabsContent>
+        
+        <TabsContent value="admin" className="mt-6">
+          <AdminActions />
         </TabsContent>
       </Tabs>
     </div>
