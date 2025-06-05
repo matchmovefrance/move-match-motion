@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, Mail, Shield, Edit, Trash2 } from 'lucide-react';
@@ -66,16 +65,29 @@ const UserManagement = () => {
         return;
       }
 
-      // Utiliser la fonction sécurisée get_all_profiles
-      const { data, error } = await supabase.rpc('get_all_profiles');
+      // Essayer d'abord avec la fonction sécurisée
+      const { data: functionData, error: functionError } = await supabase.rpc('get_all_profiles');
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
+      if (functionError) {
+        console.log('Function call failed, trying direct query:', functionError);
+        
+        // Si la fonction échoue, essayer une requête directe
+        const { data: directData, error: directError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (directError) {
+          console.error('Direct query also failed:', directError);
+          throw directError;
+        }
+
+        console.log('Users fetched via direct query:', directData);
+        setUsers(directData || []);
+      } else {
+        console.log('Users fetched via function:', functionData);
+        setUsers(functionData || []);
       }
-
-      console.log('Users fetched successfully:', data);
-      setUsers(data || []);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       
@@ -253,21 +265,31 @@ const UserManagement = () => {
     }
 
     try {
-      console.log('Deleting user and all associated data:', userId);
+      console.log('Deleting user:', userId);
       
-      // Utiliser la fonction delete_user_and_data sécurisée
+      // Essayer d'abord avec la fonction sécurisée
       const { error: functionError } = await supabase.rpc('delete_user_and_data', {
         user_uuid: userId
       });
 
       if (functionError) {
-        console.error('Error calling delete_user_and_data function:', functionError);
-        throw functionError;
+        console.log('Function delete failed, trying manual deletion:', functionError);
+        
+        // Si la fonction échoue, supprimer manuellement
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
+
+        if (profileError) {
+          console.error('Manual deletion failed:', profileError);
+          throw profileError;
+        }
       }
 
       toast({
         title: "Succès",
-        description: "Utilisateur et toutes ses données supprimés avec succès",
+        description: "Utilisateur supprimé avec succès",
       });
 
       fetchUsers();

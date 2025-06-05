@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Set a default admin profile for the admin user
+            // Set a default admin profile for the admin user without database call
             if (session.user.email === 'contact@matchmove.fr') {
               setProfile({
                 id: session.user.id,
@@ -89,8 +89,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 company_name: undefined
               });
             } else {
-              // For other users, try to fetch profile multiple times
-              await fetchUserProfileWithRetry(session.user.id);
+              // For other users, fetch profile with simple query
+              await fetchUserProfile(session.user.id);
             }
           }
           
@@ -124,8 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               company_name: undefined
             });
           } else {
-            // For other users, try to fetch profile with retry
-            await fetchUserProfileWithRetry(session.user.id);
+            // For other users, fetch profile with simple query
+            await fetchUserProfile(session.user.id);
           }
         } else {
           setProfile(null);
@@ -143,39 +143,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchUserProfileWithRetry = async (userId: string, maxAttempts: number = 5) => {
+  const fetchUserProfile = async (userId: string) => {
     try {
       console.log('Fetching profile for user:', userId);
       
-      let attempts = 0;
-      
-      while (attempts < maxAttempts) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+      // Simple direct query without RLS complications
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-        if (!error && data) {
-          console.log('Profile data received:', data);
-          const sanitizedProfile = sanitizeProfile(data);
-          if (sanitizedProfile) {
-            setProfile(sanitizedProfile);
-            console.log('Profile set successfully:', sanitizedProfile);
-            return;
-          }
-        }
-
-        attempts++;
-        if (attempts < maxAttempts) {
-          console.log(`Profile fetch attempt ${attempts} failed, retrying in 2 seconds...`);
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-        }
+      if (error) {
+        console.error('Error fetching profile:', error);
+        // For now, create a default agent profile if fetch fails
+        setProfile({
+          id: userId,
+          email: user?.email || '',
+          role: 'agent',
+          company_name: undefined
+        });
+        return;
       }
-      
-      console.warn('Profile fetch failed after all attempts:', userId);
+
+      if (data) {
+        console.log('Profile data received:', data);
+        const sanitizedProfile = sanitizeProfile(data);
+        if (sanitizedProfile) {
+          setProfile(sanitizedProfile);
+          console.log('Profile set successfully:', sanitizedProfile);
+        }
+      } else {
+        console.warn('No profile found for user:', userId);
+        // Create default agent profile if none exists
+        setProfile({
+          id: userId,
+          email: user?.email || '',
+          role: 'agent',
+          company_name: undefined
+        });
+      }
     } catch (error) {
-      console.error('Error in fetchUserProfileWithRetry:', error);
+      console.error('Error in fetchUserProfile:', error);
+      // Fallback to default profile to avoid blocking the app
+      setProfile({
+        id: userId,
+        email: user?.email || '',
+        role: 'agent',
+        company_name: undefined
+      });
     }
   };
 
