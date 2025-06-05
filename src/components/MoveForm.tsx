@@ -34,29 +34,32 @@ interface MoveFormData {
 
 interface MoveFormProps {
   onSuccess?: () => void;
+  onSubmit?: (formData: any) => Promise<void>;
+  initialData?: any;
+  isEditing?: boolean;
 }
 
-const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
+const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, isEditing }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [formData, setFormData] = useState<MoveFormData>({
-    mover_name: '',
-    company_name: '',
-    departure_city: '',
-    departure_postal_code: '',
-    departure_address: '',
-    arrival_city: '',
-    arrival_postal_code: '',
-    arrival_address: '',
-    departure_date: '',
-    departure_time: '',
-    arrival_time: '',
-    max_volume: 0,
-    price_per_m3: 0,
-    contact_phone: '',
-    contact_email: '',
-    description: '',
-    route_type: 'direct'
+    mover_name: initialData?.mover_name || '',
+    company_name: initialData?.company_name || '',
+    departure_city: initialData?.departure_city || '',
+    departure_postal_code: initialData?.departure_postal_code || '',
+    departure_address: initialData?.departure_address || '',
+    arrival_city: initialData?.arrival_city || '',
+    arrival_postal_code: initialData?.arrival_postal_code || '',
+    arrival_address: initialData?.arrival_address || '',
+    departure_date: initialData?.departure_date || '',
+    departure_time: initialData?.departure_time || '',
+    arrival_time: initialData?.arrival_time || '',
+    max_volume: initialData?.max_volume ? parseFloat(initialData.max_volume) : 0,
+    price_per_m3: initialData?.price_per_m3 ? parseFloat(initialData.price_per_m3) : 0,
+    contact_phone: initialData?.contact_phone || '',
+    contact_email: initialData?.contact_email || '',
+    description: initialData?.description || '',
+    route_type: initialData?.route_type || 'direct'
   });
 
   const [loading, setLoading] = useState(false);
@@ -68,20 +71,16 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
     }));
   };
 
-  const handleAddressSelect = (type: 'departure' | 'arrival', address: any) => {
+  const handleAddressChange = (type: 'departure' | 'arrival', value: string) => {
     if (type === 'departure') {
       setFormData(prev => ({
         ...prev,
-        departure_address: address.formatted_address,
-        departure_city: address.city,
-        departure_postal_code: address.postal_code
+        departure_address: value
       }));
     } else {
       setFormData(prev => ({
         ...prev,
-        arrival_address: address.formatted_address,
-        arrival_city: address.city,
-        arrival_postal_code: address.postal_code
+        arrival_address: value
       }));
     }
   };
@@ -100,6 +99,11 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
 
     try {
       setLoading(true);
+
+      if (onSubmit) {
+        await onSubmit(formData);
+        return;
+      }
 
       // Calculer le volume disponible (initialement égal au volume max)
       const available_volume = formData.max_volume;
@@ -174,7 +178,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Truck className="h-5 w-5" />
-          <span>Nouveau Déménagement</span>
+          <span>{isEditing ? 'Modifier le déménagement' : 'Nouveau Déménagement'}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -231,10 +235,13 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label>Adresse de départ *</Label>
                 <AddressAutocomplete
-                  onAddressSelect={(address) => handleAddressSelect('departure', address)}
+                  label="Adresse de départ *"
+                  value={formData.departure_address}
+                  onChange={(value) => handleAddressChange('departure', value)}
                   placeholder="Rechercher l'adresse de départ"
+                  required
+                  id="departure_address"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Input
@@ -253,10 +260,13 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
               </div>
 
               <div className="space-y-2">
-                <Label>Adresse d'arrivée *</Label>
                 <AddressAutocomplete
-                  onAddressSelect={(address) => handleAddressSelect('arrival', address)}
+                  label="Adresse d'arrivée *"
+                  value={formData.arrival_address}
+                  onChange={(value) => handleAddressChange('arrival', value)}
                   placeholder="Rechercher l'adresse d'arrivée"
+                  required
+                  id="arrival_address"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Input
@@ -380,7 +390,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess }) => {
           </div>
 
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Ajout en cours...' : 'Ajouter le déménagement'}
+            {loading ? 'En cours...' : isEditing ? 'Mettre à jour' : 'Ajouter le déménagement'}
           </Button>
         </form>
       </CardContent>
