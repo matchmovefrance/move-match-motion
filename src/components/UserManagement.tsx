@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, Mail, Shield, Edit, Trash2 } from 'lucide-react';
@@ -43,83 +44,78 @@ const UserManagement = () => {
   });
   const { toast } = useToast();
 
-  // Vérifier si l'utilisateur connecté est admin
   const isAdmin = profile?.role === 'admin' || loggedInUser?.email === 'contact@matchmove.fr';
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (isAdmin) {
+      fetchUsers();
+    } else {
+      setLoading(false);
+    }
+  }, [isAdmin]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      console.log('Fetching users...');
+      console.log('Fetching users as admin...');
       
       if (!isAdmin) {
-        toast({
-          title: "Accès refusé",
-          description: "Vous devez être administrateur pour voir les utilisateurs",
-          variant: "destructive",
-        });
+        console.log('Not admin, skipping fetch');
         setLoading(false);
         return;
       }
 
-      // Essayer d'abord avec la fonction sécurisée
+      // Try the admin function first
       const { data: functionData, error: functionError } = await supabase.rpc('get_all_profiles');
 
       if (functionError) {
-        console.log('Function call failed, trying direct query:', functionError);
+        console.log('Admin function failed, trying direct query:', functionError);
         
-        // Si la fonction échoue, essayer une requête directe
+        // Fallback to direct query
         const { data: directData, error: directError } = await supabase
           .from('profiles')
           .select('*')
           .order('created_at', { ascending: false });
 
         if (directError) {
-          console.error('Direct query also failed:', directError);
-          throw directError;
+          console.error('Direct query failed:', directError);
+          toast({
+            title: "Erreur",
+            description: "Impossible de charger les utilisateurs",
+            variant: "destructive",
+          });
+          setUsers([]);
+        } else {
+          console.log('Users loaded via direct query:', directData?.length);
+          setUsers(directData || []);
         }
-
-        console.log('Users fetched via direct query:', directData);
-        setUsers(directData || []);
       } else {
-        console.log('Users fetched via function:', functionData);
+        console.log('Users loaded via admin function:', functionData?.length);
         setUsers(functionData || []);
       }
     } catch (error: any) {
       console.error('Error fetching users:', error);
-      
-      let errorMessage = "Impossible de charger les utilisateurs";
-      
-      if (error.message?.includes('Access denied')) {
-        errorMessage = "Accès refusé : vous devez être administrateur pour voir les utilisateurs";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Erreur",
-        description: errorMessage,
+        description: "Erreur lors du chargement des utilisateurs",
         variant: "destructive",
       });
+      setUsers([]);
     } finally {
       setLoading(false);
     }
   };
 
   const addUser = async () => {
-    if (!loggedInUser || !isAdmin) {
+    if (!isAdmin) {
       toast({
         title: "Erreur",
-        description: "Vous devez être administrateur pour ajouter un utilisateur",
+        description: "Accès refusé",
         variant: "destructive",
       });
       return;
     }
 
-    // Validation des champs obligatoires
     if (!newUser.email.trim() || !newUser.password.trim()) {
       toast({
         title: "Erreur",
@@ -129,18 +125,16 @@ const UserManagement = () => {
       return;
     }
 
-    // Validation email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(newUser.email)) {
       toast({
         title: "Erreur",
-        description: "Veuillez entrer une adresse email valide",
+        description: "Adresse email invalide",
         variant: "destructive",
       });
       return;
     }
 
-    // Validation mot de passe
     if (newUser.password.length < 6) {
       toast({
         title: "Erreur",
@@ -151,9 +145,8 @@ const UserManagement = () => {
     }
 
     try {
-      console.log('Creating user:', { email: newUser.email, role: newUser.role });
+      console.log('Creating user:', newUser.email);
       
-      // Créer l'utilisateur via l'API auth de Supabase
       const { data, error } = await supabase.auth.signUp({
         email: newUser.email.trim().toLowerCase(),
         password: newUser.password.trim(),
@@ -166,13 +159,11 @@ const UserManagement = () => {
       });
 
       if (error) {
-        console.error('Supabase error creating user:', error);
+        console.error('Error creating user:', error);
         throw error;
       }
 
       if (data.user) {
-        console.log('User created successfully:', data.user.id);
-
         toast({
           title: "Succès",
           description: "Utilisateur ajouté avec succès",
@@ -181,7 +172,6 @@ const UserManagement = () => {
         setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
         setShowAddForm(false);
         
-        // Attendre un peu avant de recharger la liste pour que le trigger se soit exécuté
         setTimeout(() => {
           fetchUsers();
         }, 1000);
@@ -190,13 +180,8 @@ const UserManagement = () => {
       console.error('Error adding user:', error);
       
       let errorMessage = "Impossible d'ajouter l'utilisateur";
-      
-      if (error.code === '23505') {
+      if (error.message?.includes('User already registered')) {
         errorMessage = "Un utilisateur avec cette adresse email existe déjà";
-      } else if (error.message?.includes('User already registered')) {
-        errorMessage = "Un utilisateur avec cette adresse email existe déjà";
-      } else if (error.message?.includes('Signup is disabled')) {
-        errorMessage = "L'inscription est désactivée. Veuillez contacter l'administrateur.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -213,17 +198,16 @@ const UserManagement = () => {
     if (!editingUser || !isAdmin) {
       toast({
         title: "Erreur",
-        description: "Vous devez être administrateur pour modifier un utilisateur",
+        description: "Accès refusé",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      console.log('Updating user:', editingUser.id, editingUser.role);
+      console.log('Updating user:', editingUser.id);
       
-      // Mettre à jour le profil utilisateur
-      const { error: profileError } = await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({ 
           role: editingUser.role,
@@ -232,9 +216,9 @@ const UserManagement = () => {
         })
         .eq('id', editingUser.id);
 
-      if (profileError) {
-        console.error('Error updating user:', profileError);
-        throw profileError;
+      if (error) {
+        console.error('Error updating user:', error);
+        throw error;
       }
 
       toast({
@@ -248,7 +232,7 @@ const UserManagement = () => {
       console.error('Error updating user:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de mettre à jour l'utilisateur: ${error.message}`,
+        description: `Impossible de mettre à jour: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -258,7 +242,7 @@ const UserManagement = () => {
     if (!isAdmin) {
       toast({
         title: "Erreur",
-        description: "Vous devez être administrateur pour supprimer un utilisateur",
+        description: "Accès refusé",
         variant: "destructive",
       });
       return;
@@ -267,24 +251,13 @@ const UserManagement = () => {
     try {
       console.log('Deleting user:', userId);
       
-      // Essayer d'abord avec la fonction sécurisée
-      const { error: functionError } = await supabase.rpc('delete_user_and_data', {
+      const { error } = await supabase.rpc('delete_user_and_data', {
         user_uuid: userId
       });
 
-      if (functionError) {
-        console.log('Function delete failed, trying manual deletion:', functionError);
-        
-        // Si la fonction échoue, supprimer manuellement
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('id', userId);
-
-        if (profileError) {
-          console.error('Manual deletion failed:', profileError);
-          throw profileError;
-        }
+      if (error) {
+        console.error('Error deleting user:', error);
+        throw error;
       }
 
       toast({
@@ -295,17 +268,9 @@ const UserManagement = () => {
       fetchUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
-      
-      let errorMessage = "Impossible de supprimer l'utilisateur";
-      if (error.message?.includes('Access denied')) {
-        errorMessage = "Accès refusé : vous devez être administrateur pour supprimer des utilisateurs";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Erreur",
-        description: errorMessage,
+        description: `Impossible de supprimer: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -364,8 +329,7 @@ const UserManagement = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
-                    Cette action supprimera définitivement l'utilisateur et toutes ses données associées.
+                    Êtes-vous sûr de vouloir supprimer {user.email} ?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -424,8 +388,7 @@ const UserManagement = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
-                  Cette action supprimera définitivement l'utilisateur et toutes ses données associées.
+                  Êtes-vous sûr de vouloir supprimer {user.email} ?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -459,7 +422,7 @@ const UserManagement = () => {
         <Shield className="h-16 w-16 text-gray-400 mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">Accès refusé</h3>
         <p className="text-gray-600 text-center">
-          Vous devez être administrateur pour accéder à la gestion des utilisateurs.
+          Vous devez être administrateur pour accéder à cette section.
         </p>
       </div>
     );
@@ -555,8 +518,7 @@ const UserManagement = () => {
         </motion.div>
       )}
 
-      {/* Status info */}
-      {users.length === 0 && !loading && (
+      {users.length === 0 ? (
         <div className="text-center py-8">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun utilisateur trouvé</h3>
@@ -564,10 +526,7 @@ const UserManagement = () => {
             Commencez par ajouter des utilisateurs à votre système.
           </p>
         </div>
-      )}
-
-      {/* ListView with search and pagination */}
-      {users.length > 0 && (
+      ) : (
         <ListView
           items={users}
           searchFields={['email', 'role', 'company_name']}

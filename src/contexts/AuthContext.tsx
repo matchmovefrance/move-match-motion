@@ -24,23 +24,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const allowedRoles = ['admin', 'agent', 'demenageur'] as const;
-type AllowedRole = typeof allowedRoles[number];
-
-function sanitizeProfile(profileData: any): Profile | null {
-  if (!profileData || !allowedRoles.includes(profileData.role)) {
-    console.warn(`Invalid role ignored: ${profileData?.role}`);
-    return null;
-  }
-
-  return {
-    id: profileData.id,
-    email: profileData.email,
-    role: profileData.role as AllowedRole,
-    company_name: profileData.company_name,
-  };
-}
-
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -63,13 +46,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('Initializing auth...');
         
-        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-          if (mounted) {
-            setLoading(false);
-          }
+          if (mounted) setLoading(false);
           return;
         }
 
@@ -80,31 +60,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Set a default admin profile for the admin user without database call
-            if (session.user.email === 'contact@matchmove.fr') {
-              setProfile({
-                id: session.user.id,
-                email: session.user.email,
-                role: 'admin',
-                company_name: undefined
-              });
-            } else {
-              // For other users, fetch profile with simple query
-              await fetchUserProfile(session.user.id);
-            }
+            await handleUserProfile(session.user);
           }
           
           setLoading(false);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
 
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
@@ -115,18 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // For admin user, set default profile immediately
-          if (session.user.email === 'contact@matchmove.fr') {
-            setProfile({
-              id: session.user.id,
-              email: session.user.email,
-              role: 'admin',
-              company_name: undefined
-            });
-          } else {
-            // For other users, fetch profile with simple query
-            await fetchUserProfile(session.user.id);
-          }
+          await handleUserProfile(session.user);
         } else {
           setProfile(null);
         }
@@ -143,55 +98,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
+  const handleUserProfile = async (user: User) => {
     try {
-      console.log('Fetching profile for user:', userId);
+      console.log('Handling profile for user:', user.email);
       
-      // Simple direct query without RLS complications
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        // For now, create a default agent profile if fetch fails
-        setProfile({
-          id: userId,
-          email: user?.email || '',
-          role: 'agent',
+      // For admin user, set profile immediately
+      if (user.email === 'contact@matchmove.fr') {
+        const adminProfile: Profile = {
+          id: user.id,
+          email: user.email,
+          role: 'admin',
           company_name: undefined
-        });
+        };
+        setProfile(adminProfile);
+        console.log('Admin profile set successfully');
         return;
       }
 
-      if (data) {
-        console.log('Profile data received:', data);
-        const sanitizedProfile = sanitizeProfile(data);
-        if (sanitizedProfile) {
-          setProfile(sanitizedProfile);
-          console.log('Profile set successfully:', sanitizedProfile);
-        }
-      } else {
-        console.warn('No profile found for user:', userId);
-        // Create default agent profile if none exists
-        setProfile({
-          id: userId,
-          email: user?.email || '',
+      // For other users, try to fetch from database
+      console.log('Fetching profile from database for:', user.id);
+      
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        // Create default profile on error
+        const defaultProfile: Profile = {
+          id: user.id,
+          email: user.email,
           role: 'agent',
           company_name: undefined
-        });
+        };
+        setProfile(defaultProfile);
+        console.log('Default profile created due to fetch error');
+        return;
+      }
+
+      if (profileData) {
+        const profile: Profile = {
+          id: profileData.id,
+          email: profileData.email,
+          role: profileData.role as 'admin' | 'agent' | 'demenageur',
+          company_name: profileData.company_name
+        };
+        setProfile(profile);
+        console.log('Profile loaded successfully:', profile);
+      } else {
+        // No profile found, create default
+        const defaultProfile: Profile = {
+          id: user.id,
+          email: user.email,
+          role: 'agent',
+          company_name: undefined
+        };
+        setProfile(defaultProfile);
+        console.log('Default profile created - no data found');
       }
     } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
-      // Fallback to default profile to avoid blocking the app
-      setProfile({
-        id: userId,
-        email: user?.email || '',
+      console.error('Error in handleUserProfile:', error);
+      // Always provide a fallback profile
+      const fallbackProfile: Profile = {
+        id: user.id,
+        email: user.email,
         role: 'agent',
         company_name: undefined
-      });
+      };
+      setProfile(fallbackProfile);
+      console.log('Fallback profile created due to error');
     }
   };
 
@@ -215,7 +192,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error };
     }
 
-    // Don't set loading to false here, let the auth state change handle it
     return { error: null };
   };
 
@@ -252,7 +228,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: "destructive",
       });
     }
-    // State will be cleared by the auth state change listener
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
