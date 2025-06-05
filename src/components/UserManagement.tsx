@@ -52,6 +52,7 @@ const UserManagement = () => {
     company_name: ''
   });
   const [tempPassword, setTempPassword] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const isAdmin = profile?.role === 'admin' || loggedInUser?.email === 'contact@matchmove.fr';
@@ -75,7 +76,6 @@ const UserManagement = () => {
         return;
       }
 
-      // Use the get_all_profiles function
       const { data, error } = await supabase.rpc('get_all_profiles');
 
       if (error) {
@@ -142,9 +142,9 @@ const UserManagement = () => {
     }
 
     try {
+      setIsSubmitting(true);
       console.log('Creating user:', newUser.email);
       
-      // Utiliser l'edge function pour créer l'utilisateur
       const { data, error } = await supabase.functions.invoke('confirm-user-signup', {
         body: {
           email: newUser.email.trim().toLowerCase(),
@@ -162,13 +162,13 @@ const UserManagement = () => {
       if (data?.success) {
         toast({
           title: "Succès",
-          description: `L'utilisateur ${newUser.email} a été créé avec succès`,
+          description: `L'utilisateur ${newUser.email} a été créé avec succès et peut maintenant se connecter`,
         });
 
         setNewUser({ email: '', password: '', role: 'agent', company_name: '' });
         setShowAddForm(false);
         
-        // Actualiser la liste des utilisateurs
+        // Refresh the user list
         setTimeout(() => {
           fetchUsers();
         }, 1000);
@@ -179,8 +179,10 @@ const UserManagement = () => {
       console.error('Error adding user:', error);
       
       let errorMessage = "Impossible d'ajouter l'utilisateur";
-      if (error.message?.includes('User already registered')) {
+      if (error.message?.includes('User already registered') || error.message?.includes('already been registered')) {
         errorMessage = "Un utilisateur avec cette adresse email existe déjà";
+      } else if (error.message?.includes('password')) {
+        errorMessage = "Le mot de passe doit contenir au moins 6 caractères";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -190,6 +192,8 @@ const UserManagement = () => {
         description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -204,6 +208,7 @@ const UserManagement = () => {
     }
 
     try {
+      setIsSubmitting(true);
       console.log('Updating user:', editingUser.id);
       
       const { error } = await supabase
@@ -234,6 +239,8 @@ const UserManagement = () => {
         description: `Impossible de mettre à jour: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -248,6 +255,7 @@ const UserManagement = () => {
     }
 
     try {
+      setIsSubmitting(true);
       console.log('Resetting password for user:', resetPasswordUser.id);
       
       const { data, error } = await supabase.functions.invoke('reset-user-password', {
@@ -266,7 +274,7 @@ const UserManagement = () => {
         setTempPassword(data.tempPassword);
         toast({
           title: "Succès",
-          description: "Mot de passe réinitialisé avec succès",
+          description: "Mot de passe réinitialisé avec succès. L'utilisateur peut maintenant se connecter avec le nouveau mot de passe.",
         });
       } else {
         throw new Error(data?.error || 'Erreur lors de la réinitialisation');
@@ -278,6 +286,8 @@ const UserManagement = () => {
         description: `Impossible de réinitialiser le mot de passe: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -292,6 +302,7 @@ const UserManagement = () => {
     }
 
     try {
+      setIsSubmitting(true);
       console.log('Deleting user:', userId);
       
       const { data, error } = await supabase.functions.invoke('delete-user', {
@@ -308,7 +319,7 @@ const UserManagement = () => {
       if (data?.success) {
         toast({
           title: "Succès",
-          description: "Utilisateur supprimé avec succès",
+          description: "Utilisateur supprimé avec succès de tous les systèmes",
         });
 
         fetchUsers();
@@ -322,6 +333,8 @@ const UserManagement = () => {
         description: `Impossible de supprimer: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -361,6 +374,7 @@ const UserManagement = () => {
               variant="outline"
               size="sm"
               onClick={() => setEditingUser(user)}
+              disabled={isSubmitting}
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -371,6 +385,7 @@ const UserManagement = () => {
                   size="sm"
                   onClick={() => setResetPasswordUser(user)}
                   className="text-orange-600 hover:text-orange-700"
+                  disabled={isSubmitting}
                 >
                   <Key className="h-4 w-4" />
                 </Button>
@@ -389,7 +404,7 @@ const UserManagement = () => {
                       {tempPassword}
                     </p>
                     <p className="text-sm text-yellow-700 mt-2">
-                      Communiquez ce mot de passe à l'utilisateur. Il devra le changer lors de sa prochaine connexion.
+                      Communiquez ce mot de passe à l'utilisateur. Il peut maintenant se connecter avec ce mot de passe.
                     </p>
                   </div>
                 )}
@@ -400,11 +415,15 @@ const UserManagement = () => {
                       setTempPassword('');
                     }}
                     variant="outline"
+                    disabled={isSubmitting}
                   >
                     Fermer
                   </Button>
-                  <Button onClick={resetUserPassword}>
-                    Réinitialiser
+                  <Button 
+                    onClick={resetUserPassword}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Réinitialisation...' : 'Réinitialiser'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -415,6 +434,7 @@ const UserManagement = () => {
                   variant="outline"
                   size="sm"
                   className="text-red-600 hover:text-red-700"
+                  disabled={isSubmitting}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -423,16 +443,17 @@ const UserManagement = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Êtes-vous sûr de vouloir supprimer {user.email} ? Cette action supprimera également toutes les données associées à cet utilisateur.
+                    Êtes-vous sûr de vouloir supprimer {user.email} ? Cette action supprimera complètement l'utilisateur et toutes ses données de tous les systèmes.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogCancel disabled={isSubmitting}>Annuler</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => deleteUser(user.id)}
                     className="bg-red-600 hover:bg-red-700"
+                    disabled={isSubmitting}
                   >
-                    Supprimer
+                    {isSubmitting ? 'Suppression...' : 'Supprimer'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -465,6 +486,7 @@ const UserManagement = () => {
             variant="outline"
             size="sm"
             onClick={() => setEditingUser(user)}
+            disabled={isSubmitting}
           >
             <Edit className="h-3 w-3" />
           </Button>
@@ -475,6 +497,7 @@ const UserManagement = () => {
                 size="sm"
                 onClick={() => setResetPasswordUser(user)}
                 className="text-orange-600 hover:text-orange-700"
+                disabled={isSubmitting}
               >
                 <Key className="h-3 w-3" />
               </Button>
@@ -493,7 +516,7 @@ const UserManagement = () => {
                     {tempPassword}
                   </p>
                   <p className="text-sm text-yellow-700 mt-2">
-                    Communiquez ce mot de passe à l'utilisateur. Il devra le changer lors de sa prochaine connexion.
+                    Communiquez ce mot de passe à l'utilisateur. Il peut maintenant se connecter avec ce mot de passe.
                   </p>
                 </div>
               )}
@@ -504,11 +527,15 @@ const UserManagement = () => {
                     setTempPassword('');
                   }}
                   variant="outline"
+                  disabled={isSubmitting}
                 >
                   Fermer
                 </Button>
-                <Button onClick={resetUserPassword}>
-                  Réinitialiser
+                <Button 
+                  onClick={resetUserPassword}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Réinitialisation...' : 'Réinitialiser'}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -519,6 +546,7 @@ const UserManagement = () => {
                 variant="outline"
                 size="sm"
                 className="text-red-600 hover:text-red-700"
+                disabled={isSubmitting}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -527,16 +555,17 @@ const UserManagement = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer {user.email} ? Cette action supprimera également toutes les données associées à cet utilisateur.
+                  Êtes-vous sûr de vouloir supprimer {user.email} ? Cette action supprimera complètement l'utilisateur et toutes ses données de tous les systèmes.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogCancel disabled={isSubmitting}>Annuler</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => deleteUser(user.id)}
                   className="bg-red-600 hover:bg-red-700"
+                  disabled={isSubmitting}
                 >
-                  Supprimer
+                  {isSubmitting ? 'Suppression...' : 'Supprimer'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -577,6 +606,7 @@ const UserManagement = () => {
         <Button
           onClick={() => setShowAddForm(true)}
           className="bg-blue-600 hover:bg-blue-700"
+          disabled={isSubmitting}
         >
           <Plus className="h-4 w-4 mr-2" />
           Ajouter un utilisateur
@@ -602,7 +632,7 @@ const UserManagement = () => {
                 ? setEditingUser({...editingUser, email: e.target.value})
                 : setNewUser({...newUser, email: e.target.value})
               }
-              disabled={!!editingUser}
+              disabled={!!editingUser || isSubmitting}
             />
             {!editingUser && (
               <Input
@@ -610,6 +640,7 @@ const UserManagement = () => {
                 type="password"
                 value={newUser.password}
                 onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                disabled={isSubmitting}
               />
             )}
             <Input
@@ -619,6 +650,7 @@ const UserManagement = () => {
                 ? setEditingUser({...editingUser, company_name: e.target.value})
                 : setNewUser({...newUser, company_name: e.target.value})
               }
+              disabled={isSubmitting}
             />
             <Select 
               value={editingUser?.role || newUser.role}
@@ -629,6 +661,7 @@ const UserManagement = () => {
                   setNewUser({...newUser, role: value})
                 }
               }}
+              disabled={isSubmitting}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Sélectionner un rôle" />
@@ -641,8 +674,11 @@ const UserManagement = () => {
             </Select>
           </div>
           <div className="flex space-x-2 mt-4">
-            <Button onClick={editingUser ? updateUser : addUser}>
-              {editingUser ? 'Mettre à jour' : 'Ajouter'}
+            <Button 
+              onClick={editingUser ? updateUser : addUser}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Chargement...' : (editingUser ? 'Mettre à jour' : 'Ajouter')}
             </Button>
             <Button 
               variant="outline" 
@@ -650,6 +686,7 @@ const UserManagement = () => {
                 setShowAddForm(false);
                 setEditingUser(null);
               }}
+              disabled={isSubmitting}
             >
               Annuler
             </Button>

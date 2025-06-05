@@ -16,12 +16,23 @@ serve(async (req) => {
   try {
     const { email, password, role = 'agent', company_name } = await req.json();
     
-    console.log('Creating user with email:', email);
+    console.log('Creating user with email:', email, 'role:', role);
 
     if (!email || !password) {
       console.error('Missing email or password');
       return new Response(
         JSON.stringify({ success: false, error: 'Email et mot de passe requis' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
+      );
+    }
+
+    if (password.length < 6) {
+      console.error('Password too short');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Le mot de passe doit contenir au moins 6 caractères' }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400 
@@ -41,13 +52,13 @@ serve(async (req) => {
       }
     );
 
-    console.log('Creating user account...');
+    console.log('Creating user account with admin privileges...');
 
-    // Create user with admin privileges
+    // Create user with admin privileges and auto-confirm email
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password: password.trim(),
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true, // This automatically confirms the email
       user_metadata: {
         role: role,
         company_name: company_name || null
@@ -58,11 +69,11 @@ serve(async (req) => {
       console.error('Auth error:', authError);
       
       let errorMessage = 'Erreur lors de la création du compte';
-      if (authError.message?.includes('already registered')) {
+      if (authError.message?.includes('already registered') || authError.message?.includes('already been registered')) {
         errorMessage = 'Un utilisateur avec cette adresse email existe déjà';
       } else if (authError.message?.includes('password')) {
         errorMessage = 'Le mot de passe doit contenir au moins 6 caractères';
-      } else if (authError.message) {
+      } else {
         errorMessage = authError.message;
       }
       
@@ -86,9 +97,9 @@ serve(async (req) => {
       );
     }
 
-    console.log('User created successfully:', authData.user.id);
+    console.log('User created successfully:', authData.user.id, 'email confirmed:', authData.user.email_confirmed_at);
 
-    // Create or update profile
+    // Create profile in database
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -102,16 +113,23 @@ serve(async (req) => {
 
     if (profileError) {
       console.error('Profile error:', profileError);
-      // Don't fail the entire operation for profile errors
-      console.log('Continuing despite profile error...');
-    } else {
-      console.log('Profile created/updated successfully');
+      // Try to delete the auth user if profile creation fails
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Erreur lors de la création du profil utilisateur' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
+      );
     }
+
+    console.log('Profile created successfully');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Utilisateur ${email} créé avec succès`,
+        message: `Utilisateur ${email} créé avec succès et prêt à se connecter`,
         user_id: authData.user.id
       }),
       { 

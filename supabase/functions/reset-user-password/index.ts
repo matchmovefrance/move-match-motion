@@ -41,23 +41,24 @@ serve(async (req) => {
       }
     );
 
-    // Generate a temporary password
-    const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
+    // Generate a secure temporary password
+    const tempPassword = generateSecurePassword();
     
-    console.log('Generated temp password, updating user...');
+    console.log('Generated secure temp password, updating user...');
 
-    // Update user password
+    // Update user password using admin API
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
       {
-        password: tempPassword
+        password: tempPassword,
+        email_confirm: true // Ensure email remains confirmed
       }
     );
 
     if (authError) {
       console.error('Error updating password:', authError);
       return new Response(
-        JSON.stringify({ success: false, error: authError.message }),
+        JSON.stringify({ success: false, error: `Erreur lors de la mise à jour du mot de passe: ${authError.message}` }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400 
@@ -65,13 +66,24 @@ serve(async (req) => {
       );
     }
 
-    console.log('Password reset successfully');
+    if (!authData.user) {
+      console.error('No user data returned after password update');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Aucune donnée utilisateur retournée après la mise à jour' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
+      );
+    }
+
+    console.log('Password reset successfully for user:', authData.user.email);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         tempPassword: tempPassword,
-        message: `Mot de passe réinitialisé pour ${userEmail}`
+        message: `Mot de passe réinitialisé pour ${userEmail}. L'utilisateur peut maintenant se connecter avec ce nouveau mot de passe.`
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -93,3 +105,24 @@ serve(async (req) => {
     );
   }
 });
+
+// Function to generate a secure password
+function generateSecurePassword(): string {
+  const length = 12;
+  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  let password = "";
+  
+  // Ensure at least one of each type
+  password += "A"; // Uppercase
+  password += "a"; // Lowercase  
+  password += "1"; // Number
+  password += "!"; // Special char
+  
+  // Fill the rest randomly
+  for (let i = password.length; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length));
+  }
+  
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}

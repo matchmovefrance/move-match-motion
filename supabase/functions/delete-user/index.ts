@@ -41,27 +41,134 @@ serve(async (req) => {
       }
     );
 
-    console.log('Deleting user data...');
+    console.log('Starting user deletion process...');
 
-    // First delete all user-related data using the existing function
-    const { error: dataError } = await supabaseAdmin.rpc('delete_user_and_data', {
-      user_uuid: userId
-    });
+    // Delete user data in the correct order to avoid foreign key constraints
+    
+    // 1. Delete match_actions
+    const { error: matchActionsError } = await supabaseAdmin
+      .from('match_actions')
+      .delete()
+      .eq('user_id', userId);
 
-    if (dataError) {
-      console.error('Error deleting user data:', dataError);
-      return new Response(
-        JSON.stringify({ success: false, error: `Erreur lors de la suppression des données: ${dataError.message}` }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400 
-        }
-      );
+    if (matchActionsError) {
+      console.error('Error deleting match actions:', matchActionsError);
     }
 
-    console.log('User data deleted, now deleting auth user...');
+    // 2. Delete public_links
+    const { error: publicLinksError } = await supabaseAdmin
+      .from('public_links')
+      .delete()
+      .eq('created_by', userId);
 
-    // Then delete the auth user
+    if (publicLinksError) {
+      console.error('Error deleting public links:', publicLinksError);
+    }
+
+    // 3. Delete move_matches related to user's moves and requests
+    const { data: userMoves } = await supabaseAdmin
+      .from('confirmed_moves')
+      .select('id')
+      .eq('created_by', userId);
+
+    const { data: userRequests } = await supabaseAdmin
+      .from('client_requests')
+      .select('id')
+      .eq('created_by', userId);
+
+    if (userMoves && userMoves.length > 0) {
+      const moveIds = userMoves.map(move => move.id);
+      await supabaseAdmin
+        .from('move_matches')
+        .delete()
+        .in('move_id', moveIds);
+    }
+
+    if (userRequests && userRequests.length > 0) {
+      const requestIds = userRequests.map(req => req.id);
+      await supabaseAdmin
+        .from('move_matches')
+        .delete()
+        .in('client_request_id', requestIds);
+    }
+
+    // 4. Delete confirmed_moves
+    const { error: movesError } = await supabaseAdmin
+      .from('confirmed_moves')
+      .delete()
+      .eq('created_by', userId);
+
+    if (movesError) {
+      console.error('Error deleting confirmed moves:', movesError);
+    }
+
+    // 5. Delete trucks (related to user's movers)
+    const { data: userMovers } = await supabaseAdmin
+      .from('movers')
+      .select('id')
+      .eq('created_by', userId);
+
+    if (userMovers && userMovers.length > 0) {
+      const moverIds = userMovers.map(mover => mover.id);
+      await supabaseAdmin
+        .from('trucks')
+        .delete()
+        .in('mover_id', moverIds);
+    }
+
+    // 6. Delete movers
+    const { error: moversError } = await supabaseAdmin
+      .from('movers')
+      .delete()
+      .eq('created_by', userId);
+
+    if (moversError) {
+      console.error('Error deleting movers:', moversError);
+    }
+
+    // 7. Delete client_requests
+    const { error: requestsError } = await supabaseAdmin
+      .from('client_requests')
+      .delete()
+      .eq('created_by', userId);
+
+    if (requestsError) {
+      console.error('Error deleting client requests:', requestsError);
+    }
+
+    // 8. Delete clients
+    const { error: clientsError } = await supabaseAdmin
+      .from('clients')
+      .delete()
+      .eq('created_by', userId);
+
+    if (clientsError) {
+      console.error('Error deleting clients:', clientsError);
+    }
+
+    // 9. Delete service_providers
+    const { error: providersError } = await supabaseAdmin
+      .from('service_providers')
+      .delete()
+      .eq('created_by', userId);
+
+    if (providersError) {
+      console.error('Error deleting service providers:', providersError);
+    }
+
+    // 10. Delete profile
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('Error deleting profile:', profileError);
+    }
+
+    console.log('User data deleted successfully, now deleting auth user...');
+
+    // 11. Finally, delete the auth user
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (authError) {
@@ -75,12 +182,12 @@ serve(async (req) => {
       );
     }
 
-    console.log('User deleted successfully');
+    console.log('User deleted completely from auth system');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Utilisateur supprimé avec succès'
+        message: 'Utilisateur supprimé avec succès de tous les systèmes'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
