@@ -815,11 +815,18 @@ const MatchFinder = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Compatible:</span>
-                        <span className={`ml-2 font-medium ${
-                          isCompatible ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {isCompatible ? 'Oui' : 'Non'}
-                        </span>
+                        <div className="ml-2">
+                          <span className={`font-medium ${
+                            isCompatible ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {isCompatible ? 'Oui' : 'Non'}
+                          </span>
+                          {!isCompatible && !isVolumeOk && (
+                            <div className="text-xs text-red-600 mt-1">
+                              Volume utilisé sur camion déjà rempli, vérifiez avec le prestataire.
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

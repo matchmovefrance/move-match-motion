@@ -68,7 +68,7 @@ const ServiceProviders = () => {
       console.error('Error fetching service providers:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les fournisseurs de services",
+        description: "Impossible de charger les prestataires de services",
         variant: "destructive",
       });
     } finally {
@@ -80,7 +80,7 @@ const ServiceProviders = () => {
     if (!user) {
       toast({
         title: "Erreur",
-        description: "Vous devez être connecté pour ajouter un fournisseur",
+        description: "Vous devez être connecté pour ajouter un prestataire",
         variant: "destructive",
       });
       return;
@@ -137,7 +137,7 @@ const ServiceProviders = () => {
 
       toast({
         title: "Succès",
-        description: "Fournisseur de services ajouté avec succès",
+        description: "Prestataire de services ajouté avec succès",
       });
 
       setNewProvider({ 
@@ -155,10 +155,10 @@ const ServiceProviders = () => {
     } catch (error: any) {
       console.error('Error adding service provider:', error);
       
-      let errorMessage = "Impossible d'ajouter le fournisseur de services";
+      let errorMessage = "Impossible d'ajouter le prestataire de services";
       
       if (error.code === '23505') {
-        errorMessage = "Un fournisseur avec cette adresse email existe déjà";
+        errorMessage = "Un prestataire avec cette adresse email existe déjà";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -217,7 +217,7 @@ const ServiceProviders = () => {
 
       toast({
         title: "Succès",
-        description: "Fournisseur de services mis à jour avec succès",
+        description: "Prestataire de services mis à jour avec succès",
       });
 
       setEditingProvider(null);
@@ -225,10 +225,10 @@ const ServiceProviders = () => {
     } catch (error: any) {
       console.error('Error updating service provider:', error);
       
-      let errorMessage = "Impossible de mettre à jour le fournisseur de services";
+      let errorMessage = "Impossible de mettre à jour le prestataire de services";
       
       if (error.code === '23505') {
-        errorMessage = "Un fournisseur avec cette adresse email existe déjà";
+        errorMessage = "Un prestataire avec cette adresse email existe déjà";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -264,14 +264,14 @@ const ServiceProviders = () => {
 
       toast({
         title: "Succès",
-        description: "Fournisseur de services supprimé avec succès",
+        description: "Prestataire de services supprimé avec succès",
       });
 
     } catch (error: any) {
       console.error('Error deleting service provider:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de supprimer le fournisseur: ${error.message}`,
+        description: `Impossible de supprimer le prestataire: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -327,9 +327,9 @@ const ServiceProviders = () => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer le fournisseur</AlertDialogTitle>
+                <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer le fournisseur {provider.name} de {provider.company_name} ? 
+                  Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
                   Cette action est irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -388,9 +388,9 @@ const ServiceProviders = () => {
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer le fournisseur</AlertDialogTitle>
+              <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
               <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer le fournisseur {provider.name} de {provider.company_name} ? 
+                Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
                 Cette action est irréversible.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -422,14 +422,14 @@ const ServiceProviders = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Building className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Fournisseurs de services</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Prestataires de services</h2>
         </div>
         <Button
           onClick={() => setShowAddForm(true)}
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Ajouter un fournisseur
+          Ajouter un prestataire
         </Button>
       </div>
 
@@ -441,7 +441,7 @@ const ServiceProviders = () => {
           className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
         >
           <h3 className="text-lg font-semibold mb-4">
-            {editingProvider ? 'Modifier le fournisseur' : 'Nouveau fournisseur'}
+            {editingProvider ? 'Modifier le prestataire' : 'Nouveau prestataire'}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
@@ -534,7 +534,7 @@ const ServiceProviders = () => {
         renderCard={renderProviderCard}
         renderListItem={renderProviderListItem}
         searchPlaceholder="Rechercher par nom, entreprise, email ou ville..."
-        emptyStateMessage="Aucun fournisseur de services trouvé"
+        emptyStateMessage="Aucun prestataire de services trouvé"
         emptyStateIcon={<Building className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
       />

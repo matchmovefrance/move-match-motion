@@ -85,7 +85,7 @@ const Index = () => {
       { id: 'moves', label: 'Déménagements', icon: Truck },
       { id: 'matching', label: 'Matching', icon: Target },
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
-      { id: 'providers', label: 'Fournisseurs', icon: Settings },
+      { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
     ];
 

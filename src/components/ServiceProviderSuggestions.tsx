@@ -27,8 +27,8 @@ interface ServiceProviderSuggestionsProps {
 
 const ServiceProviderSuggestions: React.FC<ServiceProviderSuggestionsProps> = ({
   onSelectProvider,
-  label = "Sélectionner un fournisseur",
-  placeholder = "Rechercher un fournisseur..."
+  label = "Sélectionner un prestataire",
+  placeholder = "Rechercher un prestataire..."
 }) => {
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [filteredProviders, setFilteredProviders] = useState<ServiceProvider[]>([]);
@@ -69,7 +69,7 @@ const ServiceProviderSuggestions: React.FC<ServiceProviderSuggestionsProps> = ({
       console.error('Error fetching service providers:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les fournisseurs de services",
+        description: "Impossible de charger les prestataires de services",
         variant: "destructive",
       });
     } finally {
@@ -93,7 +93,7 @@ const ServiceProviderSuggestions: React.FC<ServiceProviderSuggestionsProps> = ({
   }
 
   if (providers.length === 0) {
-    return null; // Ne rien afficher s'il n'y a pas de fournisseurs
+    return null; // Ne rien afficher s'il n'y a pas de prestataires
   }
 
   return (
@@ -156,7 +156,7 @@ const ServiceProviderSuggestions: React.FC<ServiceProviderSuggestionsProps> = ({
       {isOpen && filteredProviders.length === 0 && searchTerm && (
         <Card className="absolute z-50 w-full shadow-lg">
           <CardContent className="p-3 text-center text-gray-500">
-            Aucun fournisseur trouvé pour "{searchTerm}"
+            Aucun prestataire trouvé pour "{searchTerm}"
           </CardContent>
         </Card>
       )}
