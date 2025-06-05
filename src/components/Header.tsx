@@ -32,16 +32,25 @@ const Header = () => {
     <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center space-x-3">
-          <img 
-            src="https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png" 
-            alt="MatchMove Logo" 
-            className="h-12 w-auto"
-          />
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">MatchMove</h1>
-            <p className="text-sm text-gray-500">Gestion de Déménagements</p>
+        <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-3">
+            <img 
+              src="https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png" 
+              alt="MatchMove Logo" 
+              className="h-12 w-auto"
+            />
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">MatchMove</h1>
+              <p className="text-sm text-gray-500">Gestion de Déménagements</p>
+            </div>
           </div>
+          
+          {/* Trustpilot Badge */}
+          <img 
+            src="https://cdn.shopify.com/s/files/1/2412/8291/files/Trustpilot-for-mobile.png?v=1660896135" 
+            alt="Trustpilot" 
+            className="h-8 w-auto"
+          />
         </div>
 
         {/* User Profile */}
