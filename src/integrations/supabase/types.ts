@@ -582,6 +582,10 @@ export type Database = {
         Args: { user_email: string }
         Returns: Json
       }
+      delete_user_and_data: {
+        Args: { user_uuid: string }
+        Returns: undefined
+      }
       generate_public_link_token: {
         Args: Record<PropertyKey, never>
         Returns: string

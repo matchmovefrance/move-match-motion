@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, Mail, Phone, Building, Edit, Trash2 } from 'lucide-react';
@@ -58,6 +59,11 @@ const MoverList = () => {
       setMovers(data || []);
     } catch (error) {
       console.error('Error fetching movers:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les déménageurs",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -210,17 +216,7 @@ const MoverList = () => {
     try {
       console.log('Deleting mover:', id);
       
-      // Supprimer d'abord tous les camions associés à ce déménageur
-      const { error: trucksError } = await supabase
-        .from('trucks')
-        .delete()
-        .eq('mover_id', id);
-
-      if (trucksError) {
-        console.error('Error deleting trucks:', trucksError);
-        // Continue quand même pour supprimer le déménageur
-      }
-
+      // Supprimer d'abord tous les camions associés à ce déménageur (maintenant automatique avec CASCADE)
       // Supprimer le déménageur de la base de données
       const { error: moverError } = await supabase
         .from('movers')
@@ -241,7 +237,7 @@ const MoverList = () => {
 
       toast({
         title: "Succès",
-        description: "Déménageur supprimé avec succès de la base de données et de l'application",
+        description: "Déménageur et ses camions associés supprimés avec succès de la base de données",
       });
 
     } catch (error: any) {
@@ -303,7 +299,7 @@ const MoverList = () => {
                 <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
-                  Cette action supprimera définitivement le déménageur et ses camions associés de la base de données et de l'application.
+                  Cette action supprimera définitivement le déménageur et ses camions associés de la base de données.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -361,7 +357,7 @@ const MoverList = () => {
               <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
               <AlertDialogDescription>
                 Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
-                Cette action supprimera définitivement le déménageur et ses camions associés de la base de données et de l'application.
+                Cette action supprimera définitivement le déménageur et ses camions associés de la base de données.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -415,7 +411,7 @@ const MoverList = () => {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              placeholder="Nom"
+              placeholder="Nom *"
               value={editingMover ? editingMover.name : newMover.name}
               onChange={(e) => editingMover 
                 ? setEditingMover({...editingMover, name: e.target.value})
@@ -423,7 +419,7 @@ const MoverList = () => {
               }
             />
             <Input
-              placeholder="Nom de l'entreprise"
+              placeholder="Nom de l'entreprise *"
               value={editingMover ? editingMover.company_name : newMover.company_name}
               onChange={(e) => editingMover 
                 ? setEditingMover({...editingMover, company_name: e.target.value})
@@ -431,7 +427,7 @@ const MoverList = () => {
               }
             />
             <Input
-              placeholder="Email"
+              placeholder="Email *"
               type="email"
               value={editingMover ? editingMover.email : newMover.email}
               onChange={(e) => editingMover 
@@ -440,7 +436,7 @@ const MoverList = () => {
               }
             />
             <Input
-              placeholder="Téléphone"
+              placeholder="Téléphone *"
               value={editingMover ? editingMover.phone : newMover.phone}
               onChange={(e) => editingMover 
                 ? setEditingMover({...editingMover, phone: e.target.value})

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, Mail, Shield, Edit, Trash2 } from 'lucide-react';
@@ -96,12 +97,29 @@ const UserManagement = () => {
       return;
     }
 
+    // Validation mot de passe
+    if (newUser.password.length < 6) {
+      toast({
+        title: "Erreur",
+        description: "Le mot de passe doit contenir au moins 6 caractères",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // Créer l'utilisateur via l'admin API
-      const { data, error } = await supabase.auth.admin.createUser({
+      console.log('Creating user:', { email: newUser.email, role: newUser.role });
+      
+      // Créer l'utilisateur via l'API auth de Supabase
+      const { data, error } = await supabase.auth.signUp({
         email: newUser.email.trim().toLowerCase(),
         password: newUser.password.trim(),
-        user_metadata: { role: newUser.role }
+        options: {
+          data: { 
+            role: newUser.role,
+            email_confirm: false
+          }
+        }
       });
 
       if (error) {
@@ -109,32 +127,30 @@ const UserManagement = () => {
         throw error;
       }
 
-      const newUserId = data.user?.id;
+      if (data.user) {
+        // Créer/mettre à jour le profil utilisateur
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            email: newUser.email.trim().toLowerCase(),
+            role: newUser.role,
+          });
 
-      // Créer un profil utilisateur associé
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: newUserId,
-          email: newUser.email.trim().toLowerCase(),
-          role: newUser.role,
+        if (profileError) {
+          console.error('Supabase error creating profile:', profileError);
+          throw profileError;
+        }
+
+        toast({
+          title: "Succès",
+          description: "Utilisateur ajouté avec succès",
         });
 
-      if (profileError) {
-        console.error('Supabase error creating profile:', profileError);
-        // Supprimer l'utilisateur créé si la création du profil échoue
-        await supabase.auth.admin.deleteUser(newUserId!);
-        throw profileError;
+        setNewUser({ email: '', password: '', role: 'agent' });
+        setShowAddForm(false);
+        fetchUsers();
       }
-
-      toast({
-        title: "Succès",
-        description: "Utilisateur ajouté avec succès",
-      });
-
-      setNewUser({ email: '', password: '', role: 'agent' });
-      setShowAddForm(false);
-      fetchUsers();
     } catch (error: any) {
       console.error('Error adding user:', error);
       
@@ -188,25 +204,16 @@ const UserManagement = () => {
 
   const deleteUser = async (userId: string) => {
     try {
-      console.log('Deleting user:', userId);
+      console.log('Deleting user and all associated data:', userId);
       
-      // Supprimer d'abord le profil utilisateur
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
+      // Utiliser la fonction delete_user_and_data pour supprimer l'utilisateur et toutes ses données
+      const { error: functionError } = await supabase.rpc('delete_user_and_data', {
+        user_uuid: userId
+      });
 
-      if (profileError) {
-        console.error('Error deleting profile:', profileError);
-        throw profileError;
-      }
-
-      // Ensuite supprimer l'utilisateur du système d'authentification via l'admin API
-      const { data, error: authError } = await supabase.auth.admin.deleteUser(userId);
-
-      if (authError) {
-        console.error('Error deleting auth user:', authError);
-        throw authError;
+      if (functionError) {
+        console.error('Error calling delete_user_and_data function:', functionError);
+        throw functionError;
       }
 
       // Mettre à jour l'état local immédiatement après la suppression réussie
@@ -218,7 +225,7 @@ const UserManagement = () => {
 
       toast({
         title: "Succès",
-        description: "Utilisateur supprimé avec succès de la base de données et de l'application",
+        description: "Utilisateur et toutes ses données supprimés avec succès de la base de données",
       });
 
     } catch (error: any) {
@@ -248,7 +255,7 @@ const UserManagement = () => {
             </div>
             <div className="flex items-center space-x-2">
               <Shield className="h-4 w-4 text-blue-600" />
-              <span>Role: {user.role}</span>
+              <span>Role: {user.role || 'Non défini'}</span>
             </div>
             <div className="text-xs text-gray-400 mt-3">
               Créé le {new Date(user.created_at).toLocaleDateString('fr-FR')}
@@ -279,7 +286,7 @@ const UserManagement = () => {
                 <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
-                  Cette action supprimera définitivement l'utilisateur de la base de données et de l'application.
+                  Cette action supprimera définitivement l'utilisateur et toutes ses données associées de la base de données.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -304,7 +311,7 @@ const UserManagement = () => {
         <div className="flex items-center space-x-4">
           <div>
             <h4 className="font-medium text-gray-800">{user.email}</h4>
-            <p className="text-sm text-gray-600">Role: {user.role}</p>
+            <p className="text-sm text-gray-600">Role: {user.role || 'Non défini'}</p>
           </div>
           <div className="text-xs text-gray-400">
             {new Date(user.created_at).toLocaleDateString('fr-FR')}
@@ -334,7 +341,7 @@ const UserManagement = () => {
               <AlertDialogTitle>Supprimer l'utilisateur</AlertDialogTitle>
               <AlertDialogDescription>
                 Êtes-vous sûr de vouloir supprimer l'utilisateur {user.email} ? 
-                Cette action supprimera définitivement l'utilisateur de la base de données et de l'application.
+                Cette action supprimera définitivement l'utilisateur et toutes ses données associées de la base de données.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -388,7 +395,7 @@ const UserManagement = () => {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              placeholder="Email"
+              placeholder="Email *"
               type="email"
               value={editingUser ? editingUser.email : newUser.email}
               onChange={(e) => editingUser 
@@ -399,21 +406,24 @@ const UserManagement = () => {
             />
             {!editingUser && (
               <Input
-                placeholder="Mot de passe"
+                placeholder="Mot de passe (min. 6 caractères) *"
                 type="password"
                 value={newUser.password}
                 onChange={(e) => setNewUser({...newUser, password: e.target.value})}
               />
             )}
-            <Select onValueChange={(value) => {
-              if (editingUser) {
-                setEditingUser({...editingUser, role: value})
-              } else {
-                setNewUser({...newUser, role: value})
-              }
-            }}>
+            <Select 
+              value={editingUser?.role || newUser.role}
+              onValueChange={(value) => {
+                if (editingUser) {
+                  setEditingUser({...editingUser, role: value})
+                } else {
+                  setNewUser({...newUser, role: value})
+                }
+              }}
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Sélectionner un rôle" defaultValue={editingUser?.role || newUser.role} />
+                <SelectValue placeholder="Sélectionner un rôle" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="agent">Agent</SelectItem>

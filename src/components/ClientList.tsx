@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
@@ -75,6 +76,11 @@ const ClientList = () => {
       setClients(data || []);
     } catch (error) {
       console.error('Error fetching clients:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les demandes clients",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -115,13 +121,34 @@ const ClientList = () => {
           description: "Demande client mise à jour avec succès",
         });
       } else {
+        // Validation des champs obligatoires pour nouveaux clients
+        if (!processedData.name?.trim() || !processedData.email?.trim() || !processedData.phone?.trim()) {
+          toast({
+            title: "Erreur",
+            description: "Les champs nom, email et téléphone sont obligatoires",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Validation email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(processedData.email)) {
+          toast({
+            title: "Erreur",
+            description: "Veuillez entrer une adresse email valide",
+            variant: "destructive",
+          });
+          return;
+        }
+
         // Créer d'abord un client dans la table clients
         const { data: clientData, error: clientError } = await supabase
           .from('clients')
           .insert({
-            name: processedData.name,
-            email: processedData.email,
-            phone: processedData.phone,
+            name: processedData.name.trim(),
+            email: processedData.email.trim().toLowerCase(),
+            phone: processedData.phone.trim(),
             created_by: user?.id,
           })
           .select('id')
@@ -134,6 +161,7 @@ const ClientList = () => {
           .from('client_requests')
           .insert({
             ...processedData,
+            email: processedData.email.trim().toLowerCase(),
             created_by: user?.id,
             client_id: clientData.id,
             estimated_volume_backup: parseFloat(formData.estimated_volume) || 0
@@ -152,9 +180,18 @@ const ClientList = () => {
       fetchClients();
     } catch (error: any) {
       console.error('Error saving client:', error);
+      
+      let errorMessage = "Impossible de sauvegarder la demande client";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un client avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: `Impossible de sauvegarder la demande client: ${error.message}`,
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -164,7 +201,7 @@ const ClientList = () => {
     try {
       console.log('Deleting client request:', id, 'and client:', clientId);
       
-      // Supprimer d'abord la demande client
+      // Supprimer la demande client (le client sera supprimé automatiquement avec CASCADE)
       const { error: requestError } = await supabase
         .from('client_requests')
         .delete()
@@ -173,19 +210,6 @@ const ClientList = () => {
       if (requestError) {
         console.error('Error deleting client request:', requestError);
         throw requestError;
-      }
-
-      // Ensuite supprimer le client de la table clients
-      if (clientId) {
-        const { error: clientError } = await supabase
-          .from('clients')
-          .delete()
-          .eq('id', clientId);
-
-        if (clientError) {
-          console.error('Error deleting client:', clientError);
-          throw clientError;
-        }
       }
 
       // Mettre à jour l'état local immédiatement après la suppression réussie
@@ -197,14 +221,14 @@ const ClientList = () => {
 
       toast({
         title: "Succès",
-        description: "Client supprimé avec succès de la base de données et de l'application",
+        description: "Demande client supprimée avec succès de la base de données",
       });
 
     } catch (error: any) {
       console.error('Error deleting client:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de supprimer le client: ${error.message}`,
+        description: `Impossible de supprimer la demande client: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -254,6 +278,9 @@ const ClientList = () => {
                 <span>{client.phone}</span>
               </div>
             )}
+            <div className="text-xs text-gray-400 mt-3">
+              Créé le {new Date(client.created_at).toLocaleDateString('fr-FR')}
+            </div>
           </div>
           
           <div className="mt-3 flex space-x-2">
@@ -303,7 +330,7 @@ const ClientList = () => {
                 <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
-                  Cette action supprimera définitivement le client de la base de données et de l'application.
+                  Cette action supprimera définitivement la demande client de la base de données.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -376,7 +403,7 @@ const ClientList = () => {
               <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
               <AlertDialogDescription>
                 Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
-                Cette action supprimera définitivement le client de la base de données et de l'application.
+                Cette action supprimera définitivement la demande client de la base de données.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

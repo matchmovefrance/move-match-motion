@@ -67,23 +67,74 @@ const ServiceProviders = () => {
       setProviders(data || []);
     } catch (error) {
       console.error('Error fetching providers:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les prestataires",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const addProvider = async () => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour ajouter un prestataire",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation des champs obligatoires
+    if (!newProvider.name.trim() || !newProvider.company_name.trim() || !newProvider.email.trim() || 
+        !newProvider.phone.trim() || !newProvider.address.trim() || !newProvider.city.trim() || 
+        !newProvider.postal_code.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Tous les champs sont obligatoires sauf les coordonnées GPS",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newProvider.email)) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une adresse email valide",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      const { error } = await supabase
+      console.log('Adding provider:', newProvider);
+      
+      const { data, error } = await supabase
         .from('service_providers')
         .insert({
-          ...newProvider,
+          name: newProvider.name.trim(),
+          company_name: newProvider.company_name.trim(),
+          email: newProvider.email.trim().toLowerCase(),
+          phone: newProvider.phone.trim(),
+          address: newProvider.address.trim(),
+          city: newProvider.city.trim(),
+          postal_code: newProvider.postal_code.trim(),
+          coordinates: newProvider.coordinates.trim() || null,
           created_by: user.id
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Provider added successfully:', data);
 
       toast({
         title: "Succès",
@@ -96,17 +147,26 @@ const ServiceProviders = () => {
         email: '',
         phone: '',
         address: '',
-        postal_code: '',
         city: '',
+        postal_code: '',
         coordinates: ''
       });
       setShowAddForm(false);
       fetchProviders();
     } catch (error: any) {
       console.error('Error adding provider:', error);
+      
+      let errorMessage = "Impossible d'ajouter le prestataire";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un prestataire avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: "Impossible d'ajouter le prestataire",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -115,10 +175,42 @@ const ServiceProviders = () => {
   const updateProvider = async () => {
     if (!editingProvider) return;
 
+    // Validation des champs obligatoires
+    if (!editingProvider.name.trim() || !editingProvider.company_name.trim() || !editingProvider.email.trim() || 
+        !editingProvider.phone.trim() || !editingProvider.address.trim() || !editingProvider.city.trim() || 
+        !editingProvider.postal_code.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Tous les champs sont obligatoires sauf les coordonnées GPS",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editingProvider.email)) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une adresse email valide",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('service_providers')
-        .update(editingProvider)
+        .update({
+          name: editingProvider.name.trim(),
+          company_name: editingProvider.company_name.trim(),
+          email: editingProvider.email.trim().toLowerCase(),
+          phone: editingProvider.phone.trim(),
+          address: editingProvider.address.trim(),
+          city: editingProvider.city.trim(),
+          postal_code: editingProvider.postal_code.trim(),
+          coordinates: editingProvider.coordinates?.trim() || null
+        })
         .eq('id', editingProvider.id);
 
       if (error) throw error;
@@ -132,9 +224,18 @@ const ServiceProviders = () => {
       fetchProviders();
     } catch (error: any) {
       console.error('Error updating provider:', error);
+      
+      let errorMessage = "Impossible de mettre à jour le prestataire";
+      
+      if (error.code === '23505') {
+        errorMessage = "Un prestataire avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: "Impossible de mettre à jour le prestataire",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -204,6 +305,9 @@ const ServiceProviders = () => {
             {provider.coordinates && (
               <div className="text-xs text-blue-600">{provider.coordinates}</div>
             )}
+            <div className="text-xs text-gray-400 mt-3">
+              Créé le {new Date(provider.created_at).toLocaleDateString('fr-FR')}
+            </div>
           </div>
         </div>
         
@@ -230,7 +334,7 @@ const ServiceProviders = () => {
                 <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
                 <AlertDialogDescription>
                   Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
-                  Cette action est irréversible.
+                  Cette action supprimera définitivement le prestataire de la base de données et de l'application.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -263,6 +367,9 @@ const ServiceProviders = () => {
           <div className="text-sm text-gray-500">
             {provider.postal_code} {provider.city}
           </div>
+          <div className="text-xs text-gray-400">
+            {new Date(provider.created_at).toLocaleDateString('fr-FR')}
+          </div>
         </div>
       </div>
       <div className="flex space-x-2">
@@ -288,7 +395,7 @@ const ServiceProviders = () => {
               <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
               <AlertDialogDescription>
                 Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
-                Cette action est irréversible.
+                Cette action supprimera définitivement le prestataire de la base de données et de l'application.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -342,7 +449,7 @@ const ServiceProviders = () => {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              placeholder="Nom"
+              placeholder="Nom *"
               value={editingProvider ? editingProvider.name : newProvider.name}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, name: e.target.value})
@@ -350,7 +457,7 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Nom de l'entreprise"
+              placeholder="Nom de l'entreprise *"
               value={editingProvider ? editingProvider.company_name : newProvider.company_name}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, company_name: e.target.value})
@@ -358,7 +465,7 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Email"
+              placeholder="Email *"
               type="email"
               value={editingProvider ? editingProvider.email : newProvider.email}
               onChange={(e) => editingProvider 
@@ -367,7 +474,7 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Téléphone"
+              placeholder="Téléphone *"
               value={editingProvider ? editingProvider.phone : newProvider.phone}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, phone: e.target.value})
@@ -375,7 +482,7 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Adresse"
+              placeholder="Adresse *"
               value={editingProvider ? editingProvider.address : newProvider.address}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, address: e.target.value})
@@ -383,7 +490,7 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Code postal"
+              placeholder="Code postal *"
               value={editingProvider ? editingProvider.postal_code : newProvider.postal_code}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, postal_code: e.target.value})
@@ -391,7 +498,7 @@ const ServiceProviders = () => {
               }
             />
             <Input
-              placeholder="Ville"
+              placeholder="Ville *"
               value={editingProvider ? editingProvider.city : newProvider.city}
               onChange={(e) => editingProvider 
                 ? setEditingProvider({...editingProvider, city: e.target.value})
