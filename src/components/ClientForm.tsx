@@ -37,6 +37,11 @@ interface ClientFormData {
   estimated_volume: string;
   description: string;
   
+  // Nouvelles options pour dates flexibles
+  flexible_dates: boolean;
+  date_range_start: string;
+  date_range_end: string;
+  
   // Budget
   budget_min: string;
   budget_max: string;
@@ -74,6 +79,9 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
     estimated_arrival_time: '',
     estimated_volume: '',
     description: '',
+    flexible_dates: false,
+    date_range_start: '',
+    date_range_end: '',
     budget_min: '',
     budget_max: '',
     quote_amount: '',
@@ -161,6 +169,9 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false }: ClientFormProp
                 estimated_arrival_time: formData.estimated_arrival_time,
                 estimated_volume: formData.estimated_volume,
                 description: formData.description,
+                flexible_dates: formData.flexible_dates,
+                date_range_start: formData.date_range_start,
+                date_range_end: formData.date_range_end,
               }}
               onInputChange={handleInputChange}
             />

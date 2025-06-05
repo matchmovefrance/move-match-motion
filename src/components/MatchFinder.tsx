@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -76,11 +75,8 @@ const MatchFinder = () => {
   const [loading, setLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  // Mémoriser la fonction fetchData pour éviter les re-rendus inutiles
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -152,9 +148,13 @@ const MatchFinder = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const handleMatchAction = async (matchId: number, actionType: 'accepted' | 'rejected') => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleMatchAction = useCallback(async (matchId: number, actionType: 'accepted' | 'rejected') => {
     try {
       const { error } = await supabase
         .from('match_actions')
@@ -183,9 +183,22 @@ const MatchFinder = () => {
         variant: "destructive",
       });
     }
+  }, [user?.id, toast, fetchData]);
+
+  // Fonction améliorée pour calculer si les dates sont compatibles (±15 jours max)
+  const areDatesCompatible = (clientDate: string, moveDate: string, isFlexible: boolean = false) => {
+    const client = new Date(clientDate);
+    const move = new Date(moveDate);
+    const timeDiff = Math.abs(client.getTime() - move.getTime());
+    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    
+    // Limite stricte de 15 jours
+    const maxDays = 15;
+    
+    return daysDiff <= maxDays;
   };
 
-  const findMatches = async () => {
+  const findMatches = useCallback(async () => {
     try {
       setLoading(true);
       setIsSearching(true);
@@ -201,14 +214,21 @@ const MatchFinder = () => {
         .delete()
         .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
 
-      // Calculer les nouveaux matches
+      // Calculer les nouveaux matches avec la règle des 15 jours
       for (const client of clientRequests) {
         for (const move of moves) {
           // Calculer la distance approximative (simulation basée sur les codes postaux)
           const distanceKm = Math.abs(parseInt(client.departure_postal_code.substring(0, 2)) - 
                                      parseInt(move.departure_postal_code.substring(0, 2))) * 50;
           
-          // Calculer la différence de dates
+          // Vérifier la compatibilité des dates (±15 jours max)
+          const datesCompatible = areDatesCompatible(client.desired_date, move.departure_date, client.flexible_dates);
+          
+          if (!datesCompatible) {
+            continue; // Ignorer ce match si les dates ne sont pas compatibles
+          }
+          
+          // Calculer la différence de dates exacte
           const clientDate = new Date(client.desired_date);
           const moveDate = new Date(move.departure_date);
           const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -221,8 +241,8 @@ const MatchFinder = () => {
           // Calculer le volume combiné
           const combinedVolume = (move.used_volume || 0) + clientVolume;
           
-          // Déterminer si c'est un match valide
-          const isValid = distanceKm <= 200 && dateDiffDays <= 7 && volumeOk;
+          // Déterminer si c'est un match valide (distance ≤ 200km, dates ≤ 15 jours, volume OK)
+          const isValid = distanceKm <= 200 && dateDiffDays <= 15 && volumeOk;
           
           // Déterminer le type de match
           let matchType = 'partial';
@@ -276,7 +296,7 @@ const MatchFinder = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [clientRequests, moves, matches, toast, fetchData]);
 
   const getMatchDetails = (match: Match) => {
     const client = clientRequests.find(c => c.id === match.client_request_id);
@@ -530,7 +550,7 @@ const MatchFinder = () => {
                     </div>
                   </div>
 
-                  {/* Détails du match */}
+                  {/* Détails du match - mise à jour pour refléter la limite de 15 jours */}
                   <div className="border-t pt-3 mt-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
@@ -539,7 +559,9 @@ const MatchFinder = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Diff. dates:</span>
-                        <span className="ml-2 font-medium">{match.date_diff_days} jours</span>
+                        <span className={`ml-2 font-medium ${match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600'}`}>
+                          {match.date_diff_days} jours
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-500">Volume combiné:</span>
@@ -547,8 +569,8 @@ const MatchFinder = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Compatible:</span>
-                        <span className={`ml-2 font-medium ${match.volume_ok ? 'text-green-600' : 'text-red-600'}`}>
-                          {match.volume_ok ? 'Oui' : 'Non'}
+                        <span className={`ml-2 font-medium ${match.volume_ok && match.date_diff_days <= 15 ? 'text-green-600' : 'text-red-600'}`}>
+                          {match.volume_ok && match.date_diff_days <= 15 ? 'Oui' : 'Non'}
                         </span>
                       </div>
                     </div>
