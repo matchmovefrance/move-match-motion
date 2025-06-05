@@ -20,7 +20,7 @@ export type Database = {
           budget_max: number | null
           budget_min: number | null
           client_id: number
-          created_at: string
+          created_at: string | null
           created_by: string
           date_range_end: string | null
           date_range_start: string | null
@@ -46,7 +46,7 @@ export type Database = {
           phone: string | null
           quote_amount: number | null
           special_requirements: string | null
-          status: string
+          status: string | null
           status_custom: string | null
         }
         Insert: {
@@ -59,7 +59,7 @@ export type Database = {
           budget_max?: number | null
           budget_min?: number | null
           client_id: number
-          created_at?: string
+          created_at?: string | null
           created_by: string
           date_range_end?: string | null
           date_range_start?: string | null
@@ -74,7 +74,7 @@ export type Database = {
           estimated_arrival_date?: string | null
           estimated_arrival_time?: string | null
           estimated_volume?: number | null
-          estimated_volume_backup: number
+          estimated_volume_backup?: number
           flexible_dates?: boolean | null
           id?: number
           inventory_list?: string | null
@@ -85,7 +85,7 @@ export type Database = {
           phone?: string | null
           quote_amount?: number | null
           special_requirements?: string | null
-          status?: string
+          status?: string | null
           status_custom?: string | null
         }
         Update: {
@@ -98,7 +98,7 @@ export type Database = {
           budget_max?: number | null
           budget_min?: number | null
           client_id?: number
-          created_at?: string
+          created_at?: string | null
           created_by?: string
           date_range_end?: string | null
           date_range_start?: string | null
@@ -124,7 +124,7 @@ export type Database = {
           phone?: string | null
           quote_amount?: number | null
           special_requirements?: string | null
-          status?: string
+          status?: string | null
           status_custom?: string | null
         }
         Relationships: [
@@ -139,7 +139,7 @@ export type Database = {
       }
       clients: {
         Row: {
-          created_at: string
+          created_at: string | null
           created_by: string
           email: string
           id: number
@@ -147,7 +147,7 @@ export type Database = {
           phone: string
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           created_by: string
           email: string
           id?: number
@@ -155,7 +155,7 @@ export type Database = {
           phone: string
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           created_by?: string
           email?: string
           id?: number
@@ -178,7 +178,7 @@ export type Database = {
           company_name: string | null
           contact_email: string | null
           contact_phone: string | null
-          created_at: string
+          created_at: string | null
           created_by: string
           departure_address: string | null
           departure_city: string
@@ -202,7 +202,7 @@ export type Database = {
           route_type: string | null
           special_conditions: string | null
           special_requirements: string | null
-          status: string
+          status: string | null
           status_custom: string | null
           total_cost: number | null
           total_price: number | null
@@ -224,7 +224,7 @@ export type Database = {
           company_name?: string | null
           contact_email?: string | null
           contact_phone?: string | null
-          created_at?: string
+          created_at?: string | null
           created_by: string
           departure_address?: string | null
           departure_city: string
@@ -248,14 +248,14 @@ export type Database = {
           route_type?: string | null
           special_conditions?: string | null
           special_requirements?: string | null
-          status?: string
+          status?: string | null
           status_custom?: string | null
           total_cost?: number | null
           total_price?: number | null
           truck_id: number
           truck_identifier?: string | null
           truck_type?: string | null
-          used_volume: number
+          used_volume?: number
         }
         Update: {
           access_conditions?: string | null
@@ -270,7 +270,7 @@ export type Database = {
           company_name?: string | null
           contact_email?: string | null
           contact_phone?: string | null
-          created_at?: string
+          created_at?: string | null
           created_by?: string
           departure_address?: string | null
           departure_city?: string
@@ -294,7 +294,7 @@ export type Database = {
           route_type?: string | null
           special_conditions?: string | null
           special_requirements?: string | null
-          status?: string
+          status?: string | null
           status_custom?: string | null
           total_cost?: number | null
           total_price?: number | null
@@ -322,39 +322,47 @@ export type Database = {
       }
       match_actions: {
         Row: {
-          action_date: string
+          action_date: string | null
           action_type: string
-          created_at: string
+          created_at: string | null
           id: string
           match_id: number
           notes: string | null
           user_id: string | null
         }
         Insert: {
-          action_date?: string
+          action_date?: string | null
           action_type: string
-          created_at?: string
+          created_at?: string | null
           id?: string
           match_id: number
           notes?: string | null
           user_id?: string | null
         }
         Update: {
-          action_date?: string
+          action_date?: string | null
           action_type?: string
-          created_at?: string
+          created_at?: string | null
           id?: string
           match_id?: number
           notes?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "match_actions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "move_matches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       move_matches: {
         Row: {
           client_request_id: number
           combined_volume: number
-          created_at: string
+          created_at: string | null
           date_diff_days: number
           distance_km: number
           id: number
@@ -366,7 +374,7 @@ export type Database = {
         Insert: {
           client_request_id: number
           combined_volume: number
-          created_at?: string
+          created_at?: string | null
           date_diff_days: number
           distance_km: number
           id?: number
@@ -378,7 +386,7 @@ export type Database = {
         Update: {
           client_request_id?: number
           combined_volume?: number
-          created_at?: string
+          created_at?: string | null
           date_diff_days?: number
           distance_km?: number
           id?: number
@@ -407,7 +415,7 @@ export type Database = {
       movers: {
         Row: {
           company_name: string
-          created_at: string
+          created_at: string | null
           created_by: string
           email: string
           id: number
@@ -416,7 +424,7 @@ export type Database = {
         }
         Insert: {
           company_name: string
-          created_at?: string
+          created_at?: string | null
           created_by: string
           email: string
           id?: number
@@ -425,7 +433,7 @@ export type Database = {
         }
         Update: {
           company_name?: string
-          created_at?: string
+          created_at?: string | null
           created_by?: string
           email?: string
           id?: number
@@ -543,21 +551,21 @@ export type Database = {
       }
       trucks: {
         Row: {
-          created_at: string
+          created_at: string | null
           id: number
           identifier: string
           max_volume: number
           mover_id: number
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           id?: number
           identifier: string
           max_volume: number
           mover_id: number
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           id?: number
           identifier?: string
           max_volume?: number
