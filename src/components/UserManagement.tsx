@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, Mail, Shield, Edit, Trash2, Key } from 'lucide-react';
@@ -295,8 +294,10 @@ const UserManagement = () => {
     try {
       console.log('Deleting user:', userId);
       
-      const { error } = await supabase.rpc('delete_user_and_data', {
-        user_uuid: userId
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: {
+          userId: userId
+        }
       });
 
       if (error) {
@@ -304,12 +305,16 @@ const UserManagement = () => {
         throw error;
       }
 
-      toast({
-        title: "Succès",
-        description: "Utilisateur supprimé avec succès",
-      });
+      if (data?.success) {
+        toast({
+          title: "Succès",
+          description: "Utilisateur supprimé avec succès",
+        });
 
-      fetchUsers();
+        fetchUsers();
+      } else {
+        throw new Error(data?.error || 'Erreur lors de la suppression');
+      }
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast({

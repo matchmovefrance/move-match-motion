@@ -14,14 +14,14 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, userEmail } = await req.json();
+    const { userId } = await req.json();
     
-    console.log('Resetting password for user:', userId, userEmail);
+    console.log('Deleting user:', userId);
 
-    if (!userId || !userEmail) {
-      console.error('Missing userId or userEmail');
+    if (!userId) {
+      console.error('Missing userId');
       return new Response(
-        JSON.stringify({ success: false, error: 'ID utilisateur et email requis' }),
+        JSON.stringify({ success: false, error: 'ID utilisateur requis' }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400 
@@ -41,23 +41,17 @@ serve(async (req) => {
       }
     );
 
-    // Generate a temporary password
-    const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-    
-    console.log('Generated temp password, updating user...');
+    console.log('Deleting user data...');
 
-    // Update user password
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      {
-        password: tempPassword
-      }
-    );
+    // First delete all user-related data using the existing function
+    const { error: dataError } = await supabaseAdmin.rpc('delete_user_and_data', {
+      user_uuid: userId
+    });
 
-    if (authError) {
-      console.error('Error updating password:', authError);
+    if (dataError) {
+      console.error('Error deleting user data:', dataError);
       return new Response(
-        JSON.stringify({ success: false, error: authError.message }),
+        JSON.stringify({ success: false, error: `Erreur lors de la suppression des données: ${dataError.message}` }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400 
@@ -65,13 +59,28 @@ serve(async (req) => {
       );
     }
 
-    console.log('Password reset successfully');
+    console.log('User data deleted, now deleting auth user...');
+
+    // Then delete the auth user
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+    if (authError) {
+      console.error('Error deleting auth user:', authError);
+      return new Response(
+        JSON.stringify({ success: false, error: `Erreur lors de la suppression de l'authentification: ${authError.message}` }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
+      );
+    }
+
+    console.log('User deleted successfully');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        tempPassword: tempPassword,
-        message: `Mot de passe réinitialisé pour ${userEmail}`
+        message: 'Utilisateur supprimé avec succès'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
