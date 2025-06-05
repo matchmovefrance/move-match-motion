@@ -9,6 +9,7 @@ import MoveManagement from './MoveManagement';
 import UserManagement from './UserManagement';
 import MoverList from './MoverList';
 import DatabaseTestPanel from './DatabaseTestPanel';
+import MatchAnalytics from './MatchAnalytics';
 
 const Dashboard = () => {
   return (
@@ -18,13 +19,14 @@ const Dashboard = () => {
       </h1>
       
       <Tabs defaultValue="test-db" className="w-full">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="test-db">Tests DB</TabsTrigger>
           <TabsTrigger value="clients">Clients</TabsTrigger>
           <TabsTrigger value="movers">Déménageurs</TabsTrigger>
           <TabsTrigger value="moves">Déménagements</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
           <TabsTrigger value="matches">Correspondances</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="links">Liens publics</TabsTrigger>
           <TabsTrigger value="users">Utilisateurs</TabsTrigger>
         </TabsList>
@@ -51,6 +53,10 @@ const Dashboard = () => {
         
         <TabsContent value="matches" className="mt-6">
           <MatchFinder />
+        </TabsContent>
+        
+        <TabsContent value="analytics" className="mt-6">
+          <MatchAnalytics />
         </TabsContent>
         
         <TabsContent value="links" className="mt-6">

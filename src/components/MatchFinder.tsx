@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X } from 'lucide-react';
@@ -63,6 +62,7 @@ const MatchFinder = () => {
   const [moves, setMoves] = useState<Move[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -147,6 +147,12 @@ const MatchFinder = () => {
   const findMatches = async () => {
     try {
       setLoading(true);
+      setIsSearching(true);
+      
+      // Animation radar de 4 secondes
+      setTimeout(() => {
+        setIsSearching(false);
+      }, 4000);
       
       // Supprimer les anciens matches
       await supabase.from('move_matches').delete().neq('id', 0);
@@ -242,14 +248,30 @@ const MatchFinder = () => {
           <Search className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances</h2>
         </div>
-        <Button
-          onClick={findMatches}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Search className="h-4 w-4 mr-2" />
-          Rechercher des correspondances
-        </Button>
+        <div className="relative">
+          <Button
+            onClick={findMatches}
+            disabled={loading || isSearching}
+            className="bg-blue-600 hover:bg-blue-700 relative overflow-hidden"
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Trouver un match
+            
+            {/* Animation radar */}
+            {isSearching && (
+              <div className="absolute inset-0 bg-blue-600">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="relative">
+                    <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 w-8 h-8 border border-white/30 rounded-full animate-ping"></div>
+                    <div className="absolute inset-0 w-8 h-8 border border-white/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="absolute inset-0 w-8 h-8 border border-white/10 rounded-full animate-ping" style={{ animationDelay: '1s' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Statistiques */}
@@ -313,7 +335,7 @@ const MatchFinder = () => {
               <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">Aucune correspondance trouvée</p>
               <p className="text-sm text-gray-500 mt-2">
-                Cliquez sur "Rechercher des correspondances" pour commencer
+                Cliquez sur "Trouver un match" pour commencer
               </p>
             </CardContent>
           </Card>
