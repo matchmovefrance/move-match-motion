@@ -49,7 +49,7 @@ const Header = () => {
           <img 
             src="https://cdn.shopify.com/s/files/1/2412/8291/files/Trustpilot-for-mobile.png?v=1660896135" 
             alt="Trustpilot" 
-            className="h-8 w-auto"
+            className="h-10 w-auto"
           />
         </div>
 
