@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Building, Mail, Phone, MapPin, Edit, Trash2 } from 'lucide-react';
+import { Plus, Building, Mail, Phone, MapPin, Edit, Trash2, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ListView } from '@/components/ui/list-view';
@@ -283,24 +282,41 @@ const ServiceProviders = () => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
     >
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-800 mb-2">{provider.name}</h3>
-          <p className="text-gray-600 mb-3">{provider.company_name}</p>
+          <h3 className="font-semibold text-gray-800 mb-2">
+            {provider.company_name}
+          </h3>
+          <p className="text-gray-600 mb-3">{provider.name}</p>
           
           <div className="space-y-2 text-sm text-gray-600">
-            <div className="flex items-center space-x-2">
-              <Mail className="h-4 w-4 text-blue-600" />
-              <span>{provider.email}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Phone className="h-4 w-4 text-blue-600" />
-              <span>{provider.phone}</span>
-            </div>
             <div className="flex items-center space-x-2">
               <MapPin className="h-4 w-4 text-blue-600" />
               <span>{provider.address}, {provider.postal_code} {provider.city}</span>
             </div>
+            
+            <div className="flex items-center space-x-2">
+              <Phone className="h-4 w-4 text-green-600" />
+              <a 
+                href={`tel:${provider.phone}`}
+                className="text-blue-600 hover:underline"
+                title="Appeler ce numéro"
+              >
+                {provider.phone}
+              </a>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Mail className="h-4 w-4 text-purple-600" />
+              <a 
+                href={`mailto:${provider.email}`}
+                className="text-blue-600 hover:underline"
+                title="Envoyer un email"
+              >
+                {provider.email}
+              </a>
+            </div>
+            
             <div className="text-xs text-gray-400 mt-3">
               Créé le {new Date(provider.created_at).toLocaleDateString('fr-FR')}
             </div>
@@ -329,7 +345,7 @@ const ServiceProviders = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
+                  Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
                   Cette action est irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -354,17 +370,29 @@ const ServiceProviders = () => {
       <div className="flex-1">
         <div className="flex items-center space-x-4">
           <div>
-            <h4 className="font-medium text-gray-800">{provider.name}</h4>
-            <p className="text-sm text-gray-600">{provider.company_name}</p>
-          </div>
-          <div className="text-sm text-gray-500">
-            <span>{provider.email}</span> • <span>{provider.phone}</span>
+            <h4 className="font-medium text-gray-800">{provider.company_name}</h4>
+            <p className="text-sm text-gray-600">{provider.name}</p>
           </div>
           <div className="text-sm text-gray-500">
             <span>{provider.city}</span>
           </div>
-          <div className="text-xs text-gray-400">
-            {new Date(provider.created_at).toLocaleDateString('fr-FR')}
+          <div className="text-sm text-blue-600">
+            <a 
+              href={`tel:${provider.phone}`}
+              className="hover:underline"
+              title="Appeler ce numéro"
+            >
+              {provider.phone}
+            </a>
+          </div>
+          <div className="text-sm text-blue-600">
+            <a 
+              href={`mailto:${provider.email}`}
+              className="hover:underline"
+              title="Envoyer un email"
+            >
+              {provider.email}
+            </a>
           </div>
         </div>
       </div>
@@ -390,7 +418,7 @@ const ServiceProviders = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
               <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer le prestataire {provider.name} de {provider.company_name} ? 
+                Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
                 Cette action est irréversible.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -421,7 +449,7 @@ const ServiceProviders = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <Building className="h-6 w-6 text-blue-600" />
+          <Settings className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Prestataires de services</h2>
         </div>
         <Button
@@ -530,12 +558,169 @@ const ServiceProviders = () => {
       {/* ListView with search and pagination */}
       <ListView
         items={providers}
-        searchFields={['name', 'company_name', 'email', 'city']}
-        renderCard={renderProviderCard}
-        renderListItem={renderProviderListItem}
-        searchPlaceholder="Rechercher par nom, entreprise, email ou ville..."
-        emptyStateMessage="Aucun prestataire de services trouvé"
-        emptyStateIcon={<Building className="h-12 w-12 text-gray-400 mx-auto" />}
+        searchFields={['company_name', 'name', 'email', 'city']}
+        renderCard={(provider: ServiceProvider) => (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-800 mb-2">
+                  {provider.company_name}
+                </h3>
+                <p className="text-gray-600 mb-3">{provider.name}</p>
+                
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="h-4 w-4 text-blue-600" />
+                    <span>{provider.address}, {provider.postal_code} {provider.city}</span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Phone className="h-4 w-4 text-green-600" />
+                    <a 
+                      href={`tel:${provider.phone}`}
+                      className="text-blue-600 hover:underline"
+                      title="Appeler ce numéro"
+                    >
+                      {provider.phone}
+                    </a>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Mail className="h-4 w-4 text-purple-600" />
+                    <a 
+                      href={`mailto:${provider.email}`}
+                      className="text-blue-600 hover:underline"
+                      title="Envoyer un email"
+                    >
+                      {provider.email}
+                    </a>
+                  </div>
+                  
+                  <div className="text-xs text-gray-400 mt-3">
+                    Créé le {new Date(provider.created_at).toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingProvider(provider)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
+                        Cette action est irréversible.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteProvider(provider.id)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        renderListItem={(provider: ServiceProvider) => (
+          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <div>
+                  <h4 className="font-medium text-gray-800">{provider.company_name}</h4>
+                  <p className="text-sm text-gray-600">{provider.name}</p>
+                </div>
+                <div className="text-sm text-gray-500">
+                  <span>{provider.city}</span>
+                </div>
+                <div className="text-sm text-blue-600">
+                  <a 
+                    href={`tel:${provider.phone}`}
+                    className="hover:underline"
+                    title="Appeler ce numéro"
+                  >
+                    {provider.phone}
+                  </a>
+                </div>
+                <div className="text-sm text-blue-600">
+                  <a 
+                    href={`mailto:${provider.email}`}
+                    className="hover:underline"
+                    title="Envoyer un email"
+                  >
+                    {provider.email}
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingProvider(provider)}
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
+                      Cette action est irréversible.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteProvider(provider.id)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Supprimer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        )}
+        searchPlaceholder="Rechercher par nom, entreprise ou ville..."
+        emptyStateMessage="Aucun prestataire trouvé"
+        emptyStateIcon={<Settings className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
       />
     </div>

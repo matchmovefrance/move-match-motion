@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
@@ -20,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import ClientForm from './ClientForm';
+import QuoteGenerator from './QuoteGenerator';
 
 interface ClientRequest {
   id: number;
@@ -270,12 +270,24 @@ const ClientList = () => {
             )}
             {client.email && (
               <div className="text-blue-600">
-                <span>{client.email}</span>
+                <a 
+                  href={`mailto:${client.email}`}
+                  className="hover:underline"
+                  title="Envoyer un email"
+                >
+                  {client.email}
+                </a>
               </div>
             )}
             {client.phone && (
               <div className="text-blue-600">
-                <span>{client.phone}</span>
+                <a 
+                  href={`tel:${client.phone}`}
+                  className="hover:underline"
+                  title="Appeler ce numéro"
+                >
+                  {client.phone}
+                </a>
               </div>
             )}
             <div className="text-xs text-gray-400 mt-3">
@@ -308,6 +320,7 @@ const ClientList = () => {
         </div>
         
         <div className="flex space-x-2">
+          <QuoteGenerator client={client} />
           <Button
             variant="outline"
             size="sm"
@@ -520,12 +533,24 @@ const ClientList = () => {
                   )}
                   {client.email && (
                     <div className="text-blue-600">
-                      <span>{client.email}</span>
+                      <a 
+                        href={`mailto:${client.email}`}
+                        className="hover:underline"
+                        title="Envoyer un email"
+                      >
+                        {client.email}
+                      </a>
                     </div>
                   )}
                   {client.phone && (
                     <div className="text-blue-600">
-                      <span>{client.phone}</span>
+                      <a 
+                        href={`tel:${client.phone}`}
+                        className="hover:underline"
+                        title="Appeler ce numéro"
+                      >
+                        {client.phone}
+                      </a>
                     </div>
                   )}
                   <div className="text-xs text-gray-400 mt-3">
@@ -558,6 +583,7 @@ const ClientList = () => {
               </div>
               
               <div className="flex space-x-2">
+                <QuoteGenerator client={client} />
                 <Button
                   variant="outline"
                   size="sm"
@@ -604,7 +630,17 @@ const ClientList = () => {
               <div className="flex items-center space-x-4">
                 <div>
                   <h4 className="font-medium text-gray-800">{client.name || 'Client non renseigné'}</h4>
-                  <p className="text-sm text-gray-600">{client.email}</p>
+                  <p className="text-sm text-gray-600">
+                    {client.email && (
+                      <a 
+                        href={`mailto:${client.email}`}
+                        className="text-blue-600 hover:underline"
+                        title="Envoyer un email"
+                      >
+                        {client.email}
+                      </a>
+                    )}
+                  </p>
                 </div>
                 <div className="text-sm text-gray-500">
                   <span>{client.departure_city} → {client.arrival_city}</span>
@@ -630,6 +666,7 @@ const ClientList = () => {
               </div>
             </div>
             <div className="flex space-x-2">
+              <QuoteGenerator client={client} />
               <Button
                 variant="outline"
                 size="sm"
