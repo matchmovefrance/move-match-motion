@@ -121,30 +121,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Try to fetch from database
-      const { data: profileData, error } = await supabase
+      // For mehdi@matchmove.fr, set as admin directly
+      if (user.email === 'mehdi@matchmove.fr') {
+        console.log('👑 Mehdi admin user detected');
+        const mehdiProfile: Profile = {
+          id: user.id,
+          email: user.email,
+          role: 'admin',
+          company_name: 'MatchMove'
+        };
+        setProfile(mehdiProfile);
+        console.log('✅ Mehdi admin profile set:', mehdiProfile);
+        return;
+      }
+
+      // For other users, try to fetch from database with a timeout
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('❌ Error fetching profile:', error);
-        await createDefaultProfile(user);
-        return;
-      }
+      // Add a timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+      );
 
-      if (profileData) {
-        const profile: Profile = {
-          id: profileData.id,
-          email: profileData.email,
-          role: profileData.role as 'admin' | 'agent' | 'demenageur',
-          company_name: profileData.company_name
-        };
-        setProfile(profile);
-        console.log('✅ Profile loaded from DB:', profile);
-      } else {
-        console.log('📝 No profile found, creating default...');
+      try {
+        const { data: profileData, error } = await Promise.race([
+          profilePromise,
+          timeoutPromise
+        ]) as any;
+
+        if (error && !error.message?.includes('timeout')) {
+          console.error('❌ Error fetching profile:', error);
+          await createDefaultProfile(user);
+          return;
+        }
+
+        if (profileData) {
+          const profile: Profile = {
+            id: profileData.id,
+            email: profileData.email,
+            role: profileData.role as 'admin' | 'agent' | 'demenageur',
+            company_name: profileData.company_name
+          };
+          setProfile(profile);
+          console.log('✅ Profile loaded from DB:', profile);
+        } else {
+          console.log('📝 No profile found, creating default...');
+          await createDefaultProfile(user);
+        }
+      } catch (timeoutError) {
+        console.log('⏰ Profile fetch timed out, using fallback');
         await createDefaultProfile(user);
       }
     } catch (error) {
@@ -157,35 +186,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('📝 Creating default profile for:', user.email);
       
-      const defaultProfile = {
+      const defaultProfile: Profile = {
         id: user.id,
         email: user.email,
-        role: 'agent' as const,
-        company_name: null
+        role: 'agent',
+        company_name: undefined
       };
 
-      const { error } = await supabase
-        .from('profiles')
-        .insert(defaultProfile);
+      // Try to insert into database, but don't block on it
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email,
+            role: 'agent',
+            company_name: null
+          });
 
-      if (error) {
-        console.error('❌ Error creating profile:', error);
-        // Use fallback profile even if insertion fails
-        setProfile({
-          id: user.id,
-          email: user.email,
-          role: 'agent',
-          company_name: undefined
-        });
-      } else {
-        console.log('✅ Default profile created successfully');
-        setProfile({
-          id: user.id,
-          email: user.email,
-          role: 'agent',
-          company_name: undefined
-        });
+        if (error) {
+          console.error('❌ Error creating profile in DB:', error);
+        } else {
+          console.log('✅ Default profile created in DB successfully');
+        }
+      } catch (dbError) {
+        console.error('❌ Database error creating profile:', dbError);
       }
+
+      // Always set the profile locally regardless of DB success
+      setProfile(defaultProfile);
+      console.log('✅ Default profile set locally:', defaultProfile);
     } catch (error) {
       console.error('❌ Error creating default profile:', error);
       // Always provide fallback
@@ -219,7 +249,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     console.log('✅ Sign in successful');
-    // Loading will be set to false by the auth state change listener
     return { error: null };
   };
 
@@ -259,23 +288,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     
     try {
-      // Check if we have a session before attempting to sign out
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
         console.log('📤 Active session found, signing out...');
         const { error } = await supabase.auth.signOut();
         
-        if (error) {
+        if (error && !error.message?.includes('session') && !error.message?.includes('Session')) {
           console.error('❌ Sign out error:', error);
-          // Don't show error toast for session missing errors as they're expected
-          if (!error.message?.includes('session') && !error.message?.includes('Session')) {
-            toast({
-              title: "Erreur de déconnexion",
-              description: error.message,
-              variant: "destructive",
-            });
-          }
+          toast({
+            title: "Erreur de déconnexion",
+            description: error.message,
+            variant: "destructive",
+          });
         } else {
           console.log('✅ Sign out successful');
         }
@@ -284,7 +309,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error('❌ Sign out error:', error);
-      // Don't show error toast for session missing errors as they're expected
       if (!error.message?.includes('session') && !error.message?.includes('Session')) {
         toast({
           title: "Erreur de déconnexion",
@@ -294,7 +318,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     
-    // Always clear local state regardless of signOut success/failure
     console.log('🧹 Clearing local auth state...');
     setUser(null);
     setSession(null);

@@ -17,7 +17,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     allowedRoles
   });
 
-  // Show loading state
+  // Show loading state with timeout
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -35,15 +35,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/auth" replace />;
   }
 
-  // Admin always has access
-  if (user.email === 'contact@matchmove.fr') {
+  // Admin users always have access
+  if (user.email === 'contact@matchmove.fr' || user.email === 'mehdi@matchmove.fr') {
     console.log('👑 Admin user detected, allowing access');
     return <>{children}</>;
   }
 
-  // Wait for profile to load for non-admin users
+  // For other users, wait for profile to load but with a reasonable timeout
   if (!profile) {
     console.log('⏳ Waiting for profile to load...');
+    // If we've been waiting too long, show an error or redirect
+    setTimeout(() => {
+      if (!profile) {
+        console.log('⏰ Profile loading timeout, redirecting to auth');
+        window.location.href = '/auth';
+      }
+    }, 10000);
+    
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
