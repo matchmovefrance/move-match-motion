@@ -602,6 +602,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_all_profiles: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          role: string
+          company_name: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
       get_all_profiles_admin: {
         Args: Record<PropertyKey, never>
         Returns: {
