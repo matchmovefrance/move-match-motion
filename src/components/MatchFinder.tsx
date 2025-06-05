@@ -230,6 +230,74 @@ const MatchFinder = () => {
     }
   };
 
+  // Fonction pour calculer la distance minimale entre un point et un trajet
+  const calculateDistanceToRoute = (clientDepartureCode: string, clientArrivalCode: string, moveDepartureCode: string, moveArrivalCode: string) => {
+    // Approximation basée sur les codes postaux (simulation de coordonnées géographiques)
+    const getCoordinatesFromPostalCode = (postalCode: string) => {
+      const dept = parseInt(postalCode.substring(0, 2));
+      // Approximation très simple des coordonnées en France
+      const lat = 46 + (dept % 10) * 0.5; // Latitude approximative
+      const lng = 2 + Math.floor(dept / 10) * 0.8; // Longitude approximative
+      return { lat, lng };
+    };
+
+    const clientDep = getCoordinatesFromPostalCode(clientDepartureCode);
+    const clientArr = getCoordinatesFromPostalCode(clientArrivalCode);
+    const moveDep = getCoordinatesFromPostalCode(moveDepartureCode);
+    const moveArr = getCoordinatesFromPostalCode(moveArrivalCode);
+
+    // Calculer la distance du point client au segment de trajet du déménageur
+    const distanceToPoint = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
+      const A = px - x1;
+      const B = py - y1;
+      const C = x2 - x1;
+      const D = y2 - y1;
+      
+      const dot = A * C + B * D;
+      const lenSq = C * C + D * D;
+      
+      if (lenSq === 0) {
+        // Le segment est un point
+        return Math.sqrt(A * A + B * B) * 111; // Conversion approximative en km
+      }
+
+      let param = dot / lenSq;
+      
+      let xx, yy;
+      if (param < 0) {
+        xx = x1;
+        yy = y1;
+      } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+      } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+      }
+
+      const dx = px - xx;
+      const dy = py - yy;
+      return Math.sqrt(dx * dx + dy * dy) * 111; // Conversion approximative en km
+    };
+
+    // Calculer la distance du point de départ client au trajet du déménageur
+    const distanceDeparture = distanceToPoint(
+      clientDep.lat, clientDep.lng,
+      moveDep.lat, moveDep.lng,
+      moveArr.lat, moveArr.lng
+    );
+
+    // Calculer la distance du point d'arrivée client au trajet du déménageur
+    const distanceArrival = distanceToPoint(
+      clientArr.lat, clientArr.lng,
+      moveDep.lat, moveDep.lng,
+      moveArr.lat, moveArr.lng
+    );
+
+    // Retourner la distance minimale
+    return Math.min(distanceDeparture, distanceArrival);
+  };
+
   const findMatches = useCallback(async () => {
     try {
       setLoading(true);
@@ -246,12 +314,16 @@ const MatchFinder = () => {
         .delete()
         .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
 
-      // Calculer les nouveaux matches avec gestion améliorée des dates flexibles
+      // Calculer les nouveaux matches avec la nouvelle logique de distance
       for (const client of clientRequests) {
         for (const move of moves) {
-          // Calculer la distance approximative (simulation basée sur les codes postaux)
-          const distanceKm = Math.abs(parseInt(client.departure_postal_code.substring(0, 2)) - 
-                                     parseInt(move.departure_postal_code.substring(0, 2))) * 50;
+          // Calculer la distance par rapport au trajet complet
+          const distanceKm = calculateDistanceToRoute(
+            client.departure_postal_code,
+            client.arrival_postal_code,
+            move.departure_postal_code,
+            move.arrival_postal_code
+          );
           
           // Vérifier la compatibilité des dates avec gestion des dates flexibles
           const datesCompatible = areDatesCompatible(client, move.departure_date);
@@ -271,27 +343,26 @@ const MatchFinder = () => {
           // Calculer le volume combiné
           const combinedVolume = (move.used_volume || 0) + clientVolume;
           
-          // Déterminer si c'est un match valide
-          // Pour les dates flexibles, la différence peut être de 0 si dans la plage
+          // Déterminer si c'est un match valide - distance <= 100km et volume OK
           const maxAllowedDays = client.flexible_dates ? 
             (dateDiffDays === 0 ? 0 : 15) : 15;
           
-          const isValid = distanceKm <= 200 && dateDiffDays <= maxAllowedDays && volumeOk;
+          const isValid = distanceKm <= 100 && dateDiffDays <= maxAllowedDays && volumeOk;
           
-          // Déterminer le type de match (amélioré pour dates flexibles)
+          // Déterminer le type de match
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
               client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
             if (client.flexible_dates && dateDiffDays === 0) {
-              matchType = 'perfect'; // Date parfaite dans la plage flexible
+              matchType = 'perfect';
             } else if (!client.flexible_dates && dateDiffDays <= 3) {
-              matchType = 'perfect'; // Date proche pour non-flexible
+              matchType = 'perfect';
             } else {
               matchType = 'good';
             }
           } else if (distanceKm <= 50) {
             if (client.flexible_dates && dateDiffDays === 0) {
-              matchType = 'good'; // Bonne correspondance avec date flexible
+              matchType = 'good';
             } else if (dateDiffDays <= 7) {
               matchType = 'good';
             }
@@ -326,7 +397,7 @@ const MatchFinder = () => {
 
       toast({
         title: "Succès",
-        description: "Recherche de correspondances terminée (dates flexibles prises en compte)",
+        description: "Recherche de correspondances terminée (distance au trajet calculée)",
       });
 
       fetchData();

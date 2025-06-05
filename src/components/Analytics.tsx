@@ -101,8 +101,8 @@ const Analytics = () => {
   };
 
   const calculateAnalyticsData = (clients: any[], moves: any[], matchData: any[]) => {
-    // Calculer les totaux
-    const totalRevenue = moves.reduce((sum, move) => sum + (move.total_price || 0), 0);
+    // Calculer le chiffre d'affaires basé sur les montants des devis clients
+    const totalRevenue = clients.reduce((sum, client) => sum + (client.quote_amount || 0), 0);
     const pendingRequests = clients.filter(c => c.status === 'pending').length;
     const confirmedMovesCount = moves.filter(m => m.status === 'confirmed').length;
 
@@ -123,16 +123,17 @@ const Analytics = () => {
       const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
       if (monthlyStats.has(monthKey)) {
         monthlyStats.get(monthKey).clients++;
+        // Ajouter le montant du devis au revenu mensuel
+        monthlyStats.get(monthKey).revenue += client.quote_amount || 0;
       }
     });
 
-    // Compter les déménagements et revenus par mois
+    // Compter les déménagements par mois
     moves.forEach(move => {
       const date = new Date(move.created_at);
       const monthKey = date.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
       if (monthlyStats.has(monthKey)) {
         monthlyStats.get(monthKey).moves++;
-        monthlyStats.get(monthKey).revenue += move.total_price || 0;
       }
     });
 
