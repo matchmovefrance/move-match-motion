@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro } from 'lucide-react';
+import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ListView } from '@/components/ui/list-view';
@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import ClientForm from './ClientForm';
 import QuoteGenerator from './QuoteGenerator';
+import ClientDetailsPopup from './ClientDetailsPopup';
 
 interface ClientRequest {
   id: number;
@@ -59,6 +60,8 @@ const ClientList = () => {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientRequest | null>(null);
+  const [selectedClient, setSelectedClient] = useState<ClientRequest | null>(null);
+  const [showClientDetails, setShowClientDetails] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -232,6 +235,16 @@ const ClientList = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleViewDetails = (client: ClientRequest) => {
+    setSelectedClient(client);
+    setShowClientDetails(true);
+  };
+
+  const handleCloseDetails = () => {
+    setShowClientDetails(false);
+    setSelectedClient(null);
   };
 
   const renderClientCard = (client: ClientRequest) => (
@@ -583,6 +596,14 @@ const ClientList = () => {
               </div>
               
               <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleViewDetails(client)}
+                  title="Voir les détails"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
                 <QuoteGenerator client={client} />
                 <Button
                   variant="outline"
@@ -666,6 +687,14 @@ const ClientList = () => {
               </div>
             </div>
             <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleViewDetails(client)}
+                title="Voir les détails"
+              >
+                <Eye className="h-3 w-3" />
+              </Button>
               <QuoteGenerator client={client} />
               <Button
                 variant="outline"
@@ -710,6 +739,12 @@ const ClientList = () => {
         emptyStateMessage="Aucune demande client trouvée"
         emptyStateIcon={<Users className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
+      />
+
+      <ClientDetailsPopup
+        client={selectedClient}
+        isOpen={showClientDetails}
+        onClose={handleCloseDetails}
       />
     </div>
   );
