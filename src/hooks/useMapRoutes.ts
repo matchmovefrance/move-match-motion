@@ -1,5 +1,5 @@
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
 interface Move {
   id: number;
@@ -41,12 +41,27 @@ interface ClientRequest {
 }
 
 export const useMapRoutes = (map: google.maps.Map | null) => {
-  const [directionsRenderers, setDirectionsRenderers] = useState<google.maps.DirectionsRenderer[]>([]);
+  const directionsRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
+  const markersRef = useRef<google.maps.Marker[]>([]);
 
-  const calculateRealRoute = async (
+  const clearMapElements = useCallback(() => {
+    // Clear existing renderers
+    directionsRenderersRef.current.forEach(renderer => {
+      renderer.setMap(null);
+    });
+    directionsRenderersRef.current = [];
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => {
+      marker.setMap(null);
+    });
+    markersRef.current = [];
+  }, []);
+
+  const calculateRealRoute = useCallback(async (
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number }
-  ): Promise<{ distance: number; duration: number; route: google.maps.DirectionsResult | null }> => {
+  ): Promise<google.maps.DirectionsResult | null> => {
     try {
       const directionsService = new google.maps.DirectionsService();
 
@@ -70,23 +85,12 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
         );
       });
 
-      const route = response.routes[0];
-      const leg = route.legs[0];
-      
-      return {
-        distance: Math.round(leg.distance!.value / 1000),
-        duration: Math.round(leg.duration!.value / 60),
-        route: response
-      };
+      return response;
     } catch (error) {
       console.error('Erreur lors du calcul de la route:', error);
-      return {
-        distance: 0,
-        duration: 0,
-        route: null
-      };
+      return null;
     }
-  };
+  }, []);
 
   const addMarkersAndRoutes = useCallback(async (
     activeMoves: Move[],
@@ -94,16 +98,13 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
   ) => {
     if (!map) return;
 
-    // Clear existing renderers
-    directionsRenderers.forEach(renderer => {
-      renderer.setMap(null);
-    });
-    setDirectionsRenderers([]);
+    // Clear existing elements
+    clearMapElements();
 
-    const newRenderers: google.maps.DirectionsRenderer[] = [];
+    const allPoints: google.maps.LatLng[] = [];
 
-    // Add mover routes (blue)
-    for (const move of activeMoves) {
+    // Add mover routes (blue) - limit to 3 for performance
+    for (const move of activeMoves.slice(0, 3)) {
       if (!move.departure_lat || !move.departure_lng || !move.arrival_lat || !move.arrival_lng) continue;
 
       // Departure marker (green)
@@ -118,7 +119,7 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
       });
 
       // Arrival marker (red)
-      new google.maps.Marker({
+      const arrivalMarker = new google.maps.Marker({
         position: { lat: move.arrival_lat, lng: move.arrival_lng },
         map: map,
         title: `Déménagement #${move.id} - Arrivée: ${move.arrival_city}`,
@@ -128,29 +129,31 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
         }
       });
 
+      markersRef.current.push(departureMarker, arrivalMarker);
+      allPoints.push(
+        new google.maps.LatLng(move.departure_lat, move.departure_lng),
+        new google.maps.LatLng(move.arrival_lat, move.arrival_lng)
+      );
+
       // Calculate and display real route
-      try {
-        const routeData = await calculateRealRoute(
-          { lat: move.departure_lat, lng: move.departure_lng },
-          { lat: move.arrival_lat, lng: move.arrival_lng }
-        );
+      const routeData = await calculateRealRoute(
+        { lat: move.departure_lat, lng: move.departure_lng },
+        { lat: move.arrival_lat, lng: move.arrival_lng }
+      );
 
-        if (routeData.route) {
-          const directionsRenderer = new google.maps.DirectionsRenderer({
-            map: map,
-            directions: routeData.route,
-            suppressMarkers: true,
-            polylineOptions: {
-              strokeColor: '#3B82F6',
-              strokeOpacity: 0.8,
-              strokeWeight: 4
-            }
-          });
+      if (routeData) {
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+          map: map,
+          directions: routeData,
+          suppressMarkers: true,
+          polylineOptions: {
+            strokeColor: '#3B82F6',
+            strokeOpacity: 0.8,
+            strokeWeight: 4
+          }
+        });
 
-          newRenderers.push(directionsRenderer);
-        }
-      } catch (error) {
-        console.error('Erreur lors de l\'affichage de la route déménageur:', error);
+        directionsRenderersRef.current.push(directionsRenderer);
       }
 
       // InfoWindow for move details
@@ -181,8 +184,8 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
       });
     }
 
-    // Add client request routes (orange)
-    for (const request of activeClientRequests) {
+    // Add client request routes (orange) - limit to 3 for performance
+    for (const request of activeClientRequests.slice(0, 3)) {
       if (!request.departure_lat || !request.departure_lng || !request.arrival_lat || !request.arrival_lng) continue;
 
       // Client departure marker (yellow)
@@ -197,7 +200,7 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
       });
 
       // Client arrival marker (orange)
-      new google.maps.Marker({
+      const clientArrivalMarker = new google.maps.Marker({
         position: { lat: request.arrival_lat, lng: request.arrival_lng },
         map: map,
         title: `Demande Client #${request.id} - Arrivée: ${request.arrival_city}`,
@@ -207,29 +210,31 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
         }
       });
 
+      markersRef.current.push(clientDepartureMarker, clientArrivalMarker);
+      allPoints.push(
+        new google.maps.LatLng(request.departure_lat, request.departure_lng),
+        new google.maps.LatLng(request.arrival_lat, request.arrival_lng)
+      );
+
       // Calculate and display real route for client
-      try {
-        const routeData = await calculateRealRoute(
-          { lat: request.departure_lat, lng: request.departure_lng },
-          { lat: request.arrival_lat, lng: request.arrival_lng }
-        );
+      const routeData = await calculateRealRoute(
+        { lat: request.departure_lat, lng: request.departure_lng },
+        { lat: request.arrival_lat, lng: request.arrival_lng }
+      );
 
-        if (routeData.route) {
-          const directionsRenderer = new google.maps.DirectionsRenderer({
-            map: map,
-            directions: routeData.route,
-            suppressMarkers: true,
-            polylineOptions: {
-              strokeColor: '#F97316',
-              strokeOpacity: 0.7,
-              strokeWeight: 3
-            }
-          });
+      if (routeData) {
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+          map: map,
+          directions: routeData,
+          suppressMarkers: true,
+          polylineOptions: {
+            strokeColor: '#F97316',
+            strokeOpacity: 0.7,
+            strokeWeight: 3
+          }
+        });
 
-          newRenderers.push(directionsRenderer);
-        }
-      } catch (error) {
-        console.error('Erreur lors de l\'affichage de la route client:', error);
+        directionsRenderersRef.current.push(directionsRenderer);
       }
 
       // InfoWindow for client request details
@@ -266,24 +271,15 @@ export const useMapRoutes = (map: google.maps.Map | null) => {
       });
     }
 
-    setDirectionsRenderers(newRenderers);
-
     // Fit bounds to show all markers
-    const allPoints = [
-      ...activeMoves.filter(move => move.departure_lat && move.departure_lng).map(move => ({ lat: move.departure_lat!, lng: move.departure_lng! })),
-      ...activeMoves.filter(move => move.arrival_lat && move.arrival_lng).map(move => ({ lat: move.arrival_lat!, lng: move.arrival_lng! })),
-      ...activeClientRequests.filter(request => request.departure_lat && request.departure_lng).map(request => ({ lat: request.departure_lat!, lng: request.departure_lng! })),
-      ...activeClientRequests.filter(request => request.arrival_lat && request.arrival_lng).map(request => ({ lat: request.arrival_lat!, lng: request.arrival_lng! }))
-    ];
-
     if (allPoints.length > 0) {
       const bounds = new google.maps.LatLngBounds();
       allPoints.forEach(point => {
-        bounds.extend(new google.maps.LatLng(point.lat, point.lng));
+        bounds.extend(point);
       });
       map.fitBounds(bounds);
     }
-  }, [map, directionsRenderers]);
+  }, [map, calculateRealRoute, clearMapElements]);
 
-  return { addMarkersAndRoutes };
+  return { addMarkersAndRoutes, clearMapElements };
 };

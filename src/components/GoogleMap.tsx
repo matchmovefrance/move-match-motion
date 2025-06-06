@@ -2,8 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { loadGoogleMapsScript } from '@/lib/google-maps-config';
-import { MapPin, Truck, Navigation, Calendar, CheckCircle, Clock } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { MapPin, Truck, Navigation, CheckCircle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import StatusToggle from './StatusToggle';
 import { useMapData } from '@/hooks/useMapData';
@@ -11,58 +10,20 @@ import { useMapRoutes } from '@/hooks/useMapRoutes';
 import { MapLegend } from './map/MapLegend';
 import { MapHistory } from './map/MapHistory';
 
-interface Move {
-  id: number;
-  departure_city: string;
-  departure_postal_code: string;
-  arrival_city: string;
-  arrival_postal_code: string;
-  departure_date: string;
-  status: string;
-  company_name?: string;
-  departure_lat?: number;
-  departure_lng?: number;
-  arrival_lat?: number;
-  arrival_lng?: number;
-  match_status?: string;
-  total_price?: number;
-  created_at: string;
-  real_distance_km?: number;
-  real_duration_minutes?: number;
-}
-
-interface ClientRequest {
-  id: number;
-  departure_city: string;
-  departure_postal_code: string;
-  arrival_city: string;
-  arrival_postal_code: string;
-  desired_date: string;
-  status: string;
-  name?: string;
-  departure_lat?: number;
-  departure_lng?: number;
-  arrival_lat?: number;
-  arrival_lng?: number;
-  estimated_volume?: number;
-  created_at: string;
-  real_distance_km?: number;
-  real_duration_minutes?: number;
-}
-
 const GoogleMapComponent: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mapInitialized = useRef(false);
 
   // Use custom hooks for data management
-  const { activeMoves, activeClientRequests, allMoves, loading, loadData } = useMapData();
-  const { addMarkersAndRoutes } = useMapRoutes(map);
+  const { activeMoves, activeClientRequests, allMoves, loading, loadData, refreshData } = useMapData();
+  const { addMarkersAndRoutes, clearMapElements } = useMapRoutes(map);
 
   // Initialize map only once
   const initializeMap = useCallback(async () => {
-    if (!mapRef.current || map) return;
+    if (!mapRef.current || mapInitialized.current) return;
 
     try {
       await loadGoogleMapsScript();
@@ -85,11 +46,13 @@ const GoogleMapComponent: React.FC = () => {
       });
 
       setMap(mapInstance);
+      mapInitialized.current = true;
+      console.log('Map initialized successfully');
     } catch (error) {
       console.error('Erreur lors de l\'initialisation de la carte:', error);
       setError('Impossible de charger Google Maps');
     }
-  }, [map]);
+  }, []);
 
   const handleStatusChange = async (moveId: number, newStatus: 'en_cours' | 'termine') => {
     try {
@@ -99,7 +62,7 @@ const GoogleMapComponent: React.FC = () => {
         .eq('id', moveId);
 
       if (error) throw error;
-      await loadData();
+      refreshData();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error);
     }
@@ -134,21 +97,34 @@ const GoogleMapComponent: React.FC = () => {
   // Initialize map once
   useEffect(() => {
     initializeMap();
-  }, []);
+  }, [initializeMap]);
 
   // Load data when map is ready
   useEffect(() => {
-    if (map) {
+    if (map && !loading) {
       loadData();
     }
-  }, [map, loadData]);
+  }, [map]);
 
-  // Add routes when data is loaded
+  // Add routes when data is loaded - with debouncing
   useEffect(() => {
     if (map && (activeMoves.length > 0 || activeClientRequests.length > 0)) {
-      addMarkersAndRoutes(activeMoves, activeClientRequests);
+      const timeoutId = setTimeout(() => {
+        addMarkersAndRoutes(activeMoves, activeClientRequests);
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
     }
-  }, [map, activeMoves, activeClientRequests, addMarkersAndRoutes]);
+  }, [map, activeMoves, activeClientRequests]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (clearMapElements) {
+        clearMapElements();
+      }
+    };
+  }, [clearMapElements]);
 
   if (error) {
     return (
@@ -174,6 +150,12 @@ const GoogleMapComponent: React.FC = () => {
           >
             {showHistory ? 'Masquer l\'historique' : 'Afficher l\'historique'}
           </button>
+          <button
+            onClick={refreshData}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Actualiser
+          </button>
           <MapLegend />
         </div>
       </div>
@@ -195,12 +177,12 @@ const GoogleMapComponent: React.FC = () => {
         />
       </div>
 
-      {(activeMoves.length > 0 || activeClientRequests.length > 0) && (
+      {(activeMoves.length > 0 || activeClientRequests.length > 0) && !loading && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center space-x-2">
             <Truck className="h-5 w-5 text-blue-600" />
             <span className="text-blue-800 font-medium">
-              {activeMoves.length} trajet{activeMoves.length > 1 ? 's' : ''} déménageur{activeMoves.length > 1 ? 's' : ''} et {activeClientRequests.length} demande{activeClientRequests.length > 1 ? 's' : ''} client{activeClientRequests.length > 1 ? 's' : ''} affichés
+              {activeMoves.length} trajet{activeMoves.length > 1 ? 's' : ''} déménageur{activeMoves.length > 1 ? 's' : ''} et {activeClientRequests.length} demande{activeClientRequests.length > 1 ? 's' : ''} client{activeClientRequests.length > 1 ? 's' : ''} affichés (limité à 3 chacun pour les performances)
             </span>
           </div>
         </div>

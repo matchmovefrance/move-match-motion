@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Move {
@@ -46,8 +46,9 @@ export const useMapData = () => {
   const [activeClientRequests, setActiveClientRequests] = useState<ClientRequest[]>([]);
   const [allMoves, setAllMoves] = useState<Move[]>([]);
   const [loading, setLoading] = useState(true);
+  const loadedRef = useRef(false);
 
-  const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number }> => {
+  const geocodeAddress = useCallback(async (address: string): Promise<{ lat: number; lng: number }> => {
     try {
       const geocoder = new google.maps.Geocoder();
       const response = await new Promise<google.maps.GeocoderResponse>((resolve, reject) => {
@@ -69,17 +70,21 @@ export const useMapData = () => {
       console.error('Erreur de géocodage:', error);
       return { lat: 46.603354, lng: 1.888334 };
     }
-  };
+  }, []);
 
   const loadData = useCallback(async () => {
+    if (loadedRef.current) return; // Prevent multiple loads
+    
     try {
       setLoading(true);
+      loadedRef.current = true;
       
       // Load confirmed moves
       const { data: movesData, error: movesError } = await supabase
         .from('confirmed_moves')
         .select('*')
-        .order('departure_date', { ascending: false });
+        .order('departure_date', { ascending: false })
+        .limit(20); // Limit for performance
 
       if (movesError) throw movesError;
 
@@ -88,17 +93,18 @@ export const useMapData = () => {
         .from('client_requests')
         .select('*')
         .neq('status', 'confirmed')
-        .order('desired_date', { ascending: false });
+        .order('desired_date', { ascending: false })
+        .limit(20); // Limit for performance
 
       if (clientRequestsError) throw clientRequestsError;
 
       if (movesData && movesData.length > 0) {
         const activeMovesData = movesData.filter(move => move.status !== 'termine');
         
-        // Geocode only first 5 active moves for performance
+        // Geocode only first 3 active moves for ultra performance
         const activeMovesWithCoords: Move[] = [];
         
-        for (const move of activeMovesData.slice(0, 5)) {
+        for (const move of activeMovesData.slice(0, 3)) {
           const departureAddress = `${move.departure_postal_code} ${move.departure_city}, France`;
           const arrivalAddress = `${move.arrival_postal_code} ${move.arrival_city}, France`;
           
@@ -124,10 +130,10 @@ export const useMapData = () => {
       }
 
       if (clientRequestsData && clientRequestsData.length > 0) {
-        // Geocode only first 5 client requests for performance
+        // Geocode only first 3 client requests for ultra performance
         const activeClientRequestsWithCoords: ClientRequest[] = [];
         
-        for (const request of clientRequestsData.slice(0, 5)) {
+        for (const request of clientRequestsData.slice(0, 3)) {
           const departureAddress = `${request.departure_postal_code} ${request.departure_city}, France`;
           const arrivalAddress = `${request.arrival_postal_code} ${request.arrival_city}, France`;
           
@@ -154,13 +160,20 @@ export const useMapData = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [geocodeAddress]);
+
+  const refreshData = useCallback(() => {
+    loadedRef.current = false;
+    setLoading(true);
+    loadData();
+  }, [loadData]);
 
   return {
     activeMoves,
     activeClientRequests,
     allMoves,
     loading,
-    loadData
+    loadData,
+    refreshData
   };
 };
