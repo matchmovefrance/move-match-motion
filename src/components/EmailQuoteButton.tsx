@@ -9,7 +9,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import jsPDF from 'jspdf';
 
 interface ClientRequest {
@@ -50,7 +49,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     
     // Logo en base64
     try {
-      const logoBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAYAAADDhn8LAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABNYSURBVHhe7Z0JmBTVtccPCCKyiEvUIAoqKipqFEVFxSVGTVzixhITl5jEJZpnTNSYmLjEJ5pnTNSYuD1jjEtc4hKXuMclLnGJW1ziEpe4xCVuUVFRUVFRQRBE4P3PrXM79dXtnu6Z7p6Z6f6/7/u+6eqqW3XrnFu3zq1bt6rEYDBYjYgYDIYoRMRgMEQhIgaDIQoRMYPBYIhCRMxgMEQhIgaDIQoRMYPBEIWImMFgiEJEzGAwRCEiZjAYohARMxgMUYiIGQyGKETEDAZDFCJiBkMUImIGgyEKETGDwRCFiJjBYIhCRMxgMEQhImYwGKIQETMYDFGIiBkMhihExAwGQxQiYgaDIQoRMYPBEIWImMFgiEJEzGAwRCEiZjAYohARMxgMUYiIGQyGKETEDAZDFCJiBsM/yRkRERERERFJOyJiIiIikhGJiEhEREKJiBhERERERERERERE0tKv2r5+XQNBAAAABJRU5ErkJggg==";
+      const logoBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAYAAADDhn8LAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABNYSURBVHhe7Z0JmBTVtccPCCKyiEvUIAoqKipqFEVFxSVGTVzixhITl5jEJZpnTNSYmLjEJ5pnTNSYuD1jjEtc4hKXuMclLnGJW1ziEpe4xCVuUVFRUVFRQRBE4P3PrXM79dXtnu6Z7p6Z6f6/7/u+6eqqW3XrnFu3zq1bt6rEYDBYjYgYDIYoRMRgMEQhIgaDIQoRMYPBYIhCRMxgMEQhIgaDIQoRMYPBEIWImMFgiEJEzGAwRCEiZjAYohARMxgMUYiIGQyGKETEDAZDFCJiBkMUImIGgyEKETGDwRCFiJjBYIhCRMxgMEQhIgaDIQoRMYPBEIWImMFgiEJEzGAwRCEiZjAYohARMxgMUYiIGQyGKETEDAZDFCJiBsM/yRkRERERERFJOyJiIiIikhGJiEhEREKJiBhERERERERERERE0tKv2r5+XQNBAAAABJRU5ErkJggg==";
       doc.addImage(logoBase64, 'PNG', 20, 8, 50, 25);
     } catch (error) {
       console.error("Erreur de chargement du logo:", error);
@@ -207,27 +206,47 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
       // Générer le PDF en base64
       const pdfBase64 = await generatePDFBase64();
       
-      // Appeler la fonction Edge pour envoyer l'email
-      const { data, error } = await supabase.functions.invoke('send-quote-email', {
-        body: {
-          clientName: client.name,
-          clientEmail: client.email,
-          quoteAmount: client.quote_amount,
-          desiredDate: client.desired_date,
-          pdfBase64: pdfBase64
-        }
+      // Préparer les données à envoyer à votre endpoint PHP
+      const emailData = {
+        clientName: client.name,
+        clientEmail: client.email,
+        quoteAmount: client.quote_amount,
+        desiredDate: client.desired_date,
+        pdfBase64: pdfBase64,
+        clientPhone: client.phone,
+        departureAddress: client.departure_address,
+        departurePostalCode: client.departure_postal_code,
+        departureCity: client.departure_city,
+        arrivalAddress: client.arrival_address,
+        arrivalPostalCode: client.arrival_postal_code,
+        arrivalCity: client.arrival_city,
+        estimatedVolume: client.estimated_volume
+      };
+
+      // Appeler votre endpoint PHP (remplacez par votre URL)
+      const response = await fetch('https://votre-serveur.com/send-quote.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(emailData)
       });
 
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      toast({
-        title: "Email envoyé",
-        description: `Le devis a été envoyé avec succès à ${client.email}`,
-      });
-      
-      setIsOpen(false);
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Email envoyé",
+          description: `Le devis a été envoyé avec succès à ${client.email}`,
+        });
+        setIsOpen(false);
+      } else {
+        throw new Error(result.error || 'Erreur inconnue');
+      }
     } catch (error: any) {
       console.error('Erreur lors de l\'envoi de l\'email:', error);
       toast({
@@ -302,7 +321,7 @@ Votre satisfaction, notre priorité.`;
                 <div>
                   <span className="font-medium text-gray-600">De :</span>
                   <p className="text-gray-800">MatchMove déménagements solutions</p>
-                  <p className="text-gray-600">noreply@matchmove.fr</p>
+                  <p className="text-gray-600">contact@matchmove.fr</p>
                 </div>
                 <div>
                   <span className="font-medium text-gray-600">À :</span>
@@ -321,6 +340,13 @@ Votre satisfaction, notre priorité.`;
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="text-sm text-blue-800">
                 📎 Le devis PDF sera automatiquement joint à cet email avec un message professionnel personnalisé
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+              <p className="text-sm text-yellow-800">
+                ⚠️ <strong>Configuration requise :</strong> Assurez-vous que votre endpoint PHP est configuré à l'adresse : 
+                <code className="bg-yellow-100 px-1 rounded">https://votre-serveur.com/send-quote.php</code>
               </p>
             </div>
           </div>
