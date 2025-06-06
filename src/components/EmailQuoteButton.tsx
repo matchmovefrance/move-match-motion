@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Mail, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -223,8 +224,8 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         estimatedVolume: client.estimated_volume
       };
 
-      // Appeler votre endpoint PHP (remplacez par votre URL)
-      const response = await fetch('https://votre-serveur.com/send-quote.php', {
+      // Appeler votre endpoint PHP avec la vraie URL
+      const response = await fetch('https://tanjaconnect.com/apx/matchmove/send-quote.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
