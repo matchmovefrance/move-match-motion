@@ -1,10 +1,15 @@
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { loadGoogleMapsScript } from '@/lib/google-maps-config';
-import { MapPin, Truck, Navigation, Calendar, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { MapPin, Truck, Navigation, Calendar, CheckCircle, Clock } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import StatusToggle from './StatusToggle';
+import { useMapData } from '@/hooks/useMapData';
+import { useMapRoutes } from '@/hooks/useMapRoutes';
+import { MapLegend } from './map/MapLegend';
+import { MapHistory } from './map/MapHistory';
 
 interface Move {
   id: number;
@@ -48,254 +53,22 @@ interface ClientRequest {
 const GoogleMapComponent: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
-  const [activeMoves, setActiveMoves] = useState<Move[]>([]);
-  const [activeClientRequests, setActiveClientRequests] = useState<ClientRequest[]>([]);
-  const [allMoves, setAllMoves] = useState<Move[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [directionsRenderers, setDirectionsRenderers] = useState<google.maps.DirectionsRenderer[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fonction pour géocoder une adresse
-  const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number }> => {
-    try {
-      const geocoder = new google.maps.Geocoder();
-      const response = await new Promise<google.maps.GeocoderResponse>((resolve, reject) => {
-        geocoder.geocode({ address }, (results, status) => {
-          if (status === 'OK' && results) {
-            resolve({ results, status });
-          } else {
-            reject(new Error(`Geocoding failed: ${status}`));
-          }
-        });
-      });
-      
-      const location = response.results[0].geometry.location;
-      return {
-        lat: location.lat(),
-        lng: location.lng()
-      };
-    } catch (error) {
-      console.error('Erreur de géocodage:', error);
-      // Retourner des coordonnées par défaut pour la France
-      return { lat: 46.603354, lng: 1.888334 };
-    }
-  };
+  // Use custom hooks for data management
+  const { activeMoves, activeClientRequests, allMoves, loading, loadData } = useMapData();
+  const { addMarkersAndRoutes } = useMapRoutes(map);
 
-  // Fonction pour calculer la route réelle avec Google Directions API
-  const calculateRealRoute = async (
-    origin: { lat: number; lng: number },
-    destination: { lat: number; lng: number }
-  ): Promise<{ distance: number; duration: number; route: google.maps.DirectionsResult | null }> => {
-    try {
-      if (!directionsService) {
-        throw new Error('Directions service not initialized');
-      }
-
-      const response = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
-        directionsService.route(
-          {
-            origin: new google.maps.LatLng(origin.lat, origin.lng),
-            destination: new google.maps.LatLng(destination.lat, destination.lng),
-            travelMode: google.maps.TravelMode.DRIVING,
-            optimizeWaypoints: true,
-            avoidHighways: false,
-            avoidTolls: false
-          },
-          (result, status) => {
-            if (status === 'OK' && result) {
-              resolve(result);
-            } else {
-              reject(new Error(`Directions request failed: ${status}`));
-            }
-          }
-        );
-      });
-
-      const route = response.routes[0];
-      const leg = route.legs[0];
-      
-      return {
-        distance: Math.round(leg.distance!.value / 1000), // Convertir en km
-        duration: Math.round(leg.duration!.value / 60), // Convertir en minutes
-        route: response
-      };
-    } catch (error) {
-      console.error('Erreur lors du calcul de la route:', error);
-      return {
-        distance: 0,
-        duration: 0,
-        route: null
-      };
-    }
-  };
-
-  // Fonction pour calculer la distance minimale d'un point à une route réelle
-  const calculateDistanceToRealRoute = async (
-    pointLat: number,
-    pointLng: number,
-    routeOrigin: { lat: number; lng: number },
-    routeDestination: { lat: number; lng: number }
-  ): Promise<number> => {
-    try {
-      // Calculer la route principale
-      const mainRoute = await calculateRealRoute(routeOrigin, routeDestination);
-      
-      if (!mainRoute.route) {
-        // Fallback vers le calcul direct si pas de route
-        const distanceToOrigin = await calculateRealRoute(
-          { lat: pointLat, lng: pointLng },
-          routeOrigin
-        );
-        const distanceToDestination = await calculateRealRoute(
-          { lat: pointLat, lng: pointLng },
-          routeDestination
-        );
-        return Math.min(distanceToOrigin.distance, distanceToDestination.distance);
-      }
-
-      // Calculer la distance du point vers l'origine et la destination de la route
-      const distanceToOrigin = await calculateRealRoute(
-        { lat: pointLat, lng: pointLng },
-        routeOrigin
-      );
-      const distanceToDestination = await calculateRealRoute(
-        { lat: pointLat, lng: pointLng },
-        routeDestination
-      );
-
-      // Retourner la distance minimale
-      return Math.min(distanceToOrigin.distance, distanceToDestination.distance);
-    } catch (error) {
-      console.error('Erreur lors du calcul de distance à la route:', error);
-      return 999; // Distance élevée en cas d'erreur
-    }
-  };
-
-  // Charger toutes les données de déménagement et demandes clients avec calcul de routes réelles
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      // Charger les déménagements confirmés
-      const { data: movesData, error: movesError } = await supabase
-        .from('confirmed_moves')
-        .select('*')
-        .order('departure_date', { ascending: false });
-
-      if (movesError) throw movesError;
-
-      // Charger les demandes clients actives
-      const { data: clientRequestsData, error: clientRequestsError } = await supabase
-        .from('client_requests')
-        .select('*')
-        .neq('status', 'confirmed')
-        .order('desired_date', { ascending: false });
-
-      if (clientRequestsError) throw clientRequestsError;
-
-      if (movesData && movesData.length > 0) {
-        // Séparer les trajets actifs (non terminés) des trajets terminés
-        const activeMovesData = movesData.filter(move => move.status !== 'termine');
-        
-        // Géocoder seulement les trajets actifs pour la carte avec calcul de routes réelles
-        const activeMovesWithCoords: Move[] = [];
-        
-        for (const move of activeMovesData.slice(0, 10)) {
-          const departureAddress = `${move.departure_postal_code} ${move.departure_city}, France`;
-          const arrivalAddress = `${move.arrival_postal_code} ${move.arrival_city}, France`;
-          
-          const [departure, arrival] = await Promise.all([
-            geocodeAddress(departureAddress),
-            geocodeAddress(arrivalAddress)
-          ]);
-          
-          // Calculer la route réelle pour ce trajet
-          let realRoute = null;
-          let realDistance = 0;
-          let realDuration = 0;
-          
-          if (directionsService) {
-            const routeData = await calculateRealRoute(departure, arrival);
-            realRoute = routeData.route;
-            realDistance = routeData.distance;
-            realDuration = routeData.duration;
-          }
-          
-          activeMovesWithCoords.push({
-            ...move,
-            departure_lat: departure.lat,
-            departure_lng: departure.lng,
-            arrival_lat: arrival.lat,
-            arrival_lng: arrival.lng,
-            real_distance_km: realDistance,
-            real_duration_minutes: realDuration
-          });
-        }
-        
-        setActiveMoves(activeMovesWithCoords);
-        setAllMoves(movesData);
-      } else {
-        setActiveMoves([]);
-        setAllMoves([]);
-      }
-
-      if (clientRequestsData && clientRequestsData.length > 0) {
-        // Géocoder les demandes clients actives avec calcul de routes réelles
-        const activeClientRequestsWithCoords: ClientRequest[] = [];
-        
-        for (const request of clientRequestsData.slice(0, 10)) {
-          const departureAddress = `${request.departure_postal_code} ${request.departure_city}, France`;
-          const arrivalAddress = `${request.arrival_postal_code} ${request.arrival_city}, France`;
-          
-          const [departure, arrival] = await Promise.all([
-            geocodeAddress(departureAddress),
-            geocodeAddress(arrivalAddress)
-          ]);
-          
-          // Calculer la route réelle pour cette demande
-          let realDistance = 0;
-          let realDuration = 0;
-          
-          if (directionsService) {
-            const routeData = await calculateRealRoute(departure, arrival);
-            realDistance = routeData.distance;
-            realDuration = routeData.duration;
-          }
-          
-          activeClientRequestsWithCoords.push({
-            ...request,
-            departure_lat: departure.lat,
-            departure_lng: departure.lng,
-            arrival_lat: arrival.lat,
-            arrival_lng: arrival.lng,
-            real_distance_km: realDistance,
-            real_duration_minutes: realDuration
-          });
-        }
-        
-        setActiveClientRequests(activeClientRequestsWithCoords);
-      } else {
-        setActiveClientRequests([]);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
-      setError('Impossible de charger les données');
-    } finally {
-      setLoading(false);
-    }
-  }, [directionsService]);
-
-  // Initialiser la carte et le service de directions
+  // Initialize map only once
   const initializeMap = useCallback(async () => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || map) return;
 
     try {
       await loadGoogleMapsScript();
       
       const mapInstance = new google.maps.Map(mapRef.current, {
-        center: { lat: 46.603354, lng: 1.888334 }, // Centre de la France
+        center: { lat: 46.603354, lng: 1.888334 },
         zoom: 6,
         styles: [
           {
@@ -311,279 +84,12 @@ const GoogleMapComponent: React.FC = () => {
         ]
       });
 
-      const directionsServiceInstance = new google.maps.DirectionsService();
-
       setMap(mapInstance);
-      setDirectionsService(directionsServiceInstance);
     } catch (error) {
       console.error('Erreur lors de l\'initialisation de la carte:', error);
       setError('Impossible de charger Google Maps');
     }
-  }, []);
-
-  // Ajouter les marqueurs et routes réelles pour les déménagements confirmés et demandes clients
-  const addMarkersAndRoutes = useCallback(async () => {
-    if (!map || !directionsService) return;
-
-    // Nettoyer les anciens renderers de directions
-    directionsRenderers.forEach(renderer => {
-      renderer.setMap(null);
-    });
-    setDirectionsRenderers([]);
-
-    const newRenderers: google.maps.DirectionsRenderer[] = [];
-
-    // Ajouter les trajets de déménageurs confirmés (bleu) avec routes réelles
-    for (const move of activeMoves) {
-      if (!move.departure_lat || !move.departure_lng || !move.arrival_lat || !move.arrival_lng) continue;
-
-      // Marqueur de départ (vert)
-      const departureMarker = new google.maps.Marker({
-        position: { lat: move.departure_lat, lng: move.departure_lng },
-        map: map,
-        title: `Déménagement #${move.id} - Départ: ${move.departure_city}`,
-        icon: {
-          url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-          scaledSize: new google.maps.Size(32, 32)
-        }
-      });
-
-      // Marqueur d'arrivée (rouge)
-      new google.maps.Marker({
-        position: { lat: move.arrival_lat, lng: move.arrival_lng },
-        map: map,
-        title: `Déménagement #${move.id} - Arrivée: ${move.arrival_city}`,
-        icon: {
-          url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
-          scaledSize: new google.maps.Size(32, 32)
-        }
-      });
-
-      // Calculer et afficher la route réelle
-      try {
-        const routeData = await calculateRealRoute(
-          { lat: move.departure_lat, lng: move.departure_lng },
-          { lat: move.arrival_lat, lng: move.arrival_lng }
-        );
-
-        if (routeData.route) {
-          const directionsRenderer = new google.maps.DirectionsRenderer({
-            map: map,
-            directions: routeData.route,
-            suppressMarkers: true, // Ne pas afficher les marqueurs par défaut
-            polylineOptions: {
-              strokeColor: '#3B82F6',
-              strokeOpacity: 0.8,
-              strokeWeight: 4
-            }
-          });
-
-          newRenderers.push(directionsRenderer);
-        }
-      } catch (error) {
-        console.error('Erreur lors de l\'affichage de la route déménageur:', error);
-        // Fallback vers une ligne droite en cas d'erreur
-        new google.maps.Polyline({
-          path: [
-            { lat: move.departure_lat, lng: move.departure_lng },
-            { lat: move.arrival_lat, lng: move.arrival_lng }
-          ],
-          geodesic: true,
-          strokeColor: '#3B82F6',
-          strokeOpacity: 0.8,
-          strokeWeight: 3,
-          map: map
-        });
-      }
-
-      // InfoWindow pour les détails du déménagement avec informations de route réelle
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="padding: 10px; max-width: 250px;">
-            <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #3B82F6;">
-              🚛 ${move.company_name || 'Déménagement'} #${move.id}
-            </h3>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>De:</strong> ${move.departure_city} (${move.departure_postal_code})
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>À:</strong> ${move.arrival_city} (${move.arrival_postal_code})
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>Date:</strong> ${new Date(move.departure_date).toLocaleDateString('fr-FR')}
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>Statut:</strong> ${move.status}
-            </p>
-            ${move.real_distance_km ? `
-              <p style="margin: 4px 0; font-size: 12px; color: #059669;">
-                <strong>Distance réelle:</strong> ${move.real_distance_km}km
-              </p>
-            ` : ''}
-            ${move.real_duration_minutes ? `
-              <p style="margin: 4px 0; font-size: 12px; color: #059669;">
-                <strong>Durée:</strong> ${Math.floor(move.real_duration_minutes / 60)}h${move.real_duration_minutes % 60}min
-              </p>
-            ` : ''}
-          </div>
-        `
-      });
-
-      departureMarker.addListener('click', () => {
-        infoWindow.open(map, departureMarker);
-      });
-    }
-
-    // Ajouter les trajets de demandes clients (orange) avec routes réelles
-    for (const request of activeClientRequests) {
-      if (!request.departure_lat || !request.departure_lng || !request.arrival_lat || !request.arrival_lng) continue;
-
-      // Calculer la distance minimale à tous les trajets de déménageurs avec routes réelles
-      let minDistance = Infinity;
-      let closestMove: Move | null = null;
-
-      for (const move of activeMoves) {
-        if (move.departure_lat && move.departure_lng && move.arrival_lat && move.arrival_lng) {
-          const distance = await calculateDistanceToRealRoute(
-            request.departure_lat!,
-            request.departure_lng!,
-            { lat: move.departure_lat, lng: move.departure_lng },
-            { lat: move.arrival_lat, lng: move.arrival_lng }
-          );
-          
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestMove = move;
-          }
-        }
-      }
-
-      // Marqueur de départ client (jaune)
-      const clientDepartureMarker = new google.maps.Marker({
-        position: { lat: request.departure_lat, lng: request.departure_lng },
-        map: map,
-        title: `Demande Client #${request.id} - Départ: ${request.departure_city}`,
-        icon: {
-          url: 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
-          scaledSize: new google.maps.Size(28, 28)
-        }
-      });
-
-      // Marqueur d'arrivée client (orange)
-      new google.maps.Marker({
-        position: { lat: request.arrival_lat, lng: request.arrival_lng },
-        map: map,
-        title: `Demande Client #${request.id} - Arrivée: ${request.arrival_city}`,
-        icon: {
-          url: 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
-          scaledSize: new google.maps.Size(28, 28)
-        }
-      });
-
-      // Calculer et afficher la route réelle pour le client
-      try {
-        const routeData = await calculateRealRoute(
-          { lat: request.departure_lat, lng: request.departure_lng },
-          { lat: request.arrival_lat, lng: request.arrival_lng }
-        );
-
-        if (routeData.route) {
-          const directionsRenderer = new google.maps.DirectionsRenderer({
-            map: map,
-            directions: routeData.route,
-            suppressMarkers: true,
-            polylineOptions: {
-              strokeColor: '#F97316',
-              strokeOpacity: 0.7,
-              strokeWeight: 3
-            }
-          });
-
-          newRenderers.push(directionsRenderer);
-        }
-      } catch (error) {
-        console.error('Erreur lors de l\'affichage de la route client:', error);
-        // Fallback vers une ligne droite en cas d'erreur
-        new google.maps.Polyline({
-          path: [
-            { lat: request.departure_lat, lng: request.departure_lng },
-            { lat: request.arrival_lat, lng: request.arrival_lng }
-          ],
-          geodesic: true,
-          strokeColor: '#F97316',
-          strokeOpacity: 0.7,
-          strokeWeight: 2,
-          map: map
-        });
-      }
-
-      // InfoWindow pour les détails de la demande client avec informations de route réelle
-      const clientInfoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="padding: 10px; max-width: 250px;">
-            <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #F97316;">
-              👤 Demande Client #${request.id}
-            </h3>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>Client:</strong> ${request.name || 'N/A'}
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>De:</strong> ${request.departure_city} (${request.departure_postal_code})
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>À:</strong> ${request.arrival_city} (${request.arrival_postal_code})
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>Date souhaitée:</strong> ${new Date(request.desired_date).toLocaleDateString('fr-FR')}
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>Volume:</strong> ${request.estimated_volume || 0} m³
-            </p>
-            <p style="margin: 4px 0; font-size: 12px;">
-              <strong>Statut:</strong> ${request.status}
-            </p>
-            ${request.real_distance_km ? `
-              <p style="margin: 4px 0; font-size: 12px; color: #059669;">
-                <strong>Distance réelle:</strong> ${request.real_distance_km}km
-              </p>
-            ` : ''}
-            ${request.real_duration_minutes ? `
-              <p style="margin: 4px 0; font-size: 12px; color: #059669;">
-                <strong>Durée:</strong> ${Math.floor(request.real_duration_minutes / 60)}h${request.real_duration_minutes % 60}min
-              </p>
-            ` : ''}
-            ${minDistance !== Infinity ? `
-              <p style="margin: 4px 0; font-size: 12px; color: ${minDistance <= 100 ? '#10b981' : '#ef4444'};">
-                <strong>Distance min au trajet:</strong> ${Math.round(minDistance)}km (route réelle)
-              </p>
-            ` : ''}
-          </div>
-        `
-      });
-
-      clientDepartureMarker.addListener('click', () => {
-        clientInfoWindow.open(map, clientDepartureMarker);
-      });
-    }
-
-    setDirectionsRenderers(newRenderers);
-
-    // Ajuster la vue pour inclure tous les marqueurs
-    const allPoints = [
-      ...activeMoves.filter(move => move.departure_lat && move.departure_lng).map(move => ({ lat: move.departure_lat!, lng: move.departure_lng! })),
-      ...activeMoves.filter(move => move.arrival_lat && move.arrival_lng).map(move => ({ lat: move.arrival_lat!, lng: move.arrival_lng! })),
-      ...activeClientRequests.filter(request => request.departure_lat && request.departure_lng).map(request => ({ lat: request.departure_lat!, lng: request.departure_lng! })),
-      ...activeClientRequests.filter(request => request.arrival_lat && request.arrival_lng).map(request => ({ lat: request.arrival_lat!, lng: request.arrival_lng! }))
-    ];
-
-    if (allPoints.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      allPoints.forEach(point => {
-        bounds.extend(new google.maps.LatLng(point.lat, point.lng));
-      });
-      map.fitBounds(bounds);
-    }
-  }, [map, directionsService, activeMoves, activeClientRequests, directionsRenderers]);
+  }, [map]);
 
   const handleStatusChange = async (moveId: number, newStatus: 'en_cours' | 'termine') => {
     try {
@@ -593,8 +99,6 @@ const GoogleMapComponent: React.FC = () => {
         .eq('id', moveId);
 
       if (error) throw error;
-
-      // Recharger les données pour mettre à jour la carte et la liste
       await loadData();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error);
@@ -627,19 +131,24 @@ const GoogleMapComponent: React.FC = () => {
     }
   };
 
+  // Initialize map once
   useEffect(() => {
     initializeMap();
-  }, [initializeMap]);
+  }, []);
 
+  // Load data when map is ready
   useEffect(() => {
-    if (map && directionsService) {
+    if (map) {
       loadData();
     }
-  }, [map, directionsService, loadData]);
+  }, [map, loadData]);
 
+  // Add routes when data is loaded
   useEffect(() => {
-    addMarkersAndRoutes();
-  }, [addMarkersAndRoutes]);
+    if (map && (activeMoves.length > 0 || activeClientRequests.length > 0)) {
+      addMarkersAndRoutes(activeMoves, activeClientRequests);
+    }
+  }, [map, activeMoves, activeClientRequests, addMarkersAndRoutes]);
 
   if (error) {
     return (
@@ -665,32 +174,7 @@ const GoogleMapComponent: React.FC = () => {
           >
             {showHistory ? 'Masquer l\'historique' : 'Afficher l\'historique'}
           </button>
-          <div className="flex items-center space-x-4 text-sm text-gray-600">
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span>Départ déménageur</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <span>Arrivée déménageur</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-0.5 bg-blue-500"></div>
-              <span>Route déménageur</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <span>Départ client</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-              <span>Arrivée client</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-0.5 bg-orange-500"></div>
-              <span>Route client</span>
-            </div>
-          </div>
+          <MapLegend />
         </div>
       </div>
 
@@ -698,7 +182,7 @@ const GoogleMapComponent: React.FC = () => {
         <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg">
           <div className="flex flex-col items-center space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600">Chargement de la carte et calcul des routes réelles...</p>
+            <p className="text-gray-600">Chargement de la carte...</p>
           </div>
         </div>
       )}
@@ -716,78 +200,19 @@ const GoogleMapComponent: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Truck className="h-5 w-5 text-blue-600" />
             <span className="text-blue-800 font-medium">
-              {activeMoves.length} trajet{activeMoves.length > 1 ? 's' : ''} déménageur{activeMoves.length > 1 ? 's' : ''} et {activeClientRequests.length} demande{activeClientRequests.length > 1 ? 's' : ''} client{activeClientRequests.length > 1 ? 's' : ''} affichés avec routes réelles
+              {activeMoves.length} trajet{activeMoves.length > 1 ? 's' : ''} déménageur{activeMoves.length > 1 ? 's' : ''} et {activeClientRequests.length} demande{activeClientRequests.length > 1 ? 's' : ''} client{activeClientRequests.length > 1 ? 's' : ''} affichés
             </span>
           </div>
         </div>
       )}
 
-      {/* Liste des trajets avec historique */}
       {showHistory && (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-              <Calendar className="h-5 w-5 mr-2" />
-              Historique des trajets
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Compagnie</TableHead>
-                  <TableHead>Départ</TableHead>
-                  <TableHead>Arrivée</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Match</TableHead>
-                  <TableHead>Prix</TableHead>
-                  <TableHead>Distance</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allMoves.map((move) => (
-                  <TableRow key={move.id}>
-                    <TableCell className="font-medium">#{move.id}</TableCell>
-                    <TableCell>{move.company_name || 'N/A'}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{move.departure_city}</div>
-                        <div className="text-sm text-gray-500">{move.departure_postal_code}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{move.arrival_city}</div>
-                        <div className="text-sm text-gray-500">{move.arrival_postal_code}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(move.departure_date).toLocaleDateString('fr-FR')}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(move.status)}</TableCell>
-                    <TableCell>{getMatchStatusBadge(move.match_status)}</TableCell>
-                    <TableCell>
-                      {move.total_price ? `${move.total_price.toLocaleString()}€` : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      {move.real_distance_km ? `${move.real_distance_km}km` : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <StatusToggle
-                        status={move.status}
-                        onStatusChange={(newStatus) => handleStatusChange(move.id, newStatus)}
-                        disabled={move.status === 'termine'}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        <MapHistory 
+          moves={allMoves}
+          getStatusBadge={getStatusBadge}
+          getMatchStatusBadge={getMatchStatusBadge}
+          handleStatusChange={handleStatusChange}
+        />
       )}
     </div>
   );

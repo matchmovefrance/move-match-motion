@@ -111,6 +111,66 @@ declare namespace google {
       results: GeocoderResult[];
       status: GeocoderStatus;
     }
+
+    class DirectionsService {
+      route(
+        request: DirectionsRequest,
+        callback: (result: DirectionsResult | null, status: DirectionsStatus) => void
+      ): void;
+    }
+
+    interface DirectionsRequest {
+      origin: LatLng | LatLngLiteral | string;
+      destination: LatLng | LatLngLiteral | string;
+      travelMode: TravelMode;
+      optimizeWaypoints?: boolean;
+      avoidHighways?: boolean;
+      avoidTolls?: boolean;
+    }
+
+    interface DirectionsResult {
+      routes: DirectionsRoute[];
+    }
+
+    interface DirectionsRoute {
+      legs: DirectionsLeg[];
+    }
+
+    interface DirectionsLeg {
+      distance: { value: number; text: string };
+      duration: { value: number; text: string };
+    }
+
+    enum DirectionsStatus {
+      OK = 'OK',
+      NOT_FOUND = 'NOT_FOUND',
+      ZERO_RESULTS = 'ZERO_RESULTS',
+      MAX_WAYPOINTS_EXCEEDED = 'MAX_WAYPOINTS_EXCEEDED',
+      INVALID_REQUEST = 'INVALID_REQUEST',
+      OVER_QUERY_LIMIT = 'OVER_QUERY_LIMIT',
+      REQUEST_DENIED = 'REQUEST_DENIED',
+      UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+    }
+
+    enum TravelMode {
+      DRIVING = 'DRIVING',
+      WALKING = 'WALKING',
+      BICYCLING = 'BICYCLING',
+      TRANSIT = 'TRANSIT'
+    }
+
+    class DirectionsRenderer {
+      constructor(opts?: DirectionsRendererOptions);
+      setMap(map: Map | null): void;
+      setDirections(directions: DirectionsResult): void;
+    }
+
+    interface DirectionsRendererOptions {
+      map?: Map;
+      directions?: DirectionsResult;
+      suppressMarkers?: boolean;
+      polylineOptions?: PolylineOptions;
+    }
   }
 }
 
