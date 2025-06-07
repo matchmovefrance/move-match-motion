@@ -30,10 +30,10 @@ interface QuoteEmailRequest {
 }
 
 const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
-  console.log("📧 Début envoi email SMTP");
-  console.log(`🔧 Configuration: ${settings.smtp_host}:${settings.smtp_port} (Secure: ${settings.smtp_secure})`);
+  console.log("📧 DÉBUT ENVOI EMAIL SMTP");
+  console.log(`🔧 Configuration: ${settings.smtp_host}:${settings.smtp_port}`);
   
-  // Validation des paramètres SMTP
+  // Validation
   if (!settings.smtp_host || !settings.smtp_username || !settings.smtp_password) {
     throw new Error('Configuration SMTP incomplète');
   }
@@ -90,40 +90,34 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
 </html>`;
 
   try {
-    console.log(`📤 Envoi email vers: ${emailData.clientEmail}`);
+    console.log(`📤 Connexion à ${settings.smtp_host}:${settings.smtp_port}`);
 
-    // Test de connexion EXACT comme dans test-smtp
+    // Connexion SMTP - EXACTEMENT comme dans test-smtp
     let conn;
-    try {
-      // Utiliser la MÊME logique que test-smtp qui fonctionne
-      if (settings.smtp_port === 465 || (settings.smtp_secure && settings.smtp_port !== 587)) {
-        console.log("🔒 Connexion TLS directe...");
-        conn = await Deno.connectTls({
-          hostname: settings.smtp_host,
-          port: settings.smtp_port,
-        });
-      } else {
-        console.log("🔌 Connexion TCP normale...");
-        conn = await Deno.connect({
-          hostname: settings.smtp_host,
-          port: settings.smtp_port,
-        });
-      }
-
-      console.log("✅ Connexion SMTP établie");
-    } catch (error) {
-      console.error("❌ Erreur connexion SMTP:", error);
-      throw new Error(`Impossible de se connecter au serveur SMTP: ${error.message}`);
+    if (settings.smtp_port === 465 || (settings.smtp_secure && settings.smtp_port !== 587)) {
+      console.log("🔒 Connexion TLS directe (port 465)");
+      conn = await Deno.connectTls({
+        hostname: settings.smtp_host,
+        port: settings.smtp_port,
+      });
+    } else {
+      console.log("🔌 Connexion TCP normale");
+      conn = await Deno.connect({
+        hostname: settings.smtp_host,
+        port: settings.smtp_port,
+      });
     }
+
+    console.log("✅ Connexion établie");
 
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
 
-    // Helper EXACT comme dans test-smtp
+    // Helper pour lire les réponses
     const readResponse = async (): Promise<string> => {
       const buffer = new Uint8Array(1024);
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Timeout de lecture")), 10000);
+        setTimeout(() => reject(new Error("Timeout lecture")), 10000);
       });
       
       const readPromise = conn.read(buffer);
@@ -131,180 +125,147 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
       return decoder.decode(buffer.subarray(0, n || 0));
     };
 
-    try {
-      // 1. Lire le message de bienvenue
-      const welcome = await readResponse();
-      console.log(`📥 SMTP Welcome: ${welcome.trim()}`);
+    // 1. Lire le welcome
+    const welcome = await readResponse();
+    console.log(`📥 Welcome: ${welcome.trim()}`);
+    if (!welcome.startsWith('220')) {
+      throw new Error(`Erreur welcome: ${welcome.trim()}`);
+    }
 
-      if (!welcome.startsWith('220')) {
-        throw new Error(`Réponse SMTP inattendue: ${welcome.trim()}`);
-      }
+    // 2. EHLO
+    await conn.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
+    const ehlo = await readResponse();
+    console.log(`📥 EHLO: ${ehlo.trim()}`);
+    if (!ehlo.startsWith('250')) {
+      throw new Error(`Erreur EHLO: ${ehlo.trim()}`);
+    }
 
-      // 2. EHLO
-      await conn.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
-      const ehloResponse = await readResponse();
-      console.log(`📥 EHLO: ${ehloResponse.trim()}`);
-
-      if (!ehloResponse.startsWith('250')) {
-        throw new Error(`Erreur EHLO: ${ehloResponse.trim()}`);
-      }
-
-      // 3. STARTTLS si port 587
-      if (settings.smtp_port === 587 && settings.smtp_secure) {
-        console.log("🔒 Activation STARTTLS...");
-        await conn.write(encoder.encode("STARTTLS\r\n"));
-        const startTlsResponse = await readResponse();
-        console.log(`📥 STARTTLS: ${startTlsResponse.trim()}`);
-        
-        if (startTlsResponse.startsWith('220')) {
-          // Upgrader la connexion vers TLS
-          const tlsConn = await Deno.startTls(conn, { hostname: settings.smtp_host });
-          conn.close();
-          conn = tlsConn;
-          
-          // Nouveau EHLO après TLS
-          await conn.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
-          const ehloTlsResponse = await readResponse();
-          console.log(`📥 EHLO après TLS: ${ehloTlsResponse.trim()}`);
-        }
-      }
-
-      // 4. Authentification EXACTE comme test-smtp
-      console.log("🔐 Authentification SMTP...");
+    // 3. STARTTLS si port 587
+    if (settings.smtp_port === 587 && settings.smtp_secure) {
+      console.log("🔒 STARTTLS...");
+      await conn.write(encoder.encode("STARTTLS\r\n"));
+      const starttls = await readResponse();
+      console.log(`📥 STARTTLS: ${starttls.trim()}`);
       
-      if (settings.smtp_auth_method === 'PLAIN') {
-        const authString = btoa(`\0${settings.smtp_username}\0${settings.smtp_password}`);
-        await conn.write(encoder.encode("AUTH PLAIN\r\n"));
-        const authPlainResponse = await readResponse();
-        console.log(`📥 AUTH PLAIN: ${authPlainResponse.trim()}`);
-        
-        await conn.write(encoder.encode(`${authString}\r\n`));
-        const authFinalResponse = await readResponse();
-        console.log(`📥 AUTH Final: ${authFinalResponse.trim()}`);
-        
-        if (!authFinalResponse.startsWith('235')) {
-          throw new Error(`Erreur authentification: ${authFinalResponse.trim()}`);
-        }
-      } else {
-        // LOGIN par défaut - EXACT comme test-smtp
-        await conn.write(encoder.encode("AUTH LOGIN\r\n"));
-        const authResponse = await readResponse();
-        console.log(`📥 AUTH LOGIN: ${authResponse.trim()}`);
-
-        if (!authResponse.startsWith('334')) {
-          throw new Error(`Erreur AUTH LOGIN: ${authResponse.trim()}`);
-        }
-
-        // Username
-        const usernameB64 = btoa(settings.smtp_username);
-        console.log(`🔑 Envoi username: ${settings.smtp_username}`);
-        await conn.write(encoder.encode(`${usernameB64}\r\n`));
-        const userResponse = await readResponse();
-        console.log(`📥 Username Response: ${userResponse.trim()}`);
-
-        if (!userResponse.startsWith('334')) {
-          throw new Error(`Erreur username: ${userResponse.trim()}`);
-        }
-
-        // Password
-        const passwordB64 = btoa(settings.smtp_password);
-        console.log(`🔑 Envoi password`);
-        await conn.write(encoder.encode(`${passwordB64}\r\n`));
-        const passResponse = await readResponse();
-        console.log(`📥 Password Response: ${passResponse.trim()}`);
-
-        if (!passResponse.startsWith('235')) {
-          throw new Error(`Erreur authentification: ${passResponse.trim()}`);
-        }
-      }
-
-      console.log("✅ Authentification réussie");
-
-      // 5. Envoi de l'email
-      const fromEmail = settings.smtp_username;
-      const fromName = settings.smtp_from_name || settings.company_name;
-
-      // MAIL FROM
-      await conn.write(encoder.encode(`MAIL FROM:<${fromEmail}>\r\n`));
-      const mailFromResponse = await readResponse();
-      console.log(`📥 MAIL FROM: ${mailFromResponse.trim()}`);
-
-      // RCPT TO
-      await conn.write(encoder.encode(`RCPT TO:<${emailData.clientEmail}>\r\n`));
-      const rcptToResponse = await readResponse();
-      console.log(`📥 RCPT TO: ${rcptToResponse.trim()}`);
-
-      // DATA
-      await conn.write(encoder.encode("DATA\r\n"));
-      const dataResponse = await readResponse();
-      console.log(`📥 DATA: ${dataResponse.trim()}`);
-
-      // Construction de l'email
-      const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36)}`;
-      
-      let emailMessage = `From: ${fromName} <${fromEmail}>\r\n`;
-      emailMessage += `To: ${emailData.clientEmail}\r\n`;
-      emailMessage += `Subject: ${subject}\r\n`;
-      emailMessage += `MIME-Version: 1.0\r\n`;
-      
-      if (emailData.pdfBase64) {
-        emailMessage += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
-        
-        // Partie HTML
-        emailMessage += `--${boundary}\r\n`;
-        emailMessage += `Content-Type: text/html; charset=utf-8\r\n`;
-        emailMessage += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-        emailMessage += htmlContent + '\r\n';
-        
-        // Partie PDF
-        emailMessage += `--${boundary}\r\n`;
-        emailMessage += `Content-Type: application/pdf\r\n`;
-        emailMessage += `Content-Transfer-Encoding: base64\r\n`;
-        emailMessage += `Content-Disposition: attachment; filename="devis.pdf"\r\n\r\n`;
-        emailMessage += emailData.pdfBase64 + '\r\n';
-        emailMessage += `--${boundary}--\r\n`;
-      } else {
-        emailMessage += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
-        emailMessage += htmlContent + '\r\n';
-      }
-
-      await conn.write(encoder.encode(emailMessage));
-
-      // Fin du message
-      await conn.write(encoder.encode(".\r\n"));
-      const endResponse = await readResponse();
-      console.log(`📥 End Response: ${endResponse.trim()}`);
-
-      // QUIT
-      await conn.write(encoder.encode("QUIT\r\n"));
-      const quitResponse = await readResponse();
-      console.log(`📥 QUIT: ${quitResponse.trim()}`);
-
-      console.log("✅ Email envoyé avec succès");
-      return { success: true, method: 'SMTP_UNIVERSAL' };
-
-    } catch (error) {
-      console.error("❌ Erreur lors des commandes SMTP:", error);
-      throw error;
-    } finally {
-      try {
+      if (starttls.startsWith('220')) {
+        const tlsConn = await Deno.startTls(conn, { hostname: settings.smtp_host });
         conn.close();
-      } catch (e) {
-        console.log("Connexion déjà fermée");
+        conn = tlsConn;
+        
+        // EHLO après TLS
+        await conn.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
+        const ehloTls = await readResponse();
+        console.log(`📥 EHLO TLS: ${ehloTls.trim()}`);
       }
     }
+
+    // 4. Authentification - EXACTEMENT comme test-smtp
+    console.log("🔐 Authentification...");
+    
+    await conn.write(encoder.encode("AUTH LOGIN\r\n"));
+    const authLogin = await readResponse();
+    console.log(`📥 AUTH LOGIN: ${authLogin.trim()}`);
+    if (!authLogin.startsWith('334')) {
+      throw new Error(`Erreur AUTH LOGIN: ${authLogin.trim()}`);
+    }
+
+    // Username
+    const usernameB64 = btoa(settings.smtp_username);
+    await conn.write(encoder.encode(`${usernameB64}\r\n`));
+    const userResp = await readResponse();
+    console.log(`📥 Username: ${userResp.trim()}`);
+    if (!userResp.startsWith('334')) {
+      throw new Error(`Erreur username: ${userResp.trim()}`);
+    }
+
+    // Password
+    const passwordB64 = btoa(settings.smtp_password);
+    await conn.write(encoder.encode(`${passwordB64}\r\n`));
+    const passResp = await readResponse();
+    console.log(`📥 Password: ${passResp.trim()}`);
+    if (!passResp.startsWith('235')) {
+      throw new Error(`Erreur password: ${passResp.trim()}`);
+    }
+
+    console.log("✅ Authentification réussie");
+
+    // 5. Envoi email
+    const fromEmail = settings.smtp_username;
+    
+    // MAIL FROM
+    await conn.write(encoder.encode(`MAIL FROM:<${fromEmail}>\r\n`));
+    const mailFrom = await readResponse();
+    console.log(`📥 MAIL FROM: ${mailFrom.trim()}`);
+    if (!mailFrom.startsWith('250')) {
+      throw new Error(`Erreur MAIL FROM: ${mailFrom.trim()}`);
+    }
+
+    // RCPT TO
+    await conn.write(encoder.encode(`RCPT TO:<${emailData.clientEmail}>\r\n`));
+    const rcptTo = await readResponse();
+    console.log(`📥 RCPT TO: ${rcptTo.trim()}`);
+    if (!rcptTo.startsWith('250')) {
+      throw new Error(`Erreur RCPT TO: ${rcptTo.trim()}`);
+    }
+
+    // DATA
+    await conn.write(encoder.encode("DATA\r\n"));
+    const dataResp = await readResponse();
+    console.log(`📥 DATA: ${dataResp.trim()}`);
+    if (!dataResp.startsWith('354')) {
+      throw new Error(`Erreur DATA: ${dataResp.trim()}`);
+    }
+
+    // Construction email
+    const fromName = settings.smtp_from_name || settings.company_name;
+    let emailContent = `From: ${fromName} <${fromEmail}>\r\n`;
+    emailContent += `To: ${emailData.clientEmail}\r\n`;
+    emailContent += `Subject: ${subject}\r\n`;
+    emailContent += `MIME-Version: 1.0\r\n`;
+    
+    if (emailData.pdfBase64) {
+      const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36)}`;
+      emailContent += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+      
+      // HTML
+      emailContent += `--${boundary}\r\n`;
+      emailContent += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
+      emailContent += htmlContent + '\r\n';
+      
+      // PDF
+      emailContent += `--${boundary}\r\n`;
+      emailContent += `Content-Type: application/pdf\r\n`;
+      emailContent += `Content-Transfer-Encoding: base64\r\n`;
+      emailContent += `Content-Disposition: attachment; filename="devis.pdf"\r\n\r\n`;
+      emailContent += emailData.pdfBase64 + '\r\n';
+      emailContent += `--${boundary}--\r\n`;
+    } else {
+      emailContent += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
+      emailContent += htmlContent + '\r\n';
+    }
+
+    // Envoyer le contenu
+    await conn.write(encoder.encode(emailContent));
+    await conn.write(encoder.encode(".\r\n"));
+    
+    const endResp = await readResponse();
+    console.log(`📥 END: ${endResp.trim()}`);
+    if (!endResp.startsWith('250')) {
+      throw new Error(`Erreur envoi: ${endResp.trim()}`);
+    }
+
+    // QUIT
+    await conn.write(encoder.encode("QUIT\r\n"));
+    const quitResp = await readResponse();
+    console.log(`📥 QUIT: ${quitResp.trim()}`);
+
+    conn.close();
+    console.log("✅ EMAIL ENVOYÉ AVEC SUCCÈS");
+    
+    return { success: true, method: 'SMTP_DIRECT' };
 
   } catch (error) {
-    console.error("❌ Erreur envoi email SMTP:", error);
-    
-    // Fallback: envoi sans PDF
-    if (emailData.pdfBase64) {
-      console.log("🔄 Tentative sans PDF...");
-      const emailDataWithoutPdf = { ...emailData };
-      delete emailDataWithoutPdf.pdfBase64;
-      return await sendEmailSMTP(emailDataWithoutPdf, settings);
-    }
-    
+    console.error("❌ Erreur SMTP:", error);
     throw error;
   }
 };
@@ -316,22 +277,22 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const emailData: QuoteEmailRequest = await req.json();
-    console.log(`📧 Traitement envoi email pour: ${emailData.clientEmail}`);
+    console.log(`📧 DEMANDE ENVOI EMAIL: ${emailData.clientEmail}`);
 
-    // Récupérer les paramètres de l'entreprise
+    // Récupérer settings
     const { data: settings, error: settingsError } = await supabase
       .from('company_settings')
       .select('*')
       .single();
 
     if (settingsError || !settings) {
-      console.error("❌ Erreur configuration:", settingsError);
-      throw new Error("Configuration d'entreprise non trouvée");
+      console.error("❌ Erreur settings:", settingsError);
+      throw new Error("Configuration manquante");
     }
 
-    console.log("✅ Configuration entreprise récupérée");
+    console.log("✅ Settings récupérés");
 
-    // Envoyer l'email
+    // Envoyer email
     const result = await sendEmailSMTP(emailData, settings);
 
     return new Response(JSON.stringify({
@@ -341,19 +302,16 @@ const handler = async (req: Request): Promise<Response> => {
       recipient: emailData.clientEmail
     }), {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        ...corsHeaders,
-      },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
 
   } catch (error: any) {
-    console.error("❌ Erreur dans send-quote-email:", error);
+    console.error("❌ ERREUR HANDLER:", error);
     
     return new Response(JSON.stringify({ 
       success: false,
       error: error.message,
-      message: 'Erreur lors de l\'envoi de l\'email'
+      message: 'Erreur envoi email'
     }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
