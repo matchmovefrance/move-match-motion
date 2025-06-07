@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -59,9 +60,11 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     setIsLoading(true);
     
     try {
-      // Préparer les données à envoyer à la fonction Supabase (sans PDF)
+      console.log('📧 Envoi email de devis à:', client.email);
+      
+      // Préparer les données pour l'edge function
       const emailData = {
-        clientName: client.name,
+        clientName: client.name || 'Client',
         clientEmail: client.email,
         quoteAmount: client.quote_amount,
         desiredDate: client.desired_date,
@@ -75,13 +78,22 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         estimatedVolume: client.estimated_volume
       };
 
-      // Appeler la fonction Supabase
+      console.log('📦 Données email:', emailData);
+
+      // Appel de l'edge function
       const { data, error } = await supabase.functions.invoke('send-quote-email', {
         body: emailData
       });
 
+      console.log('📨 Réponse edge function:', { data, error });
+
       if (error) {
+        console.error('❌ Erreur edge function:', error);
         throw error;
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erreur inconnue lors de l\'envoi');
       }
 
       toast({
@@ -89,11 +101,18 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         description: `Le devis a été envoyé avec succès à ${client.email}`,
       });
       setIsOpen(false);
+      
     } catch (error: any) {
-      console.error('Erreur lors de l\'envoi de l\'email:', error);
+      console.error('❌ Erreur lors de l\'envoi:', error);
+      
+      let errorMessage = "Impossible d'envoyer l'email";
+      if (error.message) {
+        errorMessage += `: ${error.message}`;
+      }
+      
       toast({
         title: "Erreur",
-        description: `Impossible d'envoyer l'email: ${error.message}`,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -123,6 +142,9 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
               <Mail className="h-5 w-5 text-blue-600" />
               <span>Envoyer le devis par email</span>
             </DialogTitle>
+            <DialogDescription>
+              Le devis sera envoyé directement en HTML dans l'email avec un design professionnel
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -130,8 +152,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="font-medium text-gray-600">De :</span>
-                  <p className="text-gray-800">MatchMove déménagements solutions</p>
-                  <p className="text-gray-600">noreply@matchmove.fr</p>
+                  <p className="text-gray-800">MatchMove</p>
                 </div>
                 <div>
                   <span className="font-medium text-gray-600">À :</span>
@@ -142,14 +163,20 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
               <div className="mt-3">
                 <span className="font-medium text-gray-600">Objet :</span>
                 <p className="text-gray-800">
-                  Votre devis de déménagement du {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                  Votre devis de déménagement - {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                </p>
+              </div>
+              <div className="mt-3">
+                <span className="font-medium text-gray-600">Montant :</span>
+                <p className="text-green-600 font-bold text-lg">
+                  {client.quote_amount?.toLocaleString('fr-FR')} € TTC
                 </p>
               </div>
             </div>
 
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="text-sm text-blue-800">
-                📧 Le devis sera envoyé directement dans l'email avec un design professionnel et toutes les informations nécessaires
+                ✨ Email professionnel avec design moderne et toutes les informations du déménagement
               </p>
             </div>
           </div>
