@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Building, Mail, Phone, MapPin, Settings, Server } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -15,7 +14,6 @@ interface CompanySettings {
   company_email: string;
   company_phone: string;
   company_address: string;
-  smtp_enabled: boolean;
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;
@@ -28,8 +26,7 @@ const CompanySettings = () => {
     company_email: 'contact@matchmove.fr',
     company_phone: '+33 1 23 45 67 89',
     company_address: 'France',
-    smtp_enabled: false,
-    smtp_host: '',
+    smtp_host: 'smtp.gmail.com',
     smtp_port: 587,
     smtp_username: '',
     smtp_password: ''
@@ -59,7 +56,17 @@ const CompanySettings = () => {
           throw error;
         }
       } else if (data) {
-        setSettings(data);
+        setSettings({
+          id: data.id,
+          company_name: data.company_name,
+          company_email: data.company_email,
+          company_phone: data.company_phone,
+          company_address: data.company_address,
+          smtp_host: data.smtp_host || 'smtp.gmail.com',
+          smtp_port: data.smtp_port || 587,
+          smtp_username: data.smtp_username || '',
+          smtp_password: data.smtp_password || ''
+        });
       }
     } catch (error: any) {
       console.error('Erreur lors du chargement des paramètres:', error);
@@ -77,9 +84,24 @@ const CompanySettings = () => {
     try {
       setSaving(true);
       
+      // Validation des champs SMTP requis
+      if (!settings.smtp_username || !settings.smtp_password) {
+        toast({
+          title: "Erreur",
+          description: "Veuillez remplir tous les champs SMTP obligatoires",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const settingsToSave = {
+        ...settings,
+        smtp_enabled: true // Toujours activé
+      };
+      
       const { data, error } = await supabase
         .from('company_settings')
-        .upsert(settings, {
+        .upsert(settingsToSave, {
           onConflict: 'id'
         })
         .select()
@@ -88,7 +110,17 @@ const CompanySettings = () => {
       if (error) throw error;
 
       if (data) {
-        setSettings(data);
+        setSettings({
+          id: data.id,
+          company_name: data.company_name,
+          company_email: data.company_email,
+          company_phone: data.company_phone,
+          company_address: data.company_address,
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
+          smtp_username: data.smtp_username,
+          smtp_password: data.smtp_password
+        });
       }
       
       toast({
@@ -107,7 +139,7 @@ const CompanySettings = () => {
     }
   };
 
-  const handleInputChange = (field: keyof CompanySettings, value: string | number | boolean) => {
+  const handleInputChange = (field: keyof CompanySettings, value: string | number) => {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
 
@@ -173,66 +205,67 @@ const CompanySettings = () => {
         <CardHeader>
           <CardTitle className="flex items-center text-purple-800">
             <Server className="h-5 w-5 mr-2" />
-            Configuration SMTP
+            Configuration SMTP (obligatoire)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="smtp_enabled"
-              checked={settings.smtp_enabled}
-              onCheckedChange={(checked) => handleInputChange('smtp_enabled', checked)}
-            />
-            <Label htmlFor="smtp_enabled">Activer l'envoi SMTP personnalisé</Label>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-blue-800">
+              <strong>Information :</strong> Tous les emails seront envoyés via SMTP. 
+              Veuillez configurer vos paramètres SMTP ci-dessous.
+            </p>
           </div>
 
-          {settings.smtp_enabled && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
-              <div>
-                <Label htmlFor="smtp_host">Serveur SMTP</Label>
-                <Input
-                  id="smtp_host"
-                  value={settings.smtp_host}
-                  onChange={(e) => handleInputChange('smtp_host', e.target.value)}
-                  placeholder="smtp.gmail.com"
-                />
-              </div>
-              <div>
-                <Label htmlFor="smtp_port">Port SMTP</Label>
-                <Input
-                  id="smtp_port"
-                  type="number"
-                  value={settings.smtp_port}
-                  onChange={(e) => handleInputChange('smtp_port', parseInt(e.target.value))}
-                  placeholder="587"
-                />
-              </div>
-              <div>
-                <Label htmlFor="smtp_username">Nom d'utilisateur SMTP</Label>
-                <Input
-                  id="smtp_username"
-                  value={settings.smtp_username}
-                  onChange={(e) => handleInputChange('smtp_username', e.target.value)}
-                  placeholder="votre-email@gmail.com"
-                />
-              </div>
-              <div>
-                <Label htmlFor="smtp_password">Mot de passe SMTP</Label>
-                <Input
-                  id="smtp_password"
-                  type="password"
-                  value={settings.smtp_password}
-                  onChange={(e) => handleInputChange('smtp_password', e.target.value)}
-                  placeholder="Mot de passe ou mot de passe d'application"
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="smtp_host">Serveur SMTP *</Label>
+              <Input
+                id="smtp_host"
+                value={settings.smtp_host}
+                onChange={(e) => handleInputChange('smtp_host', e.target.value)}
+                placeholder="smtp.gmail.com"
+                required
+              />
             </div>
-          )}
+            <div>
+              <Label htmlFor="smtp_port">Port SMTP *</Label>
+              <Input
+                id="smtp_port"
+                type="number"
+                value={settings.smtp_port}
+                onChange={(e) => handleInputChange('smtp_port', parseInt(e.target.value))}
+                placeholder="587"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="smtp_username">Nom d'utilisateur SMTP *</Label>
+              <Input
+                id="smtp_username"
+                value={settings.smtp_username}
+                onChange={(e) => handleInputChange('smtp_username', e.target.value)}
+                placeholder="votre-email@gmail.com"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="smtp_password">Mot de passe SMTP *</Label>
+              <Input
+                id="smtp_password"
+                type="password"
+                value={settings.smtp_password}
+                onChange={(e) => handleInputChange('smtp_password', e.target.value)}
+                placeholder="Mot de passe ou mot de passe d'application"
+                required
+              />
+            </div>
+          </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <strong>Note :</strong> Si le SMTP n'est pas activé, les emails seront envoyés via Resend. 
-              Si le SMTP est activé, les emails utiliseront votre configuration SMTP personnalisée.
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-sm text-yellow-800">
+              <strong>Conseil Gmail :</strong> Utilisez un "mot de passe d'application" plutôt que votre mot de passe principal. 
+              Activez l'authentification à 2 facteurs dans votre compte Gmail, puis générez un mot de passe d'application 
+              dans les paramètres de sécurité Google.
             </p>
           </div>
         </CardContent>
@@ -242,7 +275,7 @@ const CompanySettings = () => {
       <div className="flex justify-end">
         <Button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !settings.smtp_username || !settings.smtp_password}
           className="bg-green-600 hover:bg-green-700"
         >
           <Settings className="h-4 w-4 mr-2" />
