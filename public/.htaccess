@@ -1,0 +1,13 @@
+
+# Permettre l'accès au script PHP
+<Files "send-email.php">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# Configuration CORS pour PHP
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "POST, GET, OPTIONS, DELETE, PUT"
+    Header always set Access-Control-Allow-Headers "x-requested-with, Content-Type, origin, authorization, accept, client-security-token"
+</IfModule>

@@ -1,14 +1,11 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
-
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,78 +27,6 @@ interface QuoteEmailRequest {
   arrivalPostalCode?: string;
   arrivalCity?: string;
   estimatedVolume?: number;
-}
-
-interface CompanySettings {
-  company_name: string;
-  company_email: string;
-  company_phone: string;
-  company_address: string;
-  smtp_enabled: boolean;
-  smtp_host?: string;
-  smtp_port?: number;
-  smtp_username?: string;
-  smtp_password?: string;
-}
-
-// Fonction pour envoyer via SMTP personnalisé
-async function sendViaSMTP(
-  settings: CompanySettings,
-  to: string,
-  subject: string,
-  htmlContent: string,
-  pdfBuffer: Uint8Array,
-  fileName: string
-) {
-  // Configuration SMTP pour l'envoi direct
-  const smtpConfig = {
-    hostname: settings.smtp_host,
-    port: settings.smtp_port || 587,
-    username: settings.smtp_username,
-    password: settings.smtp_password,
-    from: `${settings.company_name} <${settings.smtp_username}>`,
-    to: to,
-    subject: subject,
-    html: htmlContent,
-    attachments: [
-      {
-        filename: fileName,
-        content: pdfBuffer,
-        contentType: 'application/pdf'
-      }
-    ]
-  };
-
-  console.log(`📧 Envoi SMTP via ${settings.smtp_host}:${settings.smtp_port}`);
-  
-  // Simulation d'envoi SMTP (Deno ne supporte pas encore nodemailer nativement)
-  // Pour une vraie implémentation SMTP, il faudrait utiliser une API externe
-  // ou créer un serveur PHP séparé pour cette fonction
-  
-  // Pour l'instant, on utilise une API SMTP externe comme EmailJS ou similaire
-  const smtpResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      service_id: 'your_service_id', // À configurer
-      template_id: 'your_template_id', // À configurer
-      user_id: 'your_user_id', // À configurer
-      template_params: {
-        to_email: to,
-        from_name: settings.company_name,
-        subject: subject,
-        message: htmlContent,
-      }
-    })
-  });
-
-  if (!smtpResponse.ok) {
-    throw new Error(`Erreur SMTP: ${smtpResponse.statusText}`);
-  }
-
-  return { success: true, method: 'SMTP' };
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -126,7 +51,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("❌ Erreur lors de la récupération des paramètres:", settingsError);
     }
 
-    const companySettings: CompanySettings = settings || {
+    const companySettings = settings || {
       company_name: 'MatchMove',
       company_email: 'contact@matchmove.fr',
       company_phone: '+33 1 23 45 67 89',
@@ -134,128 +59,44 @@ const handler = async (req: Request): Promise<Response> => {
       smtp_enabled: false
     };
 
-    const emailContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .header { background-color: #22c55e; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; }
-          .footer { background-color: #f8f9fa; padding: 15px; text-align: center; color: #666; }
-          .highlight { background-color: #f0fdf4; padding: 15px; border-left: 4px solid #22c55e; margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>${companySettings.company_name}</h1>
-          <p>Solutions de déménagement professionnelles</p>
-        </div>
-        
-        <div class="content">
-          <p>Bonjour ${clientName || 'Madame, Monsieur'},</p>
-          
-          <p>Nous avons le plaisir de vous transmettre votre devis personnalisé pour votre projet de déménagement.</p>
-          
-          <div class="highlight">
-            <h3>📋 DÉTAILS DE VOTRE DEMANDE :</h3>
-            <ul>
-              <li><strong>Date souhaitée :</strong> ${new Date(desiredDate).toLocaleDateString('fr-FR')}</li>
-              <li><strong>Montant du devis :</strong> ${quoteAmount.toFixed(2).replace('.', ',')} € TTC</li>
-            </ul>
-          </div>
-          
-          <p>📎 Vous trouverez en pièce jointe votre devis détaillé au format PDF.</p>
-          
-          <div class="highlight">
-            <h3>✅ POURQUOI CHOISIR ${companySettings.company_name.toUpperCase()} ?</h3>
-            <ul>
-              <li>Solutions de déménagement professionnelles et personnalisées</li>
-              <li>Équipe expérimentée et matériel de qualité</li>
-              <li>Assurance tous risques incluse</li>
-              <li>Devis transparent sans surprise</li>
-              <li>Service client disponible 6j/7</li>
-            </ul>
-          </div>
-          
-          <p>Ce devis est valable 30 jours à compter de sa date d'émission. Pour toute question ou pour confirmer votre réservation, n'hésitez pas à nous contacter.</p>
-          
-          <p>Nous restons à votre disposition pour vous accompagner dans votre projet de déménagement.</p>
-          
-          <p>Cordialement,<br>L'équipe ${companySettings.company_name}</p>
-          
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            <p><strong>📞 Téléphone :</strong> ${companySettings.company_phone}<br>
-            <strong>📧 Email :</strong> ${companySettings.company_email}<br>
-            <strong>📍 Adresse :</strong> ${companySettings.company_address}</p>
-          </div>
-        </div>
-        
-        <div class="footer">
-          <p>${companySettings.company_name} - Solutions de déménagement professionnelles<br>
-          Votre satisfaction, notre priorité.</p>
-        </div>
-      </body>
-      </html>
-    `;
+    // Préparer les données pour le script PHP
+    const phpData = {
+      clientName,
+      clientEmail,
+      quoteAmount,
+      desiredDate,
+      pdfBase64,
+      companySettings
+    };
 
-    // Convertir le base64 en buffer pour l'attachement
-    const pdfBuffer = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
-    const fileName = `devis_${clientName?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    // URL de votre script PHP (à adapter selon votre domaine)
+    const phpScriptUrl = `${Deno.env.get("SUPABASE_URL")?.replace('supabase.co', 'lovable.app') || 'http://localhost:3000'}/send-email.php`;
+    
+    console.log(`📤 Envoi vers script PHP: ${phpScriptUrl}`);
 
-    let emailResponse;
+    // Appeler le script PHP
+    const phpResponse = await fetch(phpScriptUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(phpData)
+    });
 
-    // Choisir la méthode d'envoi selon la configuration
-    if (companySettings.smtp_enabled && companySettings.smtp_host) {
-      console.log("🔧 Utilisation du SMTP personnalisé configuré");
-      
-      try {
-        emailResponse = await sendViaSMTP(
-          companySettings,
-          clientEmail,
-          `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
-          emailContent,
-          pdfBuffer,
-          fileName
-        );
-      } catch (smtpError) {
-        console.error("❌ Erreur SMTP, basculement vers Resend:", smtpError);
-        
-        // Fallback vers Resend en cas d'erreur SMTP
-        emailResponse = await resend.emails.send({
-          from: `${companySettings.company_name} déménagements <noreply@matchmove.fr>`,
-          to: [clientEmail],
-          subject: `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
-          html: emailContent,
-          attachments: [
-            {
-              filename: fileName,
-              content: pdfBuffer,
-            },
-          ],
-        });
-      }
-    } else {
-      console.log("📨 Utilisation de Resend (SMTP non configuré)");
-      
-      emailResponse = await resend.emails.send({
-        from: `${companySettings.company_name} déménagements <noreply@matchmove.fr>`,
-        to: [clientEmail],
-        subject: `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
-        html: emailContent,
-        attachments: [
-          {
-            filename: fileName,
-            content: pdfBuffer,
-          },
-        ],
-      });
+    if (!phpResponse.ok) {
+      const errorText = await phpResponse.text();
+      throw new Error(`Erreur PHP: ${phpResponse.status} - ${errorText}`);
     }
 
-    console.log("✅ Email de devis envoyé avec succès:", emailResponse);
+    const result = await phpResponse.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Erreur inconnue du script PHP');
+    }
 
-    return new Response(JSON.stringify(emailResponse), {
+    console.log("✅ Email envoyé avec succès via PHP:", result);
+
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
