@@ -45,23 +45,18 @@ const CompanySettings = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      // Utiliser une requête SQL brute pour éviter les problèmes de types TypeScript
+      
       const { data, error } = await supabase
-        .rpc('get_company_settings') as any;
+        .from('company_settings')
+        .select('*')
+        .limit(1)
+        .single();
 
-      if (error && error.code !== 'PGRST116') {
-        // Si la fonction n'existe pas, on fait une requête directe
-        const { data: directData, error: directError } = await supabase
-          .from('company_settings' as any)
-          .select('*')
-          .single();
-          
-        if (directError && directError.code !== 'PGRST116') {
-          throw directError;
-        }
-        
-        if (directData) {
-          setSettings(directData);
+      if (error) {
+        console.log('Erreur lors du chargement des paramètres:', error);
+        // Si aucun paramètre n'existe, on garde les valeurs par défaut
+        if (error.code !== 'PGRST116') {
+          throw error;
         }
       } else if (data) {
         setSettings(data);
@@ -82,16 +77,20 @@ const CompanySettings = () => {
     try {
       setSaving(true);
       
-      // Utiliser une requête SQL brute pour l'upsert
       const { data, error } = await supabase
-        .from('company_settings' as any)
-        .upsert(settings)
+        .from('company_settings')
+        .upsert(settings, {
+          onConflict: 'id'
+        })
         .select()
         .single();
 
       if (error) throw error;
 
-      setSettings(data);
+      if (data) {
+        setSettings(data);
+      }
+      
       toast({
         title: "Paramètres sauvegardés",
         description: "Les paramètres de l'entreprise ont été mis à jour avec succès",

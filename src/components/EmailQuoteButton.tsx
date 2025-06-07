@@ -33,6 +33,13 @@ interface EmailQuoteButtonProps {
   client: ClientRequest;
 }
 
+interface CompanySettingsData {
+  company_name: string;
+  company_email: string;
+  company_phone: string;
+  company_address: string;
+}
+
 const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,17 +47,26 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
 
   const generatePDFBase64 = async (): Promise<string> => {
     // Récupérer les paramètres de l'entreprise depuis la base de données
-    const { data: companySettings } = await supabase
-      .from('company_settings' as any)
-      .select('*')
-      .single();
-
-    const settings = companySettings || {
+    let settings: CompanySettingsData = {
       company_name: 'MatchMove',
       company_email: 'contact@matchmove.fr',
       company_phone: '+33 1 23 45 67 89',
       company_address: 'France'
     };
+
+    try {
+      const { data: companySettings, error } = await supabase
+        .from('company_settings')
+        .select('company_name, company_email, company_phone, company_address')
+        .limit(1)
+        .single();
+
+      if (!error && companySettings) {
+        settings = companySettings;
+      }
+    } catch (error) {
+      console.log('Utilisation des paramètres par défaut:', error);
+    }
 
     const doc = new jsPDF();
     
