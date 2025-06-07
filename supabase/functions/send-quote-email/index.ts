@@ -95,151 +95,138 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any,
 </html>`;
 
   try {
-    // Créer le boundary pour multipart
-    const boundary = `----boundary${Date.now()}`;
+    // Version simplifiée sans pièce jointe d'abord
+    console.log("📤 Envoi de l'email simplifié...");
     
-    // Créer le corps de l'email avec multipart/mixed pour inclure la pièce jointe
-    const emailBody = [
-      `--${boundary}`,
-      'Content-Type: text/html; charset=utf-8',
-      'Content-Transfer-Encoding: quoted-printable',
-      '',
-      htmlContent,
-      '',
-      `--${boundary}`,
-      'Content-Type: application/pdf',
-      'Content-Transfer-Encoding: base64',
-      `Content-Disposition: attachment; filename="devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf"`,
-      '',
-      pdfBase64,
-      '',
-      `--${boundary}--`
-    ].join('\r\n');
+    // Connexion au serveur SMTP
+    let conn;
+    try {
+      conn = await Deno.connect({
+        hostname: companySettings.smtp_host,
+        port: companySettings.smtp_port,
+      });
+      console.log("✅ Connexion TCP établie");
+    } catch (error) {
+      console.error("❌ Erreur connexion TCP:", error);
+      throw new Error(`Impossible de se connecter au serveur SMTP: ${error.message}`);
+    }
 
-    const smtpMessage = [
-      `EHLO ${companySettings.smtp_host}`,
-      `AUTH LOGIN`,
-      btoa(companySettings.smtp_username),
-      btoa(companySettings.smtp_password),
-      `MAIL FROM:<${companySettings.smtp_username}>`,
-      `RCPT TO:<${emailData.clientEmail}>`,
-      'DATA',
-      `From: ${companySettings.company_name} <${companySettings.smtp_username}>`,
-      `To: ${emailData.clientEmail}`,
-      `Subject: =?UTF-8?B?${btoa(`Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`)}?=`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
-      '',
-      emailBody,
-      '.',
-      'QUIT'
-    ].join('\r\n');
-
-    console.log("📤 Connexion au serveur SMTP...");
-
-    // Établir la connexion TCP avec le serveur SMTP
-    const conn = await Deno.connect({
-      hostname: companySettings.smtp_host,
-      port: companySettings.smtp_port,
-    });
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
 
     try {
-      // Démarrer TLS si nécessaire
-      if (companySettings.smtp_port === 587 || companySettings.smtp_port === 465) {
+      // Pour Gmail et autres serveurs sécurisés, utiliser STARTTLS
+      if (companySettings.smtp_port === 587) {
+        console.log("🔒 Démarrage TLS...");
         const tlsConn = await Deno.startTls(conn, {
           hostname: companySettings.smtp_host,
         });
         
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
+        // Message SMTP simple
+        const subject = `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
+        const subjectBase64 = btoa(unescape(encodeURIComponent(subject)));
         
-        await tlsConn.write(encoder.encode(smtpMessage));
+        const emailMessage = [
+          `EHLO ${companySettings.smtp_host}`,
+          `AUTH LOGIN`,
+          btoa(companySettings.smtp_username),
+          btoa(companySettings.smtp_password),
+          `MAIL FROM:<${companySettings.smtp_username}>`,
+          `RCPT TO:<${emailData.clientEmail}>`,
+          `DATA`,
+          `From: ${companySettings.company_name} <${companySettings.smtp_username}>`,
+          `To: ${emailData.clientEmail}`,
+          `Subject: =?UTF-8?B?${subjectBase64}?=`,
+          `MIME-Version: 1.0`,
+          `Content-Type: text/html; charset=utf-8`,
+          `Content-Transfer-Encoding: quoted-printable`,
+          ``,
+          htmlContent,
+          `.`,
+          `QUIT`
+        ].join('\r\n');
+
+        await tlsConn.write(encoder.encode(emailMessage));
         
-        const buffer = new Uint8Array(1024);
+        // Lire la réponse
+        const buffer = new Uint8Array(4096);
         const bytesRead = await tlsConn.read(buffer);
         const response = decoder.decode(buffer.subarray(0, bytesRead || 0));
         
         console.log("📧 Réponse SMTP:", response);
         
         tlsConn.close();
+        
+        if (response.includes('250')) {
+          console.log("✅ Email envoyé avec succès");
+          return {
+            success: true,
+            message: 'Email envoyé via SMTP avec succès'
+          };
+        } else {
+          throw new Error(`Réponse SMTP inattendue: ${response}`);
+        }
+        
       } else {
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
+        // Pour les connexions non-TLS
+        const subject = `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
+        const subjectBase64 = btoa(unescape(encodeURIComponent(subject)));
         
-        await conn.write(encoder.encode(smtpMessage));
+        const emailMessage = [
+          `EHLO ${companySettings.smtp_host}`,
+          `AUTH LOGIN`,
+          btoa(companySettings.smtp_username),
+          btoa(companySettings.smtp_password),
+          `MAIL FROM:<${companySettings.smtp_username}>`,
+          `RCPT TO:<${emailData.clientEmail}>`,
+          `DATA`,
+          `From: ${companySettings.company_name} <${companySettings.smtp_username}>`,
+          `To: ${emailData.clientEmail}`,
+          `Subject: =?UTF-8?B?${subjectBase64}?=`,
+          `MIME-Version: 1.0`,
+          `Content-Type: text/html; charset=utf-8`,
+          ``,
+          htmlContent,
+          `.`,
+          `QUIT`
+        ].join('\r\n');
+
+        await conn.write(encoder.encode(emailMessage));
         
-        const buffer = new Uint8Array(1024);
+        const buffer = new Uint8Array(4096);
         const bytesRead = await conn.read(buffer);
         const response = decoder.decode(buffer.subarray(0, bytesRead || 0));
         
         console.log("📧 Réponse SMTP:", response);
+        
+        conn.close();
+        
+        if (response.includes('250')) {
+          console.log("✅ Email envoyé avec succès");
+          return {
+            success: true,
+            message: 'Email envoyé via SMTP avec succès'
+          };
+        } else {
+          throw new Error(`Réponse SMTP inattendue: ${response}`);
+        }
       }
-    } finally {
-      conn.close();
+      
+    } catch (error) {
+      console.error("❌ Erreur lors de l'envoi:", error);
+      if (conn) {
+        try {
+          conn.close();
+        } catch (closeError) {
+          console.log("Erreur lors de la fermeture:", closeError);
+        }
+      }
+      throw error;
     }
-
-    console.log("✅ Email envoyé via SMTP avec succès");
-
-    return {
-      success: true,
-      message: 'Email envoyé via SMTP'
-    };
 
   } catch (error) {
-    console.error("❌ Erreur SMTP:", error);
-    
-    // Fallback : envoyer sans pièce jointe si erreur
-    try {
-      console.log("🔄 Tentative d'envoi sans pièce jointe...");
-      
-      const simpleConn = await Deno.connect({
-        hostname: companySettings.smtp_host,
-        port: companySettings.smtp_port,
-      });
-
-      const simpleMessage = [
-        `EHLO ${companySettings.smtp_host}`,
-        `AUTH LOGIN`,
-        btoa(companySettings.smtp_username),
-        btoa(companySettings.smtp_password),
-        `MAIL FROM:<${companySettings.smtp_username}>`,
-        `RCPT TO:<${emailData.clientEmail}>`,
-        'DATA',
-        `From: ${companySettings.company_name} <${companySettings.smtp_username}>`,
-        `To: ${emailData.clientEmail}`,
-        `Subject: =?UTF-8?B?${btoa(`Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`)}?=`,
-        `Content-Type: text/html; charset=utf-8`,
-        '',
-        htmlContent,
-        '.',
-        'QUIT'
-      ].join('\r\n');
-
-      if (companySettings.smtp_port === 587 || companySettings.smtp_port === 465) {
-        const tlsConn = await Deno.startTls(simpleConn, {
-          hostname: companySettings.smtp_host,
-        });
-        
-        const encoder = new TextEncoder();
-        await tlsConn.write(encoder.encode(simpleMessage));
-        tlsConn.close();
-      } else {
-        const encoder = new TextEncoder();
-        await simpleConn.write(encoder.encode(simpleMessage));
-        simpleConn.close();
-      }
-
-      console.log("✅ Email envoyé sans pièce jointe");
-      
-      return {
-        success: true,
-        message: 'Email envoyé sans pièce jointe (problème avec la pièce jointe PDF)'
-      };
-      
-    } catch (fallbackError) {
-      console.error("❌ Erreur fallback:", fallbackError);
-      throw new Error(`Erreur envoi email SMTP: ${error.message}`);
-    }
+    console.error("❌ Erreur SMTP complète:", error);
+    throw new Error(`Erreur envoi email SMTP: ${error.message}`);
   }
 };
 
@@ -284,7 +271,7 @@ Montant: ${emailData.quoteAmount}€`;
       pdfBase64 = btoa(pdfContent);
     }
 
-    // Envoyer l'email via SMTP uniquement
+    // Envoyer l'email via SMTP
     const result = await sendEmailSMTP(emailData, settings, pdfBase64);
 
     console.log("✅ Email envoyé avec succès");
