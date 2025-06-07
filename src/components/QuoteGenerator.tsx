@@ -1,7 +1,7 @@
-
 import jsPDF from 'jspdf';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ClientRequest {
   id: number;
@@ -27,57 +27,38 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
   const generatePDF = async () => {
+    // Récupérer les paramètres de l'entreprise depuis la base de données
+    const { data: companySettings } = await supabase
+      .from('company_settings')
+      .select('*')
+      .single();
+
+    const settings = companySettings || {
+      company_name: 'MatchMove',
+      company_email: 'contact@matchmove.fr',
+      company_phone: '+33 1 23 45 67 89',
+      company_address: 'France'
+    };
+
     const doc = new jsPDF();
     
     // Couleurs vertes
     const primaryColor = '#22c55e'; // vert
     const secondaryColor = '#64748b'; // gris
     
-    // Charger le logo
-    try {
-      const logoUrl = 'https://matchmove.fr/wp-content/uploads/2024/02/Logo-Matchmove-e1709213815530.png';
-      const logoImg = new Image();
-      logoImg.crossOrigin = 'anonymous';
-      
-      await new Promise((resolve, reject) => {
-        logoImg.onload = resolve;
-        logoImg.onerror = reject;
-        logoImg.src = logoUrl;
-      });
-      
-      // En-tête avec fond vert
-      doc.setFillColor(34, 197, 94); // vert
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      // Ajouter le logo
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = logoImg.width;
-      canvas.height = logoImg.height;
-      ctx?.drawImage(logoImg, 0, 0);
-      const logoDataUrl = canvas.toDataURL('image/png');
-      
-      doc.addImage(logoDataUrl, 'PNG', 20, 8, 50, 25);
-      
-      // Texte de l'en-tête
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Solutions de déménagement', 80, 25);
-    } catch (error) {
-      // En cas d'erreur de chargement du logo, utiliser uniquement le texte
-      doc.setFillColor(34, 197, 94); // vert
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('MatchMove', 20, 25);
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Solutions de déménagement', 20, 32);
-    }
+    // En-tête avec fond vert
+    doc.setFillColor(34, 197, 94); // vert
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    // Titre de l'entreprise
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text(settings.company_name, 20, 25);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Solutions de déménagement', 20, 32);
     
     // Titre du document
     doc.setTextColor(0, 0, 0);
@@ -85,28 +66,31 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     doc.setFont('helvetica', 'bold');
     doc.text('DEVIS DE DÉMÉNAGEMENT', 20, 60);
     
-    // Informations de la société
+    // Informations de la société (mise à jour avec les paramètres)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text('MatchMove SAS', 140, 60);
-    doc.text('Email: contact@matchmove.fr', 140, 67);
-    doc.text('Téléphone: +33 1 23 45 67 89', 140, 74);
+    doc.text(settings.company_name, 140, 60);
+    doc.text(`Email: ${settings.company_email}`, 140, 67);
+    doc.text(`Téléphone: ${settings.company_phone}`, 140, 74);
+    if (settings.company_address) {
+      doc.text(`Adresse: ${settings.company_address}`, 140, 81);
+    }
     
     // Ligne de séparation
     doc.setDrawColor(200, 200, 200);
-    doc.line(20, 85, 190, 85);
+    doc.line(20, 90, 190, 90);
     
     // Informations client
     doc.setTextColor(34, 197, 94);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('INFORMATIONS CLIENT', 20, 100);
+    doc.text('INFORMATIONS CLIENT', 20, 105);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    let yPos = 110;
+    let yPos = 115;
     
     if (client.name) {
       doc.text(`Nom: ${client.name}`, 20, yPos);
@@ -191,7 +175,7 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
     doc.text(`Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, 20, 280);
-    doc.text('MatchMove - Solutions de déménagement professionnelles', 20, 285);
+    doc.text(`${settings.company_name} - Solutions de déménagement professionnelles`, 20, 285);
     
     // Télécharger le PDF
     const fileName = `devis_${client.name?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;

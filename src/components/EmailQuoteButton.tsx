@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Mail, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import jsPDF from 'jspdf';
 
 interface ClientRequest {
@@ -37,31 +39,34 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
   const { toast } = useToast();
 
   const generatePDFBase64 = async (): Promise<string> => {
+    // Récupérer les paramètres de l'entreprise depuis la base de données
+    const { data: companySettings } = await supabase
+      .from('company_settings')
+      .select('*')
+      .single();
+
+    const settings = companySettings || {
+      company_name: 'MatchMove',
+      company_email: 'contact@matchmove.fr',
+      company_phone: '+33 1 23 45 67 89',
+      company_address: 'France'
+    };
+
     const doc = new jsPDF();
-    
-    // Couleurs vertes
-    const primaryColor = '#22c55e';
-    const secondaryColor = '#64748b';
     
     // En-tête avec fond vert
     doc.setFillColor(34, 197, 94);
     doc.rect(0, 0, 210, 40, 'F');
     
-    // Logo en base64
-    try {
-      const logoBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAYAAADDhn8LAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABNYSURBVHhe7Z0JmBTVtccPCCKyiEvUIAoqKipqFEVFxSVGTVzixhITl5jEJZpnTNSYmLjEJ5pnTNSYuD1jjEtc4hKXuMclLnGJW1ziEpe4xCVuUVFRUVFRQRBE4P3PrXM79dXtnu6Z7p6Z6f6/7/u+6eqqW3XrnFu3zq1bt6rEYDBYjYgYDIYoRMRgMEQhIgaDIQoRMYPBYIhCRMxgMEQhIgaDIQoRMYPBEIWImMFgiEJEzGAwRCEiZjAYohARMxgMUYiIGQyGKETEDAZDFCJiBkMUImIGgyEKETGDwRCFiJjBYIhCRMxgMEQhIgaDIQoRMYPBEIWImMFgiEJEzGAwRCEiZjAYohARMxgMUYiIGQyGKETEDAZDFCJiBsM/yRkRERERERFJOyJiIiIikhGJiEhEREKJiBhERERERERERERE0tKv2r5+XQNBAAAABJRU5ErkJggg==";
-      doc.addImage(logoBase64, 'PNG', 20, 8, 50, 25);
-    } catch (error) {
-      console.error("Erreur de chargement du logo:", error);
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('MatchMove', 20, 25);
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Solutions de déménagement', 20, 32);
-    }
+    // Titre de l'entreprise
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text(settings.company_name, 20, 25);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Solutions de déménagement', 20, 32);
     
     // Titre du document
     doc.setTextColor(0, 0, 0);
@@ -69,28 +74,31 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     doc.setFont('helvetica', 'bold');
     doc.text('DEVIS DE DÉMÉNAGEMENT', 20, 60);
     
-    // Informations de la société
+    // Informations de la société (mise à jour avec les paramètres)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text('MatchMove SAS', 140, 60);
-    doc.text('Email: contact@matchmove.fr', 140, 67);
-    doc.text('Téléphone: +33 1 23 45 67 89', 140, 74);
+    doc.text(settings.company_name, 140, 60);
+    doc.text(`Email: ${settings.company_email}`, 140, 67);
+    doc.text(`Téléphone: ${settings.company_phone}`, 140, 74);
+    if (settings.company_address) {
+      doc.text(`Adresse: ${settings.company_address}`, 140, 81);
+    }
     
     // Ligne de séparation
     doc.setDrawColor(200, 200, 200);
-    doc.line(20, 85, 190, 85);
+    doc.line(20, 90, 190, 90);
     
     // Informations client
     doc.setTextColor(34, 197, 94);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('INFORMATIONS CLIENT', 20, 100);
+    doc.text('INFORMATIONS CLIENT', 20, 105);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    let yPos = 110;
+    let yPos = 115;
     
     if (client.name) {
       doc.text(`Nom: ${client.name}`, 20, yPos);
@@ -175,7 +183,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
     doc.text(`Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, 20, 280);
-    doc.text('MatchMove - Solutions de déménagement professionnelles', 20, 285);
+    doc.text(`${settings.company_name} - Solutions de déménagement professionnelles`, 20, 285);
     
     // Retourner le PDF en base64
     return doc.output('datauristring').split(',')[1];
@@ -206,7 +214,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
       // Générer le PDF en base64
       const pdfBase64 = await generatePDFBase64();
       
-      // Préparer les données à envoyer à votre endpoint PHP
+      // Préparer les données à envoyer à la fonction Supabase
       const emailData = {
         clientName: client.name,
         clientEmail: client.email,
@@ -223,30 +231,20 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         estimatedVolume: client.estimated_volume
       };
 
-      // Appeler votre endpoint PHP (remplacez par votre URL)
-      const response = await fetch('https://votre-serveur.com/send-quote.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(emailData)
+      // Appeler la fonction Supabase
+      const { data, error } = await supabase.functions.invoke('send-quote-email', {
+        body: emailData
       });
 
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+      if (error) {
+        throw error;
       }
 
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: "Email envoyé",
-          description: `Le devis a été envoyé avec succès à ${client.email}`,
-        });
-        setIsOpen(false);
-      } else {
-        throw new Error(result.error || 'Erreur inconnue');
-      }
+      toast({
+        title: "Email envoyé",
+        description: `Le devis a été envoyé avec succès à ${client.email}`,
+      });
+      setIsOpen(false);
     } catch (error: any) {
       console.error('Erreur lors de l\'envoi de l\'email:', error);
       toast({
@@ -258,38 +256,6 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
       setIsLoading(false);
     }
   };
-
-  const emailContent = `Bonjour ${client.name || 'Madame, Monsieur'},
-
-Nous avons le plaisir de vous transmettre votre devis personnalisé pour votre projet de déménagement.
-
-📋 DÉTAILS DE VOTRE DEMANDE :
-• Date souhaitée : ${new Date(client.desired_date).toLocaleDateString('fr-FR')}
-• Montant du devis : ${client.quote_amount?.toFixed(2).replace('.', ',')} € TTC
-
-📎 Vous trouverez en pièce jointe votre devis détaillé au format PDF.
-
-✅ POURQUOI CHOISIR MATCHMOVE ?
-• Solutions de déménagement professionnelles et personnalisées
-• Équipe expérimentée et matériel de qualité
-• Assurance tous risques incluse
-• Devis transparent sans surprise
-• Service client disponible 6j/7
-
-Ce devis est valable 30 jours à compter de sa date d'émission. Pour toute question ou pour confirmer votre réservation, n'hésitez pas à nous contacter.
-
-Nous restons à votre disposition pour vous accompagner dans votre projet de déménagement.
-
-Cordialement,
-L'équipe MatchMove
-
-📞 Téléphone : +33 1 23 45 67 89
-📧 Email : contact@matchmove.fr
-🌐 Site web : www.matchmove.fr
-
----
-MatchMove SAS - Solutions de déménagement professionnelles
-Votre satisfaction, notre priorité.`;
 
   return (
     <>
@@ -321,7 +287,7 @@ Votre satisfaction, notre priorité.`;
                 <div>
                   <span className="font-medium text-gray-600">De :</span>
                   <p className="text-gray-800">MatchMove déménagements solutions</p>
-                  <p className="text-gray-600">contact@matchmove.fr</p>
+                  <p className="text-gray-600">noreply@matchmove.fr</p>
                 </div>
                 <div>
                   <span className="font-medium text-gray-600">À :</span>
@@ -340,13 +306,6 @@ Votre satisfaction, notre priorité.`;
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="text-sm text-blue-800">
                 📎 Le devis PDF sera automatiquement joint à cet email avec un message professionnel personnalisé
-              </p>
-            </div>
-
-            <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-              <p className="text-sm text-yellow-800">
-                ⚠️ <strong>Configuration requise :</strong> Assurez-vous que votre endpoint PHP est configuré à l'adresse : 
-                <code className="bg-yellow-100 px-1 rounded">https://votre-serveur.com/send-quote.php</code>
               </p>
             </div>
           </div>

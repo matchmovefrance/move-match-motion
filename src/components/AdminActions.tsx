@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RotateCcw, AlertTriangle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RotateCcw, AlertTriangle, Building } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import CompanySettings from './CompanySettings';
 
 const AdminActions = () => {
   const [loading, setLoading] = useState(false);
@@ -52,32 +54,53 @@ const AdminActions = () => {
   };
 
   return (
-    <Card className="border-orange-200">
-      <CardHeader>
-        <CardTitle className="flex items-center text-orange-800">
-          <AlertTriangle className="h-5 w-5 mr-2" />
-          Actions d'administration
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <h4 className="font-medium text-orange-800 mb-2">Remise à zéro des compteurs</h4>
-          <p className="text-sm text-orange-700 mb-4">
-            Cette action supprimera tous les matches et remettra les compteurs du tableau de bord à zéro.
-            Cette action est irréversible.
-          </p>
-          <Button
-            onClick={resetMatchCounters}
-            disabled={loading}
-            variant="outline"
-            className="border-orange-300 text-orange-700 hover:bg-orange-100"
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            {loading ? 'Remise à zéro...' : 'Remettre à zéro les compteurs'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <Tabs defaultValue="counters" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="counters" className="flex items-center space-x-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span>Actions système</span>
+          </TabsTrigger>
+          <TabsTrigger value="company" className="flex items-center space-x-2">
+            <Building className="h-4 w-4" />
+            <span>Paramètres entreprise</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="counters" className="space-y-4">
+          <Card className="border-orange-200">
+            <CardHeader>
+              <CardTitle className="flex items-center text-orange-800">
+                <AlertTriangle className="h-5 w-5 mr-2" />
+                Actions d'administration
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <h4 className="font-medium text-orange-800 mb-2">Remise à zéro des compteurs</h4>
+                <p className="text-sm text-orange-700 mb-4">
+                  Cette action supprimera tous les matches et remettra les compteurs du tableau de bord à zéro.
+                  Cette action est irréversible.
+                </p>
+                <Button
+                  onClick={resetMatchCounters}
+                  disabled={loading}
+                  variant="outline"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  {loading ? 'Remise à zéro...' : 'Remettre à zéro les compteurs'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="company" className="space-y-4">
+          <CompanySettings />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 };
 

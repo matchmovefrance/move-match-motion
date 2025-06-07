@@ -1,6 +1,12 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+);
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -16,6 +22,26 @@ interface QuoteEmailRequest {
   quoteAmount: number;
   desiredDate: string;
   pdfBase64: string;
+  clientPhone?: string;
+  departureAddress?: string;
+  departurePostalCode?: string;
+  departureCity?: string;
+  arrivalAddress?: string;
+  arrivalPostalCode?: string;
+  arrivalCity?: string;
+  estimatedVolume?: number;
+}
+
+interface CompanySettings {
+  company_name: string;
+  company_email: string;
+  company_phone: string;
+  company_address: string;
+  smtp_enabled: boolean;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_username?: string;
+  smtp_password?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -25,9 +51,29 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { clientName, clientEmail, quoteAmount, desiredDate, pdfBase64 }: QuoteEmailRequest = await req.json();
+    const emailData: QuoteEmailRequest = await req.json();
+    const { clientName, clientEmail, quoteAmount, desiredDate, pdfBase64 } = emailData;
 
     console.log(`Envoi d'email de devis pour: ${clientEmail}`);
+
+    // Récupérer les paramètres de l'entreprise
+    const { data: settings, error: settingsError } = await supabase
+      .from('company_settings')
+      .select('*')
+      .single();
+
+    if (settingsError) {
+      console.error("Erreur lors de la récupération des paramètres:", settingsError);
+      // Utiliser des valeurs par défaut
+    }
+
+    const companySettings: CompanySettings = settings || {
+      company_name: 'MatchMove',
+      company_email: 'contact@matchmove.fr',
+      company_phone: '+33 1 23 45 67 89',
+      company_address: 'France',
+      smtp_enabled: false
+    };
 
     const emailContent = `
       <!DOCTYPE html>
@@ -44,7 +90,7 @@ const handler = async (req: Request): Promise<Response> => {
       </head>
       <body>
         <div class="header">
-          <h1>MatchMove</h1>
+          <h1>${companySettings.company_name}</h1>
           <p>Solutions de déménagement professionnelles</p>
         </div>
         
@@ -64,7 +110,7 @@ const handler = async (req: Request): Promise<Response> => {
           <p>📎 Vous trouverez en pièce jointe votre devis détaillé au format PDF.</p>
           
           <div class="highlight">
-            <h3>✅ POURQUOI CHOISIR MATCHMOVE ?</h3>
+            <h3>✅ POURQUOI CHOISIR ${companySettings.company_name.toUpperCase()} ?</h3>
             <ul>
               <li>Solutions de déménagement professionnelles et personnalisées</li>
               <li>Équipe expérimentée et matériel de qualité</li>
@@ -78,17 +124,17 @@ const handler = async (req: Request): Promise<Response> => {
           
           <p>Nous restons à votre disposition pour vous accompagner dans votre projet de déménagement.</p>
           
-          <p>Cordialement,<br>L'équipe MatchMove</p>
+          <p>Cordialement,<br>L'équipe ${companySettings.company_name}</p>
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            <p><strong>📞 Téléphone :</strong> +33 1 23 45 67 89<br>
-            <strong>📧 Email :</strong> contact@matchmove.fr<br>
-            <strong>🌐 Site web :</strong> www.matchmove.fr</p>
+            <p><strong>📞 Téléphone :</strong> ${companySettings.company_phone}<br>
+            <strong>📧 Email :</strong> ${companySettings.company_email}<br>
+            <strong>📍 Adresse :</strong> ${companySettings.company_address}</p>
           </div>
         </div>
         
         <div class="footer">
-          <p>MatchMove SAS - Solutions de déménagement professionnelles<br>
+          <p>${companySettings.company_name} - Solutions de déménagement professionnelles<br>
           Votre satisfaction, notre priorité.</p>
         </div>
       </body>
@@ -99,7 +145,7 @@ const handler = async (req: Request): Promise<Response> => {
     const pdfBuffer = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
 
     const emailResponse = await resend.emails.send({
-      from: "MatchMove déménagements solutions <noreply@matchmove.fr>",
+      from: `${companySettings.company_name} déménagements solutions <noreply@matchmove.fr>`,
       to: [clientEmail],
       subject: `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
       html: emailContent,
