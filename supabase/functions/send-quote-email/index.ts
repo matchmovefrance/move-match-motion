@@ -92,10 +92,10 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
   try {
     console.log(`📤 Envoi email vers: ${emailData.clientEmail}`);
 
-    // Connexion SMTP avec la même logique que la fonction de test
+    // Test de connexion EXACT comme dans test-smtp
     let conn;
     try {
-      // Pour les ports SSL (465) ou si smtp_secure est true, utiliser une connexion TLS directe
+      // Utiliser la MÊME logique que test-smtp qui fonctionne
       if (settings.smtp_port === 465 || (settings.smtp_secure && settings.smtp_port !== 587)) {
         console.log("🔒 Connexion TLS directe...");
         conn = await Deno.connectTls({
@@ -103,7 +103,6 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
           port: settings.smtp_port,
         });
       } else {
-        // Connexion normale pour les autres cas
         console.log("🔌 Connexion TCP normale...");
         conn = await Deno.connect({
           hostname: settings.smtp_host,
@@ -120,11 +119,8 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
 
-    // Helper pour envoyer et lire les réponses SMTP
-    const sendCommand = async (command: string): Promise<string> => {
-      console.log(`📤 SMTP: ${command.trim()}`);
-      await conn.write(encoder.encode(command));
-      
+    // Helper EXACT comme dans test-smtp
+    const readResponse = async (): Promise<string> => {
       const buffer = new Uint8Array(1024);
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Timeout de lecture")), 10000);
@@ -132,75 +128,122 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
       
       const readPromise = conn.read(buffer);
       const n = await Promise.race([readPromise, timeoutPromise]);
-      const response = decoder.decode(buffer.subarray(0, n || 0));
-      console.log(`📥 SMTP: ${response.trim()}`);
-      
-      if (response.startsWith('4') || response.startsWith('5')) {
-        throw new Error(`Erreur SMTP: ${response.trim()}`);
-      }
-      
-      return response;
+      return decoder.decode(buffer.subarray(0, n || 0));
     };
 
     try {
-      // Lecture du message de bienvenue
-      const buffer = new Uint8Array(1024);
-      const n = await conn.read(buffer);
-      const welcome = decoder.decode(buffer.subarray(0, n || 0));
+      // 1. Lire le message de bienvenue
+      const welcome = await readResponse();
       console.log(`📥 SMTP Welcome: ${welcome.trim()}`);
 
-      // EHLO/HELO
-      await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
-      
-      // STARTTLS si nécessaire (port 587 ou demandé explicitement)
+      if (!welcome.startsWith('220')) {
+        throw new Error(`Réponse SMTP inattendue: ${welcome.trim()}`);
+      }
+
+      // 2. EHLO
+      await conn.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
+      const ehloResponse = await readResponse();
+      console.log(`📥 EHLO: ${ehloResponse.trim()}`);
+
+      if (!ehloResponse.startsWith('250')) {
+        throw new Error(`Erreur EHLO: ${ehloResponse.trim()}`);
+      }
+
+      // 3. STARTTLS si port 587
       if (settings.smtp_port === 587 && settings.smtp_secure) {
         console.log("🔒 Activation STARTTLS...");
-        await sendCommand("STARTTLS\r\n");
+        await conn.write(encoder.encode("STARTTLS\r\n"));
+        const startTlsResponse = await readResponse();
+        console.log(`📥 STARTTLS: ${startTlsResponse.trim()}`);
         
-        // Upgrader la connexion vers TLS
-        const tlsConn = await Deno.startTls(conn, { hostname: settings.smtp_host });
-        conn.close();
-        conn = tlsConn;
-        
-        // Nouveau EHLO après TLS
-        await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
-      }
-      
-      // Authentification
-      if (settings.smtp_username && settings.smtp_password) {
-        console.log("🔐 Authentification SMTP...");
-        
-        if (settings.smtp_auth_method === 'PLAIN') {
-          const authString = btoa(`\0${settings.smtp_username}\0${settings.smtp_password}`);
-          await sendCommand("AUTH PLAIN\r\n");
-          await sendCommand(`${authString}\r\n`);
-        } else {
-          // LOGIN par défaut
-          await sendCommand("AUTH LOGIN\r\n");
+        if (startTlsResponse.startsWith('220')) {
+          // Upgrader la connexion vers TLS
+          const tlsConn = await Deno.startTls(conn, { hostname: settings.smtp_host });
+          conn.close();
+          conn = tlsConn;
           
-          const usernameB64 = btoa(settings.smtp_username);
-          await sendCommand(`${usernameB64}\r\n`);
-          
-          const passwordB64 = btoa(settings.smtp_password);
-          await sendCommand(`${passwordB64}\r\n`);
+          // Nouveau EHLO après TLS
+          await conn.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
+          const ehloTlsResponse = await readResponse();
+          console.log(`📥 EHLO après TLS: ${ehloTlsResponse.trim()}`);
         }
       }
 
-      // Envoi de l'email
+      // 4. Authentification EXACTE comme test-smtp
+      console.log("🔐 Authentification SMTP...");
+      
+      if (settings.smtp_auth_method === 'PLAIN') {
+        const authString = btoa(`\0${settings.smtp_username}\0${settings.smtp_password}`);
+        await conn.write(encoder.encode("AUTH PLAIN\r\n"));
+        const authPlainResponse = await readResponse();
+        console.log(`📥 AUTH PLAIN: ${authPlainResponse.trim()}`);
+        
+        await conn.write(encoder.encode(`${authString}\r\n`));
+        const authFinalResponse = await readResponse();
+        console.log(`📥 AUTH Final: ${authFinalResponse.trim()}`);
+        
+        if (!authFinalResponse.startsWith('235')) {
+          throw new Error(`Erreur authentification: ${authFinalResponse.trim()}`);
+        }
+      } else {
+        // LOGIN par défaut - EXACT comme test-smtp
+        await conn.write(encoder.encode("AUTH LOGIN\r\n"));
+        const authResponse = await readResponse();
+        console.log(`📥 AUTH LOGIN: ${authResponse.trim()}`);
+
+        if (!authResponse.startsWith('334')) {
+          throw new Error(`Erreur AUTH LOGIN: ${authResponse.trim()}`);
+        }
+
+        // Username
+        const usernameB64 = btoa(settings.smtp_username);
+        console.log(`🔑 Envoi username: ${settings.smtp_username}`);
+        await conn.write(encoder.encode(`${usernameB64}\r\n`));
+        const userResponse = await readResponse();
+        console.log(`📥 Username Response: ${userResponse.trim()}`);
+
+        if (!userResponse.startsWith('334')) {
+          throw new Error(`Erreur username: ${userResponse.trim()}`);
+        }
+
+        // Password
+        const passwordB64 = btoa(settings.smtp_password);
+        console.log(`🔑 Envoi password`);
+        await conn.write(encoder.encode(`${passwordB64}\r\n`));
+        const passResponse = await readResponse();
+        console.log(`📥 Password Response: ${passResponse.trim()}`);
+
+        if (!passResponse.startsWith('235')) {
+          throw new Error(`Erreur authentification: ${passResponse.trim()}`);
+        }
+      }
+
+      console.log("✅ Authentification réussie");
+
+      // 5. Envoi de l'email
       const fromEmail = settings.smtp_username;
       const fromName = settings.smtp_from_name || settings.company_name;
-      const replyTo = settings.smtp_reply_to || settings.company_email;
 
-      await sendCommand(`MAIL FROM:<${fromEmail}>\r\n`);
-      await sendCommand(`RCPT TO:<${emailData.clientEmail}>\r\n`);
-      await sendCommand("DATA\r\n");
+      // MAIL FROM
+      await conn.write(encoder.encode(`MAIL FROM:<${fromEmail}>\r\n`));
+      const mailFromResponse = await readResponse();
+      console.log(`📥 MAIL FROM: ${mailFromResponse.trim()}`);
 
-      // Construction de l'email avec boundary pour multipart
+      // RCPT TO
+      await conn.write(encoder.encode(`RCPT TO:<${emailData.clientEmail}>\r\n`));
+      const rcptToResponse = await readResponse();
+      console.log(`📥 RCPT TO: ${rcptToResponse.trim()}`);
+
+      // DATA
+      await conn.write(encoder.encode("DATA\r\n"));
+      const dataResponse = await readResponse();
+      console.log(`📥 DATA: ${dataResponse.trim()}`);
+
+      // Construction de l'email
       const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36)}`;
       
       let emailMessage = `From: ${fromName} <${fromEmail}>\r\n`;
       emailMessage += `To: ${emailData.clientEmail}\r\n`;
-      emailMessage += `Reply-To: ${replyTo}\r\n`;
       emailMessage += `Subject: ${subject}\r\n`;
       emailMessage += `MIME-Version: 1.0\r\n`;
       
@@ -226,8 +269,16 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
       }
 
       await conn.write(encoder.encode(emailMessage));
-      await sendCommand(".\r\n");
-      await sendCommand("QUIT\r\n");
+
+      // Fin du message
+      await conn.write(encoder.encode(".\r\n"));
+      const endResponse = await readResponse();
+      console.log(`📥 End Response: ${endResponse.trim()}`);
+
+      // QUIT
+      await conn.write(encoder.encode("QUIT\r\n"));
+      const quitResponse = await readResponse();
+      console.log(`📥 QUIT: ${quitResponse.trim()}`);
 
       console.log("✅ Email envoyé avec succès");
       return { success: true, method: 'SMTP_UNIVERSAL' };
