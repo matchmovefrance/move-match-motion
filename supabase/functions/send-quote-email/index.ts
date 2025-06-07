@@ -29,11 +29,12 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any) => {
+const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
   console.log("📧 Début envoi email SMTP");
+  console.log(`🔧 Configuration: ${settings.smtp_host}:${settings.smtp_port} (Secure: ${settings.smtp_secure})`);
   
   // Validation des paramètres SMTP
-  if (!companySettings.smtp_host || !companySettings.smtp_username || !companySettings.smtp_password) {
+  if (!settings.smtp_host || !settings.smtp_username || !settings.smtp_password) {
     throw new Error('Configuration SMTP incomplète');
   }
 
@@ -54,7 +55,7 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any)
 </head>
 <body>
     <div class="header">
-        <h1>${companySettings.company_name}</h1>
+        <h1>${settings.smtp_from_name || settings.company_name}</h1>
         <p>Solutions de déménagement professionnelles</p>
     </div>
     
@@ -73,32 +74,38 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any)
         
         <p>Ce devis est valable 30 jours à compter de sa date d'émission.</p>
         
-        <p>Cordialement,<br>L'équipe ${companySettings.company_name}</p>
+        <p>Cordialement,<br>L'équipe ${settings.company_name}</p>
         
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            <p><strong>📞 Téléphone :</strong> ${companySettings.company_phone}<br>
-            <strong>📧 Email :</strong> ${companySettings.company_email}<br>
-            <strong>📍 Adresse :</strong> ${companySettings.company_address}</p>
+            <p><strong>📞 Téléphone :</strong> ${settings.company_phone}<br>
+            <strong>📧 Email :</strong> ${settings.company_email}<br>
+            <strong>📍 Adresse :</strong> ${settings.company_address}</p>
         </div>
     </div>
     
     <div class="footer">
-        <p>${companySettings.company_name} - Solutions de déménagement professionnelles</p>
+        <p>${settings.company_name} - Solutions de déménagement professionnelles</p>
     </div>
 </body>
 </html>`;
 
   try {
     console.log(`📤 Envoi email vers: ${emailData.clientEmail}`);
-    console.log(`🔧 Serveur SMTP: ${companySettings.smtp_host}:${companySettings.smtp_port}`);
 
-    // Connexion SMTP avec gestion des erreurs améliorée
+    // Connexion SMTP avec support TLS/SSL
     let conn;
+    const connectOptions: any = {
+      hostname: settings.smtp_host,
+      port: settings.smtp_port,
+    };
+
+    // Si le port est 465 (SSL) ou smtp_secure est true, utiliser TLS
+    if (settings.smtp_port === 465 || settings.smtp_secure) {
+      connectOptions.transport = 'tls';
+    }
+
     try {
-      conn = await Deno.connect({
-        hostname: companySettings.smtp_host,
-        port: companySettings.smtp_port,
-      });
+      conn = await Deno.connect(connectOptions);
       console.log("✅ Connexion SMTP établie");
     } catch (error) {
       console.error("❌ Erreur connexion SMTP:", error);
@@ -132,29 +139,58 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any)
       const welcome = decoder.decode(buffer.subarray(0, n || 0));
       console.log(`📥 SMTP Welcome: ${welcome.trim()}`);
 
-      // Commandes SMTP
-      await sendCommand(`HELO ${companySettings.smtp_host}\r\n`);
+      // EHLO/HELO
+      await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
       
-      // Authentification si nécessaire
-      if (companySettings.smtp_username && companySettings.smtp_password) {
-        await sendCommand("AUTH LOGIN\r\n");
+      // STARTTLS si nécessaire (port 587 ou demandé explicitement)
+      if (settings.smtp_port === 587 || (settings.smtp_secure && settings.smtp_port !== 465)) {
+        console.log("🔒 Activation STARTTLS...");
+        await sendCommand("STARTTLS\r\n");
         
-        const usernameB64 = btoa(companySettings.smtp_username);
-        await sendCommand(`${usernameB64}\r\n`);
+        // Upgrader la connexion vers TLS
+        const tlsConn = await Deno.startTls(conn, { hostname: settings.smtp_host });
+        conn.close();
+        conn = tlsConn;
         
-        const passwordB64 = btoa(companySettings.smtp_password);
-        await sendCommand(`${passwordB64}\r\n`);
+        // Nouveau EHLO après TLS
+        await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
+      }
+      
+      // Authentification
+      if (settings.smtp_username && settings.smtp_password) {
+        console.log("🔐 Authentification SMTP...");
+        
+        if (settings.smtp_auth_method === 'PLAIN') {
+          const authString = btoa(`\0${settings.smtp_username}\0${settings.smtp_password}`);
+          await sendCommand("AUTH PLAIN\r\n");
+          await sendCommand(`${authString}\r\n`);
+        } else {
+          // LOGIN par défaut
+          await sendCommand("AUTH LOGIN\r\n");
+          
+          const usernameB64 = btoa(settings.smtp_username);
+          await sendCommand(`${usernameB64}\r\n`);
+          
+          const passwordB64 = btoa(settings.smtp_password);
+          await sendCommand(`${passwordB64}\r\n`);
+        }
       }
 
-      await sendCommand(`MAIL FROM:<${companySettings.smtp_username}>\r\n`);
+      // Envoi de l'email
+      const fromEmail = settings.smtp_username;
+      const fromName = settings.smtp_from_name || settings.company_name;
+      const replyTo = settings.smtp_reply_to || settings.company_email;
+
+      await sendCommand(`MAIL FROM:<${fromEmail}>\r\n`);
       await sendCommand(`RCPT TO:<${emailData.clientEmail}>\r\n`);
       await sendCommand("DATA\r\n");
 
       // Construction de l'email avec boundary pour multipart
       const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36)}`;
       
-      let emailMessage = `From: ${companySettings.company_name} <${companySettings.smtp_username}>\r\n`;
+      let emailMessage = `From: ${fromName} <${fromEmail}>\r\n`;
       emailMessage += `To: ${emailData.clientEmail}\r\n`;
+      emailMessage += `Reply-To: ${replyTo}\r\n`;
       emailMessage += `Subject: ${subject}\r\n`;
       emailMessage += `MIME-Version: 1.0\r\n`;
       
@@ -184,7 +220,7 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any)
       await sendCommand("QUIT\r\n");
 
       console.log("✅ Email envoyé avec succès");
-      return { success: true, method: 'SMTP_NATIVE' };
+      return { success: true, method: 'SMTP_UNIVERSAL' };
 
     } catch (error) {
       console.error("❌ Erreur lors des commandes SMTP:", error);
@@ -205,7 +241,7 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any)
       console.log("🔄 Tentative sans PDF...");
       const emailDataWithoutPdf = { ...emailData };
       delete emailDataWithoutPdf.pdfBase64;
-      return await sendEmailSMTP(emailDataWithoutPdf, companySettings);
+      return await sendEmailSMTP(emailDataWithoutPdf, settings);
     }
     
     throw error;

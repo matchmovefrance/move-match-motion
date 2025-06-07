@@ -179,10 +179,15 @@ export type Database = {
           company_phone: string
           created_at: string | null
           id: number
+          smtp_auth_method: string | null
           smtp_enabled: boolean
+          smtp_from_name: string | null
           smtp_host: string | null
           smtp_password: string | null
           smtp_port: number | null
+          smtp_reply_to: string | null
+          smtp_secure: boolean | null
+          smtp_timeout: number | null
           smtp_username: string | null
           updated_at: string | null
         }
@@ -193,10 +198,15 @@ export type Database = {
           company_phone?: string
           created_at?: string | null
           id?: number
+          smtp_auth_method?: string | null
           smtp_enabled?: boolean
+          smtp_from_name?: string | null
           smtp_host?: string | null
           smtp_password?: string | null
           smtp_port?: number | null
+          smtp_reply_to?: string | null
+          smtp_secure?: boolean | null
+          smtp_timeout?: number | null
           smtp_username?: string | null
           updated_at?: string | null
         }
@@ -207,10 +217,15 @@ export type Database = {
           company_phone?: string
           created_at?: string | null
           id?: number
+          smtp_auth_method?: string | null
           smtp_enabled?: boolean
+          smtp_from_name?: string | null
           smtp_host?: string | null
           smtp_password?: string | null
           smtp_port?: number | null
+          smtp_reply_to?: string | null
+          smtp_secure?: boolean | null
+          smtp_timeout?: number | null
           smtp_username?: string | null
           updated_at?: string | null
         }

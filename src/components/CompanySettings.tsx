@@ -26,6 +26,11 @@ interface CompanySettings {
   smtp_port: number;
   smtp_username: string;
   smtp_password: string;
+  smtp_secure: boolean;
+  smtp_auth_method: string;
+  smtp_timeout: number;
+  smtp_from_name: string;
+  smtp_reply_to: string;
 }
 
 const CompanySettings = () => {
@@ -34,10 +39,15 @@ const CompanySettings = () => {
     company_email: 'contact@matchmove.fr',
     company_phone: '+33 1 23 45 67 89',
     company_address: 'France',
-    smtp_host: 'smtp.gmail.com',
+    smtp_host: '',
     smtp_port: 587,
     smtp_username: '',
-    smtp_password: ''
+    smtp_password: '',
+    smtp_secure: true,
+    smtp_auth_method: 'LOGIN',
+    smtp_timeout: 30000,
+    smtp_from_name: 'MatchMove',
+    smtp_reply_to: ''
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,10 +82,15 @@ const CompanySettings = () => {
           company_email: data.company_email,
           company_phone: data.company_phone,
           company_address: data.company_address,
-          smtp_host: data.smtp_host || 'smtp.gmail.com',
+          smtp_host: data.smtp_host || '',
           smtp_port: data.smtp_port || 587,
           smtp_username: data.smtp_username || '',
-          smtp_password: data.smtp_password || ''
+          smtp_password: data.smtp_password || '',
+          smtp_secure: data.smtp_secure !== undefined ? data.smtp_secure : true,
+          smtp_auth_method: data.smtp_auth_method || 'LOGIN',
+          smtp_timeout: data.smtp_timeout || 30000,
+          smtp_from_name: data.smtp_from_name || 'MatchMove',
+          smtp_reply_to: data.smtp_reply_to || ''
         });
       }
     } catch (error: any) {
@@ -263,11 +278,12 @@ const CompanySettings = () => {
         <CardContent className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
             <p className="text-sm text-blue-800">
-              <strong>Information :</strong> Tous les emails seront envoyés via SMTP. 
-              Veuillez configurer vos paramètres SMTP ci-dessous.
+              <strong>Information :</strong> Configuration universelle SMTP compatible avec tous les fournisseurs 
+              (Gmail, Outlook, OVH, Ionos, etc.). Veuillez configurer vos paramètres ci-dessous.
             </p>
           </div>
 
+          {/* Paramètres SMTP de base */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="smtp_host">Serveur SMTP *</Label>
@@ -275,7 +291,7 @@ const CompanySettings = () => {
                 id="smtp_host"
                 value={settings.smtp_host}
                 onChange={(e) => handleInputChange('smtp_host', e.target.value)}
-                placeholder="smtp.gmail.com"
+                placeholder="smtp.gmail.com, smtp.office365.com, ssl0.ovh.net..."
                 required
               />
             </div>
@@ -286,7 +302,7 @@ const CompanySettings = () => {
                 type="number"
                 value={settings.smtp_port}
                 onChange={(e) => handleInputChange('smtp_port', parseInt(e.target.value))}
-                placeholder="587"
+                placeholder="587 (TLS), 465 (SSL), 25"
                 required
               />
             </div>
@@ -296,7 +312,7 @@ const CompanySettings = () => {
                 id="smtp_username"
                 value={settings.smtp_username}
                 onChange={(e) => handleInputChange('smtp_username', e.target.value)}
-                placeholder="votre-email@gmail.com"
+                placeholder="votre-email@domaine.com"
                 required
               />
             </div>
@@ -313,11 +329,61 @@ const CompanySettings = () => {
             </div>
           </div>
 
+          {/* Paramètres SMTP avancés */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Paramètres avancés</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="smtp_from_name">Nom d'expéditeur</Label>
+                <Input
+                  id="smtp_from_name"
+                  value={settings.smtp_from_name}
+                  onChange={(e) => handleInputChange('smtp_from_name', e.target.value)}
+                  placeholder="Nom affiché dans les emails"
+                />
+              </div>
+              <div>
+                <Label htmlFor="smtp_reply_to">Email de réponse</Label>
+                <Input
+                  id="smtp_reply_to"
+                  type="email"
+                  value={settings.smtp_reply_to}
+                  onChange={(e) => handleInputChange('smtp_reply_to', e.target.value)}
+                  placeholder="Email pour les réponses (optionnel)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="smtp_auth_method">Méthode d'authentification</Label>
+                <select
+                  id="smtp_auth_method"
+                  value={settings.smtp_auth_method}
+                  onChange={(e) => handleInputChange('smtp_auth_method', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="LOGIN">LOGIN (recommandé)</option>
+                  <option value="PLAIN">PLAIN</option>
+                </select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="smtp_secure"
+                  checked={settings.smtp_secure}
+                  onChange={(e) => handleInputChange('smtp_secure', e.target.checked)}
+                  className="rounded"
+                />
+                <Label htmlFor="smtp_secure">Connexion sécurisée (TLS/SSL)</Label>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
-              <strong>Conseil Gmail :</strong> Utilisez un "mot de passe d'application" plutôt que votre mot de passe principal. 
-              Activez l'authentification à 2 facteurs dans votre compte Gmail, puis générez un mot de passe d'application 
-              dans les paramètres de sécurité Google.
+              <strong>Conseils de configuration :</strong><br/>
+              • <strong>Gmail :</strong> smtp.gmail.com:587, activez l'authentification 2FA et utilisez un mot de passe d'application<br/>
+              • <strong>Outlook/Hotmail :</strong> smtp.office365.com:587<br/>
+              • <strong>OVH :</strong> ssl0.ovh.net:465 (SSL) ou ssl0.ovh.net:587 (TLS)<br/>
+              • <strong>Ionos :</strong> smtp.ionos.fr:587
             </p>
           </div>
 
