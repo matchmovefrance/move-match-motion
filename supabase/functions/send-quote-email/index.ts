@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -29,7 +30,20 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-const sendEmailWithResend = async (emailData: QuoteEmailRequest, companySettings: any, pdfBase64: string) => {
+const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any, pdfBase64: string) => {
+  // Vérifier que SMTP est configuré
+  if (!companySettings.smtp_host || 
+      !companySettings.smtp_username || 
+      !companySettings.smtp_password) {
+    throw new Error('Configuration SMTP incomplète. Veuillez configurer le SMTP dans les paramètres admin.');
+  }
+
+  console.log("📧 Configuration SMTP:", {
+    host: companySettings.smtp_host,
+    port: companySettings.smtp_port,
+    username: companySettings.smtp_username
+  });
+
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -81,45 +95,50 @@ const sendEmailWithResend = async (emailData: QuoteEmailRequest, companySettings
 </body>
 </html>`;
 
-  const resendApiUrl = 'https://api.resend.com/emails';
-  
-  // Utiliser l'adresse email configurée dans les paramètres SMTP
-  const fromEmail = companySettings.smtp_username || 'noreply@resend.dev';
-  
-  const emailPayload = {
-    from: `${companySettings.company_name} <${fromEmail}>`,
-    to: [emailData.clientEmail],
-    subject: `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`,
-    html: htmlContent,
-    attachments: [{
-      filename: `devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`,
-      content: pdfBase64,
-      type: 'application/pdf',
-      disposition: 'attachment'
-    }]
-  };
+  try {
+    const client = new SMTPClient({
+      connection: {
+        hostname: companySettings.smtp_host,
+        port: companySettings.smtp_port,
+        tls: true,
+        auth: {
+          username: companySettings.smtp_username,
+          password: companySettings.smtp_password,
+        },
+      },
+    });
 
-  console.log("📤 Envoi via Resend API avec email:", fromEmail);
-  
-  const response = await fetch(resendApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`
-    },
-    body: JSON.stringify(emailPayload)
-  });
+    console.log("📤 Connexion au serveur SMTP...");
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("❌ Erreur Resend:", errorText);
-    throw new Error(`Erreur envoi email: ${response.status} - ${errorText}`);
+    await client.send({
+      from: companySettings.smtp_username,
+      to: emailData.clientEmail,
+      subject: `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`,
+      content: htmlContent,
+      html: htmlContent,
+      attachments: [
+        {
+          filename: `devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`,
+          content: pdfBase64,
+          encoding: "base64",
+          contentType: "application/pdf",
+        },
+      ],
+    });
+
+    await client.close();
+
+    console.log("✅ Email envoyé via SMTP avec succès");
+
+    return {
+      success: true,
+      message: 'Email envoyé via SMTP'
+    };
+
+  } catch (error) {
+    console.error("❌ Erreur SMTP:", error);
+    throw new Error(`Erreur envoi email SMTP: ${error.message}`);
   }
-
-  const result = await response.json();
-  console.log("✅ Email envoyé via Resend:", result);
-  
-  return result;
 };
 
 const handler = async (req: Request): Promise<Response> => {
@@ -163,15 +182,15 @@ Montant: ${emailData.quoteAmount}€`;
       pdfBase64 = btoa(pdfContent);
     }
 
-    // Envoyer l'email
-    const result = await sendEmailWithResend(emailData, settings, pdfBase64);
+    // Envoyer l'email via SMTP uniquement
+    const result = await sendEmailSMTP(emailData, settings, pdfBase64);
 
     console.log("✅ Email envoyé avec succès");
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Email envoyé avec succès',
-      method: 'Resend',
+      message: 'Email envoyé avec succès via SMTP',
+      method: 'SMTP',
       details: result
     }), {
       status: 200,
@@ -187,7 +206,7 @@ Montant: ${emailData.quoteAmount}€`;
       JSON.stringify({ 
         success: false,
         error: error.message,
-        method: 'Resend'
+        method: 'SMTP'
       }),
       {
         status: 500,
