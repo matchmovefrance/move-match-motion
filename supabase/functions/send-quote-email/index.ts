@@ -29,21 +29,7 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any, pdfBase64: string) => {
-  // Vérifier que SMTP est configuré
-  if (!companySettings.smtp_host || 
-      !companySettings.smtp_username || 
-      !companySettings.smtp_password) {
-    throw new Error('Configuration SMTP incomplète. Veuillez configurer le SMTP dans les paramètres admin.');
-  }
-
-  console.log("📧 Configuration SMTP:", {
-    host: companySettings.smtp_host,
-    port: companySettings.smtp_port,
-    username: companySettings.smtp_username
-  });
-
-  // Préparer le contenu HTML de l'email
+const sendEmailWithResend = async (emailData: QuoteEmailRequest, companySettings: any, pdfBase64: string) => {
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -95,11 +81,13 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any,
 </body>
 </html>`;
 
-  // Utiliser Resend comme fallback SMTP
   const resendApiUrl = 'https://api.resend.com/emails';
   
+  // Utiliser l'adresse email configurée dans les paramètres SMTP
+  const fromEmail = companySettings.smtp_username || 'noreply@resend.dev';
+  
   const emailPayload = {
-    from: `${companySettings.company_name} <${companySettings.smtp_username}>`,
+    from: `${companySettings.company_name} <${fromEmail}>`,
     to: [emailData.clientEmail],
     subject: `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`,
     html: htmlContent,
@@ -111,7 +99,7 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any,
     }]
   };
 
-  console.log("📤 Envoi via Resend API avec configuration SMTP");
+  console.log("📤 Envoi via Resend API avec email:", fromEmail);
   
   const response = await fetch(resendApiUrl, {
     method: 'POST',
@@ -166,25 +154,24 @@ const handler = async (req: Request): Promise<Response> => {
     // Utiliser le PDF fourni ou générer un PDF simple
     let pdfBase64 = emailData.pdfBase64;
     if (!pdfBase64) {
-      // Créer un PDF simple en base64 si pas fourni
       const pdfContent = `Devis de déménagement
 Client: ${emailData.clientName}
 Email: ${emailData.clientEmail}
 Date: ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}
 Montant: ${emailData.quoteAmount}€`;
       
-      pdfBase64 = btoa(pdfContent); // Conversion simple en base64
+      pdfBase64 = btoa(pdfContent);
     }
 
     // Envoyer l'email
-    const result = await sendEmailSMTP(emailData, settings, pdfBase64);
+    const result = await sendEmailWithResend(emailData, settings, pdfBase64);
 
     console.log("✅ Email envoyé avec succès");
 
     return new Response(JSON.stringify({
       success: true,
       message: 'Email envoyé avec succès',
-      method: 'SMTP',
+      method: 'Resend',
       details: result
     }), {
       status: 200,
@@ -200,7 +187,7 @@ Montant: ${emailData.quoteAmount}€`;
       JSON.stringify({ 
         success: false,
         error: error.message,
-        method: 'SMTP'
+        method: 'Resend'
       }),
       {
         status: 500,
