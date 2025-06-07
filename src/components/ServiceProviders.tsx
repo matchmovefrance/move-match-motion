@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Settings, MapPin, Phone, Mail, Edit, Trash2, Building } from 'lucide-react';
+import { Plus, Settings, MapPin, Phone, Mail, Edit, Trash2, Building, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,6 +20,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import SyncStatusDialog from './SyncStatusDialog';
 
 interface ServiceProvider {
   id: number;
@@ -42,6 +42,7 @@ const ServiceProviders = () => {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ServiceProvider | null>(null);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
   const { toast } = useToast();
 
   // Form state
@@ -77,12 +78,21 @@ const ServiceProviders = () => {
 
   const fetchProviders = async () => {
     try {
+      setLoading(true);
+      console.log('🔄 Fetching service providers from database...');
+      
       const { data, error } = await supabase
         .from('service_providers')
         .select('*')
+        .eq('created_by', user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching providers:', error);
+        throw error;
+      }
+      
+      console.log('✅ Service providers fetched from DB:', data?.length || 0);
       setProviders(data || []);
     } catch (error) {
       console.error('Error fetching providers:', error);
@@ -141,6 +151,28 @@ const ServiceProviders = () => {
     return true;
   };
 
+  const checkForDuplicateProvider = async (email: string, excludeId?: number) => {
+    if (!user) return false;
+    
+    try {
+      let query = supabase
+        .from('service_providers')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .eq('created_by', user.id);
+      
+      if (excludeId) {
+        query = query.neq('id', excludeId);
+      }
+      
+      const { data } = await query;
+      return (data && data.length > 0);
+    } catch (error) {
+      console.error('Error checking duplicate:', error);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -157,6 +189,22 @@ const ServiceProviders = () => {
 
     try {
       setLoading(true);
+      console.log('📝 Provider form submission started:', { isEditing: !!editingProvider, formData });
+
+      // Vérifier les doublons
+      const isDuplicate = await checkForDuplicateProvider(
+        formData.email, 
+        editingProvider?.id
+      );
+      
+      if (isDuplicate) {
+        toast({
+          title: "Erreur",
+          description: "Un prestataire avec cette adresse email existe déjà",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const providerData = {
         name: formData.name.trim(),
@@ -170,26 +218,39 @@ const ServiceProviders = () => {
       };
 
       if (editingProvider) {
+        console.log('✏️ Updating existing provider:', editingProvider.id);
+        
         // Update existing provider
         const { error } = await supabase
           .from('service_providers')
           .update(providerData)
-          .eq('id', editingProvider.id);
+          .eq('id', editingProvider.id)
+          .eq('created_by', user.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Provider update error:', error);
+          throw error;
+        }
 
+        console.log('✅ Provider updated successfully');
         toast({
           title: "Succès",
           description: "Prestataire mis à jour avec succès",
         });
       } else {
+        console.log('➕ Creating new provider');
+        
         // Create new provider
         const { error } = await supabase
           .from('service_providers')
           .insert(providerData);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Provider creation error:', error);
+          throw error;
+        }
 
+        console.log('✅ Provider created successfully');
         toast({
           title: "Succès",
           description: "Prestataire ajouté avec succès",
@@ -203,7 +264,7 @@ const ServiceProviders = () => {
       await fetchProviders();
 
     } catch (error: any) {
-      console.error('Error saving provider:', error);
+      console.error('❌ Error saving provider:', error);
       
       let errorMessage = "Impossible de sauvegarder le prestataire";
       if (error.code === '23505') {
@@ -223,21 +284,33 @@ const ServiceProviders = () => {
   };
 
   const deleteProvider = async (id: number) => {
+    if (!user) return;
+    
     try {
+      console.log('🗑️ Deleting provider:', id);
+      
       const { error } = await supabase
         .from('service_providers')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('created_by', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error deleting provider:', error);
+        throw error;
+      }
 
+      console.log('✅ Provider deleted successfully');
+      
+      // Mettre à jour l'état local immédiatement
       setProviders(prevProviders => prevProviders.filter(p => p.id !== id));
+      
       toast({
         title: "Succès",
         description: "Prestataire supprimé avec succès",
       });
     } catch (error: any) {
-      console.error('Error deleting provider:', error);
+      console.error('❌ Error deleting provider:', error);
       toast({
         title: "Erreur",
         description: `Impossible de supprimer le prestataire: ${error.message}`,
@@ -248,6 +321,15 @@ const ServiceProviders = () => {
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSyncComplete = () => {
+    setShowSyncDialog(false);
+    fetchProviders();
+    toast({
+      title: "Succès",
+      description: "Synchronisation terminée avec succès",
+    });
   };
 
   if (loading && !showAddForm && !editingProvider) {
@@ -400,13 +482,23 @@ const ServiceProviders = () => {
           <Settings className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Prestataires de services</h2>
         </div>
-        <Button
-          onClick={() => setShowAddForm(true)}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Ajouter un prestataire
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowSyncDialog(true)}
+            title="Vérifier la synchronisation"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Sync
+          </Button>
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter un prestataire
+          </Button>
+        </div>
       </div>
 
       <ListView
@@ -575,6 +667,12 @@ const ServiceProviders = () => {
         emptyStateMessage="Aucun prestataire trouvé"
         emptyStateIcon={<Settings className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
+      />
+
+      <SyncStatusDialog
+        isOpen={showSyncDialog}
+        onClose={() => setShowSyncDialog(false)}
+        onSyncComplete={handleSyncComplete}
       />
     </div>
   );

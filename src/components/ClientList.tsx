@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye } from 'lucide-react';
+import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ListView } from '@/components/ui/list-view';
@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import ClientForm from './ClientForm';
 import QuoteGenerator from './QuoteGenerator';
 import ClientDetailsPopup from './ClientDetailsPopup';
+import SyncStatusDialog from './SyncStatusDialog';
 
 interface ClientRequest {
   id: number;
@@ -62,6 +63,7 @@ const ClientList = () => {
   const [editingClient, setEditingClient] = useState<ClientRequest | null>(null);
   const [selectedClient, setSelectedClient] = useState<ClientRequest | null>(null);
   const [showClientDetails, setShowClientDetails] = useState(false);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,12 +72,21 @@ const ClientList = () => {
 
   const fetchClients = async () => {
     try {
+      setLoading(true);
+      console.log('🔄 Fetching clients from database...');
+      
       const { data, error } = await supabase
         .from('client_requests')
         .select('*')
+        .eq('created_by', user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching clients:', error);
+        throw error;
+      }
+      
+      console.log('✅ Clients fetched from DB:', data?.length || 0);
       setClients(data || []);
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -91,20 +102,34 @@ const ClientList = () => {
 
   const validateRequiredFields = (formData: any) => {
     const requiredFields = ['name', 'email', 'phone', 'departure_city', 'arrival_city', 'estimated_volume', 'desired_date'];
-    const missingFields = [];
-
-    for (const field of requiredFields) {
-      if (!formData[field] || String(formData[field]).trim() === '') {
-        missingFields.push(field);
-      }
-    }
-
-    return missingFields;
+    return requiredFields.filter(field => !formData[field] || String(formData[field]).trim() === '');
   };
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+  };
+
+  const checkForDuplicateClient = async (email: string, excludeId?: number) => {
+    if (!user) return false;
+    
+    try {
+      let query = supabase
+        .from('clients')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .eq('created_by', user.id);
+      
+      if (excludeId) {
+        query = query.neq('id', excludeId);
+      }
+      
+      const { data } = await query;
+      return (data && data.length > 0);
+    } catch (error) {
+      console.error('Error checking duplicate:', error);
+      return false;
+    }
   };
 
   const cleanAndProcessFormData = (formData: any) => {
@@ -153,7 +178,7 @@ const ClientList = () => {
 
     try {
       setLoading(true);
-      console.log('Original form data:', formData);
+      console.log('📝 Form submission started:', { isEditing: !!editingClient, formData });
 
       // Validation des champs obligatoires
       const missingFields = validateRequiredFields(formData);
@@ -176,26 +201,64 @@ const ClientList = () => {
         return;
       }
 
+      // Vérifier les doublons
+      const isDuplicate = await checkForDuplicateClient(
+        formData.email, 
+        editingClient?.client_id
+      );
+      
+      if (isDuplicate) {
+        toast({
+          title: "Erreur",
+          description: "Un client avec cette adresse email existe déjà",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Nettoyer les données
       const processedData = cleanAndProcessFormData(formData);
-      console.log('Processed data:', processedData);
+      console.log('🧹 Processed data:', processedData);
 
       if (editingClient) {
-        // Mode édition
-        const { error } = await supabase
+        console.log('✏️ Updating existing client:', editingClient.id);
+        
+        // Mode édition - Mettre à jour le client et la demande
+        const { error: clientError } = await supabase
+          .from('clients')
+          .update({
+            name: processedData.name,
+            email: processedData.email,
+            phone: processedData.phone,
+          })
+          .eq('id', editingClient.client_id)
+          .eq('created_by', user.id);
+
+        if (clientError) {
+          console.error('❌ Client update error:', clientError);
+          throw clientError;
+        }
+
+        const { error: requestError } = await supabase
           .from('client_requests')
           .update(processedData)
-          .eq('id', editingClient.id);
+          .eq('id', editingClient.id)
+          .eq('created_by', user.id);
 
-        if (error) throw error;
+        if (requestError) {
+          console.error('❌ Client request update error:', requestError);
+          throw requestError;
+        }
 
+        console.log('✅ Client updated successfully');
         toast({
           title: "Succès",
           description: "Demande client mise à jour avec succès",
         });
       } else {
-        // Mode création
-        // Créer d'abord un client dans la table clients
+        console.log('➕ Creating new client');
+        
+        // Mode création - Créer client puis demande
         const { data: clientData, error: clientError } = await supabase
           .from('clients')
           .insert({
@@ -208,20 +271,10 @@ const ClientList = () => {
           .single();
 
         if (clientError) {
-          console.error('Client creation error:', clientError);
-          if (clientError.code === '23505') {
-            toast({
-              title: "Erreur",
-              description: "Un client avec cette adresse email existe déjà",
-              variant: "destructive",
-            });
-          } else {
-            throw clientError;
-          }
-          return;
+          console.error('❌ Client creation error:', clientError);
+          throw clientError;
         }
 
-        // Insérer ensuite la demande client
         const { error: requestError } = await supabase
           .from('client_requests')
           .insert({
@@ -232,26 +285,35 @@ const ClientList = () => {
           });
 
         if (requestError) {
-          console.error('Client request creation error:', requestError);
+          console.error('❌ Client request creation error:', requestError);
           throw requestError;
         }
 
+        console.log('✅ Client created successfully');
         toast({
           title: "Succès",
           description: "Demande client ajoutée avec succès",
         });
       }
 
-      // Fermer les formulaires et retourner à la liste
+      // Fermer les formulaires et recharger les données
       setShowAddForm(false);
       setEditingClient(null);
       await fetchClients();
       
     } catch (error: any) {
-      console.error('Error saving client:', error);
+      console.error('❌ Error saving client:', error);
+      
+      let errorMessage = "Impossible de sauvegarder la demande client";
+      if (error.code === '23505') {
+        errorMessage = "Un client avec cette adresse email existe déjà";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erreur",
-        description: `Impossible de sauvegarder la demande client: ${error.message}`,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -259,23 +321,40 @@ const ClientList = () => {
     }
   };
 
-  const deleteClient = async (id: number, clientId: number) => {
+  const deleteClient = async (requestId: number, clientId: number) => {
+    if (!user) return;
+    
     try {
-      console.log('Deleting client request:', id, 'and client:', clientId);
+      console.log('🗑️ Deleting client:', { requestId, clientId });
       
-      // Supprimer le client (cela supprimera automatiquement la demande client avec CASCADE)
+      // Supprimer d'abord la demande client
+      const { error: requestError } = await supabase
+        .from('client_requests')
+        .delete()
+        .eq('id', requestId)
+        .eq('created_by', user.id);
+
+      if (requestError) {
+        console.error('❌ Error deleting client request:', requestError);
+        throw requestError;
+      }
+
+      // Supprimer ensuite le client
       const { error: clientError } = await supabase
         .from('clients')
         .delete()
-        .eq('id', clientId);
+        .eq('id', clientId)
+        .eq('created_by', user.id);
 
       if (clientError) {
-        console.error('Error deleting client:', clientError);
+        console.error('❌ Error deleting client:', clientError);
         throw clientError;
       }
 
-      // Mettre à jour l'état local
-      setClients(prevClients => prevClients.filter(c => c.id !== id));
+      console.log('✅ Client deleted successfully');
+      
+      // Mettre à jour l'état local immédiatement
+      setClients(prevClients => prevClients.filter(c => c.id !== requestId));
 
       toast({
         title: "Succès",
@@ -283,7 +362,7 @@ const ClientList = () => {
       });
 
     } catch (error: any) {
-      console.error('Error deleting client:', error);
+      console.error('❌ Error deleting client:', error);
       toast({
         title: "Erreur",
         description: `Impossible de supprimer le client: ${error.message}`,
@@ -300,6 +379,15 @@ const ClientList = () => {
   const handleCloseDetails = () => {
     setShowClientDetails(false);
     setSelectedClient(null);
+  };
+
+  const handleSyncComplete = () => {
+    setShowSyncDialog(false);
+    fetchClients();
+    toast({
+      title: "Succès",
+      description: "Synchronisation terminée avec succès",
+    });
   };
 
   if (loading) {
@@ -354,13 +442,23 @@ const ClientList = () => {
           <Users className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Demandes clients</h2>
         </div>
-        <Button
-          onClick={() => setShowAddForm(true)}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Ajouter une demande
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowSyncDialog(true)}
+            title="Vérifier la synchronisation"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Sync
+          </Button>
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter une demande
+          </Button>
+        </div>
       </div>
 
       <ListView
@@ -601,6 +699,12 @@ const ClientList = () => {
         client={selectedClient}
         isOpen={showClientDetails}
         onClose={handleCloseDetails}
+      />
+
+      <SyncStatusDialog
+        isOpen={showSyncDialog}
+        onClose={() => setShowSyncDialog(false)}
+        onSyncComplete={handleSyncComplete}
       />
     </div>
   );
