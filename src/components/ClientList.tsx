@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye } from 'lucide-react';
@@ -89,24 +90,54 @@ const ClientList = () => {
     }
   };
 
+  const cleanDateField = (value: any): string | null => {
+    if (!value || value === '') return null;
+    const trimmed = String(value).trim();
+    return trimmed === '' ? null : trimmed;
+  };
+
+  const cleanStringField = (value: any): string | null => {
+    if (!value || value === '') return null;
+    const trimmed = String(value).trim();
+    return trimmed === '' ? null : trimmed;
+  };
+
   const handleFormSubmit = async (formData: any) => {
     try {
-      // Nettoyer les valeurs vides pour les champs time et date
-      const cleanTimeField = (value: string) => {
-        return value && value.trim() !== '' ? value : null;
-      };
+      setLoading(true);
+      console.log('Original form data:', formData);
 
-      // Convertir les valeurs string en nombres appropriés et nettoyer les champs time
+      // Nettoyer toutes les données avec gestion spéciale pour les dates
       const processedData = {
-        ...formData,
-        estimated_volume: parseFloat(formData.estimated_volume) || 0,
+        name: cleanStringField(formData.name),
+        email: cleanStringField(formData.email),
+        phone: cleanStringField(formData.phone),
+        departure_address: cleanStringField(formData.departure_address),
+        departure_city: cleanStringField(formData.departure_city) || '',
+        departure_postal_code: cleanStringField(formData.departure_postal_code) || '',
+        departure_country: cleanStringField(formData.departure_country) || 'France',
+        departure_time: cleanDateField(formData.departure_time),
+        arrival_address: cleanStringField(formData.arrival_address),
+        arrival_city: cleanStringField(formData.arrival_city) || '',
+        arrival_postal_code: cleanStringField(formData.arrival_postal_code) || '',
+        arrival_country: cleanStringField(formData.arrival_country) || 'France',
+        desired_date: cleanStringField(formData.desired_date) || new Date().toISOString().split('T')[0],
+        estimated_arrival_date: cleanDateField(formData.estimated_arrival_date),
+        estimated_arrival_time: cleanDateField(formData.estimated_arrival_time),
+        estimated_volume: formData.estimated_volume ? parseFloat(formData.estimated_volume) : 0,
+        description: cleanStringField(formData.description),
         budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
         budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
         quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
-        departure_time: cleanTimeField(formData.departure_time),
-        arrival_time: cleanTimeField(formData.arrival_time),
-        estimated_arrival_date: cleanTimeField(formData.estimated_arrival_date),
-        estimated_arrival_time: cleanTimeField(formData.estimated_arrival_time),
+        special_requirements: cleanStringField(formData.special_requirements),
+        access_conditions: cleanStringField(formData.access_conditions),
+        inventory_list: cleanStringField(formData.inventory_list),
+        flexible_dates: formData.flexible_dates || false,
+        date_range_start: cleanDateField(formData.date_range_start),
+        date_range_end: cleanDateField(formData.date_range_end),
+        status: 'pending',
+        is_matched: false,
+        match_status: 'pending'
       };
 
       console.log('Processed data before save:', processedData);
@@ -178,9 +209,11 @@ const ClientList = () => {
         });
       }
 
+      // Fermer les formulaires et rafraîchir la liste
       setShowAddForm(false);
       setEditingClient(null);
-      fetchClients();
+      await fetchClients();
+      
     } catch (error: any) {
       console.error('Error saving client:', error);
       
@@ -197,6 +230,8 @@ const ClientList = () => {
         description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -486,6 +521,7 @@ const ClientList = () => {
             quote_amount: editingClient.quote_amount?.toString() || ''
           } : undefined}
           isEditing={!!editingClient}
+          clientId={editingClient?.id}
         />
       </div>
     );
