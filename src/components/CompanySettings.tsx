@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -124,7 +125,9 @@ const CompanySettings = () => {
           smtp_host: settings.smtp_host,
           smtp_port: settings.smtp_port,
           smtp_username: settings.smtp_username,
-          smtp_password: settings.smtp_password
+          smtp_password: settings.smtp_password,
+          smtp_secure: settings.smtp_secure,
+          smtp_auth_method: settings.smtp_auth_method
         }
       });
 
@@ -183,10 +186,15 @@ const CompanySettings = () => {
           company_email: data.company_email,
           company_phone: data.company_phone,
           company_address: data.company_address,
-          smtp_host: data.smtp_host,
-          smtp_port: data.smtp_port,
-          smtp_username: data.smtp_username,
-          smtp_password: data.smtp_password
+          smtp_host: data.smtp_host || '',
+          smtp_port: data.smtp_port || 587,
+          smtp_username: data.smtp_username || '',
+          smtp_password: data.smtp_password || '',
+          smtp_secure: data.smtp_secure !== undefined ? data.smtp_secure : true,
+          smtp_auth_method: data.smtp_auth_method || 'LOGIN',
+          smtp_timeout: data.smtp_timeout || 30000,
+          smtp_from_name: data.smtp_from_name || 'MatchMove',
+          smtp_reply_to: data.smtp_reply_to || ''
         });
       }
       
@@ -206,7 +214,7 @@ const CompanySettings = () => {
     }
   };
 
-  const handleInputChange = (field: keyof CompanySettings, value: string | number) => {
+  const handleInputChange = (field: keyof CompanySettings, value: string | number | boolean) => {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
 
