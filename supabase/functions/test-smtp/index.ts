@@ -63,28 +63,43 @@ const handler = async (req: Request): Promise<Response> => {
     // Test de connexion réel
     console.log(`🔌 Tentative de connexion à ${smtp_host}:${smtp_port}`);
 
-    const connectOptions: any = {
-      hostname: smtp_host,
-      port: smtp_port,
-    };
-
-    // Si le port est 465 (SSL) ou smtp_secure est true, utiliser TLS
-    if (smtp_port === 465 || smtp_secure) {
-      connectOptions.transport = 'tls';
-    }
-
     let conn;
     try {
-      conn = await Deno.connect(connectOptions);
-      console.log("✅ Connexion TCP établie");
+      // Pour les ports SSL (465) ou si smtp_secure est true, utiliser une connexion TLS directe
+      if (smtp_port === 465 || (smtp_secure && smtp_port !== 587)) {
+        console.log("🔒 Connexion TLS directe...");
+        conn = await Deno.connectTls({
+          hostname: smtp_host,
+          port: smtp_port,
+        });
+      } else {
+        // Connexion normale pour les autres cas
+        console.log("🔌 Connexion TCP normale...");
+        conn = await Deno.connect({
+          hostname: smtp_host,
+          port: smtp_port,
+        });
+      }
+
+      console.log("✅ Connexion établie");
 
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
 
+      // Helper pour lire les réponses SMTP avec timeout
+      const readResponse = async (): Promise<string> => {
+        const buffer = new Uint8Array(1024);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Timeout de lecture")), 10000);
+        });
+        
+        const readPromise = conn.read(buffer);
+        const n = await Promise.race([readPromise, timeoutPromise]);
+        return decoder.decode(buffer.subarray(0, n || 0));
+      };
+
       // Lire le message de bienvenue
-      const buffer = new Uint8Array(1024);
-      const n = await conn.read(buffer);
-      const welcome = decoder.decode(buffer.subarray(0, n || 0));
+      const welcome = await readResponse();
       console.log(`📥 Welcome: ${welcome.trim()}`);
 
       if (!welcome.startsWith('220')) {
@@ -93,10 +108,38 @@ const handler = async (req: Request): Promise<Response> => {
 
       // Test EHLO
       await conn.write(encoder.encode(`EHLO test.client\r\n`));
-      const ehloBuffer = new Uint8Array(1024);
-      const ehloN = await conn.read(ehloBuffer);
-      const ehloResponse = decoder.decode(ehloBuffer.subarray(0, ehloN || 0));
+      const ehloResponse = await readResponse();
       console.log(`📥 EHLO: ${ehloResponse.trim()}`);
+
+      if (!ehloResponse.startsWith('250')) {
+        throw new Error(`Erreur EHLO: ${ehloResponse.trim()}`);
+      }
+
+      // Si c'est le port 587 avec STARTTLS
+      if (smtp_port === 587 && smtp_secure) {
+        console.log("🔒 Test STARTTLS...");
+        await conn.write(encoder.encode("STARTTLS\r\n"));
+        const startTlsResponse = await readResponse();
+        console.log(`📥 STARTTLS: ${startTlsResponse.trim()}`);
+        
+        if (startTlsResponse.startsWith('220')) {
+          console.log("✅ STARTTLS supporté");
+        }
+      }
+
+      // Test authentification (sans envoyer les vrais identifiants)
+      await conn.write(encoder.encode("AUTH LOGIN\r\n"));
+      const authResponse = await readResponse();
+      console.log(`📥 AUTH: ${authResponse.trim()}`);
+
+      if (authResponse.startsWith('334')) {
+        console.log("✅ Authentification LOGIN supportée");
+      }
+
+      // Fermer proprement
+      await conn.write(encoder.encode("QUIT\r\n"));
+      const quitResponse = await readResponse();
+      console.log(`📥 QUIT: ${quitResponse.trim()}`);
 
       conn.close();
       console.log("✅ Test de connexion SMTP réussi");
