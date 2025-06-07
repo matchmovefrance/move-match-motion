@@ -9,8 +9,7 @@ const supabase = createClient(
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 interface QuoteEmailRequest {
@@ -28,111 +27,204 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-const sendEmailViaSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
-  console.log(`📧 Tentative d'envoi à: ${emailData.clientEmail}`);
-  console.log(`⚙️ Host: ${settings.smtp_host}, Port: ${settings.smtp_port}`);
+const handler = async (req: Request): Promise<Response> => {
+  console.log("🚀 === DÉBUT FUNCTION SEND-QUOTE-EMAIL ===");
   
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  
-  let connection;
-  
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Connexion selon le port
+    console.log("📥 Réception de la requête...");
+    
+    if (req.method !== "POST") {
+      throw new Error("Méthode non autorisée");
+    }
+
+    const emailData: QuoteEmailRequest = await req.json();
+    console.log(`📧 Données reçues pour: ${emailData.clientEmail}`);
+    console.log(`💰 Montant: ${emailData.quoteAmount}€`);
+
+    // Validation des données
+    if (!emailData.clientEmail || !emailData.quoteAmount) {
+      throw new Error("Email ou montant manquant");
+    }
+
+    // Récupération des paramètres SMTP
+    console.log("🔍 Récupération config SMTP...");
+    const { data: settings, error: settingsError } = await supabase
+      .from('company_settings')
+      .select('*')
+      .single();
+
+    if (settingsError || !settings) {
+      console.error("❌ Erreur config:", settingsError);
+      throw new Error("Configuration SMTP introuvable");
+    }
+
+    console.log(`⚙️ Config trouvée: ${settings.smtp_host}:${settings.smtp_port}`);
+
+    // Validation des paramètres SMTP
+    if (!settings.smtp_host || !settings.smtp_username || !settings.smtp_password) {
+      throw new Error("Paramètres SMTP incomplets");
+    }
+
+    // Envoi de l'email
+    console.log("📤 Début envoi email...");
+    await sendEmail(emailData, settings);
+    
+    console.log("✅ Email envoyé avec succès!");
+    
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Email envoyé avec succès'
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+
+  } catch (error: any) {
+    console.error("💥 ERREUR:", error.message);
+    console.error("📍 Stack:", error.stack);
+    
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message || "Erreur inconnue"
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+  }
+};
+
+const sendEmail = async (emailData: QuoteEmailRequest, settings: any) => {
+  console.log("🔌 Connexion SMTP...");
+  
+  let conn;
+  try {
+    // Connexion selon le type de sécurité
     if (settings.smtp_port === 465) {
-      console.log("🔒 Connexion SSL directe...");
-      connection = await Deno.connectTls({
+      console.log("🔒 Connexion SSL/465");
+      conn = await Deno.connectTls({
         hostname: settings.smtp_host,
-        port: settings.smtp_port,
+        port: 465,
       });
     } else {
-      console.log("🔌 Connexion TCP standard...");
-      connection = await Deno.connect({
+      console.log("🔌 Connexion TCP standard");
+      conn = await Deno.connect({
         hostname: settings.smtp_host,
         port: settings.smtp_port,
       });
     }
 
-    const readResponse = async () => {
-      const buffer = new Uint8Array(4096);
-      const n = await connection.read(buffer);
-      const response = decoder.decode(buffer.subarray(0, n || 0));
-      console.log(`📨 Reçu: ${response.trim()}`);
+    const reader = conn.readable.getReader();
+    const writer = conn.writable.getWriter();
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // Fonction pour lire les réponses
+    const readResponse = async (): Promise<string> => {
+      const { value } = await reader.read();
+      const response = decoder.decode(value);
+      console.log(`📨 <--`, response.trim());
       return response;
     };
 
-    const sendCommand = async (command: string) => {
-      console.log(`📤 Envoi: ${command.trim()}`);
-      await connection.write(encoder.encode(command));
+    // Fonction pour envoyer des commandes
+    const sendCommand = async (command: string): Promise<string> => {
+      console.log(`📤 -->`, command.trim());
+      await writer.write(encoder.encode(command));
       return await readResponse();
     };
 
-    // Lecture du message de bienvenue
-    const welcome = await readResponse();
-    if (!welcome.startsWith('220')) {
-      throw new Error(`Connexion refusée: ${welcome}`);
+    // Processus SMTP
+    console.log("👋 Lecture bannière...");
+    let response = await readResponse();
+    if (!response.startsWith('220')) {
+      throw new Error(`Bannière invalide: ${response}`);
     }
 
     // EHLO
-    const ehloResponse = await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
-    if (!ehloResponse.startsWith('250')) {
-      throw new Error(`EHLO failed: ${ehloResponse}`);
+    response = await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
+    if (!response.startsWith('250')) {
+      throw new Error(`EHLO échoué: ${response}`);
     }
 
     // STARTTLS si port 587
     if (settings.smtp_port === 587) {
-      console.log("🔐 Initialisation STARTTLS...");
-      const startTlsResponse = await sendCommand("STARTTLS\r\n");
-      if (startTlsResponse.startsWith('220')) {
-        const tlsConn = await Deno.startTls(connection, { 
-          hostname: settings.smtp_host 
-        });
-        connection.close();
-        connection = tlsConn;
+      console.log("🔐 STARTTLS...");
+      response = await sendCommand("STARTTLS\r\n");
+      if (response.startsWith('220')) {
+        // Fermer les streams actuels
+        await reader.cancel();
+        await writer.close();
+        
+        // Upgrade vers TLS
+        const tlsConn = await Deno.startTls(conn, { hostname: settings.smtp_host });
+        const tlsReader = tlsConn.readable.getReader();
+        const tlsWriter = tlsConn.writable.getWriter();
         
         // Nouveau EHLO après TLS
-        await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
+        await tlsWriter.write(encoder.encode(`EHLO ${settings.smtp_host}\r\n`));
+        const { value } = await tlsReader.read();
+        console.log("📨 EHLO après TLS:", decoder.decode(value).trim());
+        
+        // Continuer avec les connexions TLS
+        Object.assign(reader, tlsReader);
+        Object.assign(writer, tlsWriter);
       }
     }
 
     // Authentification
-    console.log("🔑 Authentification...");
-    let authResponse = await sendCommand("AUTH LOGIN\r\n");
-    if (!authResponse.startsWith('334')) {
-      throw new Error(`AUTH LOGIN failed: ${authResponse}`);
+    console.log("🔑 AUTH LOGIN...");
+    response = await sendCommand("AUTH LOGIN\r\n");
+    if (!response.startsWith('334')) {
+      throw new Error(`AUTH LOGIN échoué: ${response}`);
     }
 
-    // Username
+    // Username en base64
     const usernameB64 = btoa(settings.smtp_username);
-    authResponse = await sendCommand(`${usernameB64}\r\n`);
-    if (!authResponse.startsWith('334')) {
-      throw new Error(`Username rejected: ${authResponse}`);
+    response = await sendCommand(`${usernameB64}\r\n`);
+    if (!response.startsWith('334')) {
+      throw new Error(`Username rejeté: ${response}`);
     }
 
-    // Password
+    // Password en base64
     const passwordB64 = btoa(settings.smtp_password);
-    authResponse = await sendCommand(`${passwordB64}\r\n`);
-    if (!authResponse.startsWith('235')) {
-      throw new Error(`Password rejected: ${authResponse}`);
+    response = await sendCommand(`${passwordB64}\r\n`);
+    if (!response.startsWith('235')) {
+      throw new Error(`Mot de passe rejeté: ${response}`);
     }
 
-    console.log("✅ Authentification réussie!");
+    console.log("✅ Authentification réussie");
 
-    // Envoi du mail
-    await sendCommand(`MAIL FROM:<${settings.smtp_username}>\r\n`);
-    await sendCommand(`RCPT TO:<${emailData.clientEmail}>\r\n`);
-    await sendCommand("DATA\r\n");
+    // Envoi du message
+    console.log("📮 Envoi du message...");
+    
+    response = await sendCommand(`MAIL FROM:<${settings.smtp_username}>\r\n`);
+    if (!response.startsWith('250')) {
+      throw new Error(`MAIL FROM échoué: ${response}`);
+    }
 
-    // Construction du message
+    response = await sendCommand(`RCPT TO:<${emailData.clientEmail}>\r\n`);
+    if (!response.startsWith('250')) {
+      throw new Error(`RCPT TO échoué: ${response}`);
+    }
+
+    response = await sendCommand("DATA\r\n");
+    if (!response.startsWith('354')) {
+      throw new Error(`DATA échoué: ${response}`);
+    }
+
+    // Construction du message HTML
     const subject = `Devis MatchMove - ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
     const fromName = settings.smtp_from_name || "MatchMove";
     
-    const emailContent = `From: ${fromName} <${settings.smtp_username}>
+    const message = `From: ${fromName} <${settings.smtp_username}>
 To: ${emailData.clientEmail}
 Subject: ${subject}
 MIME-Version: 1.0
 Content-Type: text/html; charset=utf-8
-Content-Transfer-Encoding: 8bit
 
 <!DOCTYPE html>
 <html>
@@ -168,80 +260,30 @@ Content-Transfer-Encoding: 8bit
   </div>
 </body>
 </html>
+
 `;
 
-    await connection.write(encoder.encode(emailContent));
-    const endResponse = await sendCommand("\r\n.\r\n");
-    
-    if (!endResponse.startsWith('250')) {
-      throw new Error(`Envoi échoué: ${endResponse}`);
+    // Envoi du contenu
+    await writer.write(encoder.encode(message));
+    response = await sendCommand("\r\n.\r\n");
+    if (!response.startsWith('250')) {
+      throw new Error(`Envoi du message échoué: ${response}`);
     }
 
+    // Fermeture
     await sendCommand("QUIT\r\n");
-    connection.close();
+    await reader.cancel();
+    await writer.close();
+    conn.close();
 
     console.log("🎉 Email envoyé avec succès!");
-    return { success: true };
 
   } catch (error) {
     console.error("❌ Erreur SMTP:", error);
-    if (connection) {
-      try { connection.close(); } catch {}
+    if (conn) {
+      try { conn.close(); } catch {}
     }
     throw error;
-  }
-};
-
-const handler = async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    console.log("🚀 === DÉBUT ENVOI EMAIL ===");
-    
-    const emailData: QuoteEmailRequest = await req.json();
-    console.log(`📧 Destinataire: ${emailData.clientEmail}`);
-    console.log(`💰 Montant: ${emailData.quoteAmount}€`);
-
-    // Récupération config SMTP
-    const { data: settings, error: settingsError } = await supabase
-      .from('company_settings')
-      .select('*')
-      .single();
-
-    if (settingsError || !settings) {
-      console.error("❌ Config SMTP introuvable:", settingsError);
-      throw new Error("Configuration SMTP non trouvée");
-    }
-
-    // Validation
-    if (!settings.smtp_host || !settings.smtp_username || !settings.smtp_password) {
-      throw new Error("Paramètres SMTP incomplets");
-    }
-
-    console.log("✅ Configuration valide, envoi en cours...");
-
-    await sendEmailViaSMTP(emailData, settings);
-
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Email envoyé avec succès'
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
-
-  } catch (error: any) {
-    console.error("💥 ERREUR FINALE:", error.message);
-    
-    return new Response(JSON.stringify({ 
-      success: false,
-      error: error.message
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
   }
 };
 

@@ -39,7 +39,11 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
   const { toast } = useToast();
 
   const handleSendEmail = async () => {
+    console.log('🚀 === DÉBUT ENVOI EMAIL CLIENT ===');
+    
+    // Vérifications de base
     if (!client.email) {
+      console.error('❌ Email client manquant');
       toast({
         title: "Erreur",
         description: "Aucune adresse email renseignée",
@@ -49,6 +53,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     }
 
     if (!client.quote_amount) {
+      console.error('❌ Montant devis manquant');
       toast({
         title: "Erreur", 
         description: "Aucun montant de devis renseigné",
@@ -60,40 +65,49 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     setIsLoading(true);
     
     try {
-      console.log('📧 Envoi devis à:', client.email);
+      console.log(`📧 Préparation envoi à: ${client.email}`);
+      console.log(`💰 Montant: ${client.quote_amount}€`);
       
+      // Préparation des données simplifiées
       const emailPayload = {
         clientName: client.name || 'Client',
         clientEmail: client.email,
         quoteAmount: client.quote_amount,
         desiredDate: client.desired_date,
-        clientPhone: client.phone,
-        departureAddress: client.departure_address,
-        departurePostalCode: client.departure_postal_code,
-        departureCity: client.departure_city,
-        arrivalAddress: client.arrival_address,
-        arrivalPostalCode: client.arrival_postal_code,
-        arrivalCity: client.arrival_city,
-        estimatedVolume: client.estimated_volume
+        clientPhone: client.phone || '',
+        departureAddress: client.departure_address || '',
+        departurePostalCode: client.departure_postal_code || '',
+        departureCity: client.departure_city || '',
+        arrivalAddress: client.arrival_address || '',
+        arrivalPostalCode: client.arrival_postal_code || '',
+        arrivalCity: client.arrival_city || '',
+        estimatedVolume: client.estimated_volume || 0
       };
 
-      console.log('📦 Payload:', emailPayload);
+      console.log('📦 Payload préparé:', JSON.stringify(emailPayload, null, 2));
 
+      // Appel de la fonction edge
+      console.log('🔗 Appel fonction edge...');
       const { data, error } = await supabase.functions.invoke('send-quote-email', {
         body: emailPayload
       });
 
-      console.log('📨 Réponse:', { data, error });
+      console.log('📨 Réponse fonction:', { data, error });
 
+      // Gestion des erreurs
       if (error) {
         console.error('❌ Erreur Supabase:', error);
         throw new Error(error.message || 'Erreur lors de l\'appel de la fonction');
       }
 
-      if (data?.success === false) {
+      // Vérification du succès
+      if (data && data.success === false) {
+        console.error('❌ Échec fonction:', data.error);
         throw new Error(data.error || 'L\'envoi a échoué');
       }
 
+      // Succès
+      console.log('✅ Email envoyé avec succès');
       toast({
         title: "✅ Email envoyé",
         description: `Le devis a été envoyé à ${client.email}`,
@@ -102,10 +116,16 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
       
     } catch (error: any) {
       console.error('💥 Erreur complète:', error);
+      console.error('📍 Stack trace:', error.stack);
+      
+      let errorMessage = "Impossible d'envoyer l'email";
+      if (error.message) {
+        errorMessage = error.message;
+      }
       
       toast({
         title: "❌ Erreur d'envoi",
-        description: error.message || "Impossible d'envoyer l'email",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
