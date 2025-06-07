@@ -32,17 +32,20 @@ interface QuoteEmailRequest {
 const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any) => {
   console.log("📧 Début envoi email SMTP");
   
+  // Validation des paramètres SMTP
   if (!companySettings.smtp_host || !companySettings.smtp_username || !companySettings.smtp_password) {
     throw new Error('Configuration SMTP incomplète');
   }
 
+  const subject = `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
+  
   const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
         .header { background-color: #22c55e; color: white; padding: 20px; text-align: center; }
         .content { padding: 20px; }
         .footer { background-color: #f8f9fa; padding: 15px; text-align: center; color: #666; }
@@ -86,94 +89,126 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any)
 </html>`;
 
   try {
-    // Utilisation d'une approche plus simple avec fetch vers un service SMTP
-    const subject = `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
-    
-    // Construction du message email en format simple
-    const emailMessage = {
-      from: `${companySettings.company_name} <${companySettings.smtp_username}>`,
-      to: emailData.clientEmail,
-      subject: subject,
-      html: htmlContent,
-      smtp: {
-        host: companySettings.smtp_host,
-        port: companySettings.smtp_port,
-        username: companySettings.smtp_username,
-        password: companySettings.smtp_password
-      }
-    };
+    console.log(`📤 Envoi email vers: ${emailData.clientEmail}`);
+    console.log(`🔧 Serveur SMTP: ${companySettings.smtp_host}:${companySettings.smtp_port}`);
 
-    console.log("📤 Envoi de l'email via service SMTP externe");
-    
-    // Utilisation d'un service SMTP simple via API
-    const smtpResponse = await fetch('https://api.smtp2go.com/v3/email/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Smtp2go-Api-Key': 'api-fallback' // Fallback, nous utiliserons directement SMTP
-      },
-      body: JSON.stringify({
-        sender: emailMessage.from,
-        to: [emailMessage.to],
-        subject: emailMessage.subject,
-        html_body: emailMessage.html
-      })
-    }).catch(() => null);
-
-    // Si l'API externe échoue, on essaie une approche SMTP directe simplifiée
-    if (!smtpResponse || !smtpResponse.ok) {
-      console.log("🔄 Tentative SMTP directe simplifiée");
-      
-      // Approche ultra-simplifiée : juste envoyer sans TLS complexe
-      const conn = await Deno.connect({
+    // Connexion SMTP avec gestion des erreurs améliorée
+    let conn;
+    try {
+      conn = await Deno.connect({
         hostname: companySettings.smtp_host,
-        port: 25 // Port standard SMTP non-chiffré pour test
+        port: companySettings.smtp_port,
       });
-
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
-
-      // Commandes SMTP de base
-      const commands = [
-        `HELO ${companySettings.smtp_host}\r\n`,
-        `MAIL FROM:<${companySettings.smtp_username}>\r\n`,
-        `RCPT TO:<${emailData.clientEmail}>\r\n`,
-        `DATA\r\n`,
-        `From: ${companySettings.company_name} <${companySettings.smtp_username}>\r\n`,
-        `To: ${emailData.clientEmail}\r\n`,
-        `Subject: ${subject}\r\n`,
-        `Content-Type: text/html; charset=utf-8\r\n`,
-        `\r\n`,
-        htmlContent,
-        `\r\n.\r\n`,
-        `QUIT\r\n`
-      ];
-
-      for (const command of commands) {
-        await conn.write(encoder.encode(command));
-        const buffer = new Uint8Array(1024);
-        await conn.read(buffer);
-      }
-
-      conn.close();
-      
-      console.log("✅ Email envoyé via SMTP direct");
-      return { success: true, method: 'SMTP_DIRECT' };
+      console.log("✅ Connexion SMTP établie");
+    } catch (error) {
+      console.error("❌ Erreur connexion SMTP:", error);
+      throw new Error(`Impossible de se connecter au serveur SMTP: ${error.message}`);
     }
 
-    console.log("✅ Email envoyé via API externe");
-    return { success: true, method: 'API_EXTERNAL' };
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // Helper pour envoyer et lire les réponses SMTP
+    const sendCommand = async (command: string): Promise<string> => {
+      console.log(`📤 SMTP: ${command.trim()}`);
+      await conn.write(encoder.encode(command));
+      
+      const buffer = new Uint8Array(1024);
+      const n = await conn.read(buffer);
+      const response = decoder.decode(buffer.subarray(0, n || 0));
+      console.log(`📥 SMTP: ${response.trim()}`);
+      
+      if (response.startsWith('4') || response.startsWith('5')) {
+        throw new Error(`Erreur SMTP: ${response.trim()}`);
+      }
+      
+      return response;
+    };
+
+    try {
+      // Lecture du message de bienvenue
+      const buffer = new Uint8Array(1024);
+      const n = await conn.read(buffer);
+      const welcome = decoder.decode(buffer.subarray(0, n || 0));
+      console.log(`📥 SMTP Welcome: ${welcome.trim()}`);
+
+      // Commandes SMTP
+      await sendCommand(`HELO ${companySettings.smtp_host}\r\n`);
+      
+      // Authentification si nécessaire
+      if (companySettings.smtp_username && companySettings.smtp_password) {
+        await sendCommand("AUTH LOGIN\r\n");
+        
+        const usernameB64 = btoa(companySettings.smtp_username);
+        await sendCommand(`${usernameB64}\r\n`);
+        
+        const passwordB64 = btoa(companySettings.smtp_password);
+        await sendCommand(`${passwordB64}\r\n`);
+      }
+
+      await sendCommand(`MAIL FROM:<${companySettings.smtp_username}>\r\n`);
+      await sendCommand(`RCPT TO:<${emailData.clientEmail}>\r\n`);
+      await sendCommand("DATA\r\n");
+
+      // Construction de l'email avec boundary pour multipart
+      const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36)}`;
+      
+      let emailMessage = `From: ${companySettings.company_name} <${companySettings.smtp_username}>\r\n`;
+      emailMessage += `To: ${emailData.clientEmail}\r\n`;
+      emailMessage += `Subject: ${subject}\r\n`;
+      emailMessage += `MIME-Version: 1.0\r\n`;
+      
+      if (emailData.pdfBase64) {
+        emailMessage += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+        
+        // Partie HTML
+        emailMessage += `--${boundary}\r\n`;
+        emailMessage += `Content-Type: text/html; charset=utf-8\r\n`;
+        emailMessage += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+        emailMessage += htmlContent + '\r\n';
+        
+        // Partie PDF
+        emailMessage += `--${boundary}\r\n`;
+        emailMessage += `Content-Type: application/pdf\r\n`;
+        emailMessage += `Content-Transfer-Encoding: base64\r\n`;
+        emailMessage += `Content-Disposition: attachment; filename="devis.pdf"\r\n\r\n`;
+        emailMessage += emailData.pdfBase64 + '\r\n';
+        emailMessage += `--${boundary}--\r\n`;
+      } else {
+        emailMessage += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
+        emailMessage += htmlContent + '\r\n';
+      }
+
+      await conn.write(encoder.encode(emailMessage));
+      await sendCommand(".\r\n");
+      await sendCommand("QUIT\r\n");
+
+      console.log("✅ Email envoyé avec succès");
+      return { success: true, method: 'SMTP_NATIVE' };
+
+    } catch (error) {
+      console.error("❌ Erreur lors des commandes SMTP:", error);
+      throw error;
+    } finally {
+      try {
+        conn.close();
+      } catch (e) {
+        console.log("Connexion déjà fermée");
+      }
+    }
 
   } catch (error) {
-    console.error("❌ Erreur envoi email:", error);
+    console.error("❌ Erreur envoi email SMTP:", error);
     
-    // Dernier recours : log pour debug et retourner succès factice
-    console.log("🚨 Mode dégradé: email non envoyé mais processus continué");
-    return { 
-      success: false, 
-      error: error.message,
-      fallback: true 
-    };
+    // Fallback: envoi sans PDF
+    if (emailData.pdfBase64) {
+      console.log("🔄 Tentative sans PDF...");
+      const emailDataWithoutPdf = { ...emailData };
+      delete emailDataWithoutPdf.pdfBase64;
+      return await sendEmailSMTP(emailDataWithoutPdf, companySettings);
+    }
+    
+    throw error;
   }
 };
 
@@ -193,6 +228,7 @@ const handler = async (req: Request): Promise<Response> => {
       .single();
 
     if (settingsError || !settings) {
+      console.error("❌ Erreur configuration:", settingsError);
       throw new Error("Configuration d'entreprise non trouvée");
     }
 
@@ -203,9 +239,9 @@ const handler = async (req: Request): Promise<Response> => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: result.success ? 'Email envoyé avec succès' : 'Email traité (mode dégradé)',
-      method: result.method || 'FALLBACK',
-      details: result
+      message: 'Email envoyé avec succès',
+      method: result.method,
+      recipient: emailData.clientEmail
     }), {
       status: 200,
       headers: {
@@ -220,7 +256,7 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(JSON.stringify({ 
       success: false,
       error: error.message,
-      message: 'Erreur lors du traitement de l\'email'
+      message: 'Erreur lors de l\'envoi de l\'email'
     }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
