@@ -1,12 +1,20 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building, Mail, Phone, MapPin, Settings, Server } from 'lucide-react';
+import { Building, Mail, Phone, MapPin, Settings, Server, TestTube, CheckCircle, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CompanySettings {
   id?: number;
@@ -33,6 +41,9 @@ const CompanySettings = () => {
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [showTestDialog, setShowTestDialog] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -51,7 +62,6 @@ const CompanySettings = () => {
 
       if (error) {
         console.log('Erreur lors du chargement des paramètres:', error);
-        // Si aucun paramètre n'existe, on garde les valeurs par défaut
         if (error.code !== 'PGRST116') {
           throw error;
         }
@@ -80,11 +90,53 @@ const CompanySettings = () => {
     }
   };
 
+  const handleTestSMTP = async () => {
+    try {
+      setTesting(true);
+      
+      // Validation des champs SMTP requis
+      if (!settings.smtp_username || !settings.smtp_password || !settings.smtp_host) {
+        toast({
+          title: "Erreur",
+          description: "Veuillez remplir tous les champs SMTP obligatoires avant de tester",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('test-smtp', {
+        body: {
+          smtp_host: settings.smtp_host,
+          smtp_port: settings.smtp_port,
+          smtp_username: settings.smtp_username,
+          smtp_password: settings.smtp_password
+        }
+      });
+
+      if (error) throw error;
+
+      setTestResult({
+        success: data.success,
+        message: data.success ? 'Connexion SMTP réussie !' : data.error
+      });
+      setShowTestDialog(true);
+
+    } catch (error: any) {
+      console.error('Erreur lors du test SMTP:', error);
+      setTestResult({
+        success: false,
+        message: error.message || 'Erreur lors du test de connexion SMTP'
+      });
+      setShowTestDialog(true);
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
       
-      // Validation des champs SMTP requis
       if (!settings.smtp_username || !settings.smtp_password) {
         toast({
           title: "Erreur",
@@ -96,7 +148,7 @@ const CompanySettings = () => {
       
       const settingsToSave = {
         ...settings,
-        smtp_enabled: true // Toujours activé
+        smtp_enabled: true
       };
       
       const { data, error } = await supabase
@@ -268,6 +320,19 @@ const CompanySettings = () => {
               dans les paramètres de sécurité Google.
             </p>
           </div>
+
+          {/* Bouton Test SMTP */}
+          <div className="flex justify-center pt-4">
+            <Button
+              onClick={handleTestSMTP}
+              disabled={testing || !settings.smtp_username || !settings.smtp_password || !settings.smtp_host}
+              variant="outline"
+              className="bg-blue-50 hover:bg-blue-100 border-blue-300"
+            >
+              <TestTube className="h-4 w-4 mr-2" />
+              {testing ? 'Test en cours...' : 'Tester la connexion SMTP'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -282,6 +347,35 @@ const CompanySettings = () => {
           {saving ? 'Sauvegarde...' : 'Sauvegarder les paramètres'}
         </Button>
       </div>
+
+      {/* Dialog de résultat du test SMTP */}
+      <AlertDialog open={showTestDialog} onOpenChange={setShowTestDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              {testResult?.success ? (
+                <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 mr-2 text-red-600" />
+              )}
+              {testResult?.success ? 'Test SMTP Réussi' : 'Test SMTP Échoué'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {testResult?.message}
+              {testResult?.success && (
+                <div className="mt-2 text-green-700 bg-green-50 p-3 rounded-md">
+                  ✅ Votre configuration SMTP fonctionne correctement. Vous pouvez maintenant sauvegarder vos paramètres.
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowTestDialog(false)}>
+              Fermer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
