@@ -19,7 +19,7 @@ interface QuoteEmailRequest {
   clientEmail: string;
   quoteAmount: number;
   desiredDate: string;
-  pdfBase64: string;
+  pdfBase64?: string;
   clientPhone?: string;
   departureAddress?: string;
   departurePostalCode?: string;
@@ -168,6 +168,144 @@ const generatePDFBase64 = async (emailData: QuoteEmailRequest, companySettings: 
   return doc.output('datauristring').split(',')[1];
 };
 
+const sendEmailSMTP = async (emailData: QuoteEmailRequest, companySettings: any, pdfBase64: string) => {
+  // Vérifier que SMTP est configuré
+  if (!companySettings.smtp_enabled || 
+      !companySettings.smtp_host || 
+      !companySettings.smtp_username || 
+      !companySettings.smtp_password) {
+    throw new Error('Configuration SMTP incomplète. Veuillez configurer le SMTP dans les paramètres admin.');
+  }
+
+  console.log("📧 Configuration SMTP:", {
+    host: companySettings.smtp_host,
+    port: companySettings.smtp_port,
+    username: companySettings.smtp_username,
+    secure: companySettings.smtp_secure
+  });
+
+  // Préparer le contenu HTML de l'email
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .header { background-color: #22c55e; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .footer { background-color: #f8f9fa; padding: 15px; text-align: center; color: #666; }
+        .highlight { background-color: #f0fdf4; padding: 15px; border-left: 4px solid #22c55e; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>${companySettings.company_name}</h1>
+        <p>Solutions de déménagement professionnelles</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour ${emailData.clientName || 'Madame, Monsieur'},</p>
+        
+        <p>Nous avons le plaisir de vous transmettre votre devis personnalisé pour votre projet de déménagement.</p>
+        
+        <div class="highlight">
+            <h3>📋 DÉTAILS DE VOTRE DEMANDE :</h3>
+            <ul>
+                <li><strong>Date souhaitée :</strong> ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}</li>
+                <li><strong>Montant du devis :</strong> ${emailData.quoteAmount.toFixed(2).replace('.', ',')} € TTC</li>
+            </ul>
+        </div>
+        
+        <p>📎 Vous trouverez en pièce jointe votre devis détaillé au format PDF.</p>
+        
+        <p>Ce devis est valable 30 jours à compter de sa date d'émission.</p>
+        
+        <p>Cordialement,<br>L'équipe ${companySettings.company_name}</p>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p><strong>📞 Téléphone :</strong> ${companySettings.company_phone}<br>
+            <strong>📧 Email :</strong> ${companySettings.company_email}<br>
+            <strong>📍 Adresse :</strong> ${companySettings.company_address}</p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>${companySettings.company_name} - Solutions de déménagement professionnelles</p>
+    </div>
+</body>
+</html>`;
+
+  // Configuration de l'email pour SMTP
+  const boundary = '----=_NextPart_' + Math.random().toString(36).substr(2, 9);
+  
+  const emailBody = [
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    `From: ${companySettings.company_name} <${companySettings.smtp_username}>`,
+    `To: ${emailData.clientEmail}`,
+    `Subject: =?UTF-8?B?${btoa(`Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`)}?=`,
+    `MIME-Version: 1.0`,
+    '',
+    `--${boundary}`,
+    `Content-Type: multipart/alternative; boundary="${boundary}_alt"`,
+    '',
+    `--${boundary}_alt`,
+    `Content-Type: text/html; charset=UTF-8`,
+    `Content-Transfer-Encoding: quoted-printable`,
+    '',
+    htmlContent,
+    '',
+    `--${boundary}_alt--`,
+    '',
+    `--${boundary}`,
+    `Content-Type: application/pdf; name="devis.pdf"`,
+    `Content-Transfer-Encoding: base64`,
+    `Content-Disposition: attachment; filename="devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf"`,
+    '',
+    pdfBase64,
+    '',
+    `--${boundary}--`
+  ].join('\r\n');
+
+  // Utiliser un service SMTP via API (comme SendGrid, Mailgun, etc.)
+  // Ici on utilise une approche générique avec fetch
+  const smtpApiUrl = `https://api.smtp2go.com/v3/email/send`;
+  
+  const smtpPayload = {
+    api_key: companySettings.smtp_password, // Utiliser le mot de passe SMTP comme clé API
+    to: [emailData.clientEmail],
+    sender: companySettings.smtp_username,
+    subject: `Votre devis de déménagement du ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`,
+    html_body: htmlContent,
+    attachments: [{
+      filename: `devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`,
+      fileblob: pdfBase64,
+      mimetype: 'application/pdf'
+    }]
+  };
+
+  console.log("📤 Envoi via SMTP API");
+  
+  const response = await fetch(smtpApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(smtpPayload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("❌ Erreur SMTP:", errorText);
+    throw new Error(`Erreur SMTP: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log("✅ Email envoyé via SMTP:", result);
+  
+  return result;
+};
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -178,9 +316,9 @@ const handler = async (req: Request): Promise<Response> => {
     const emailData: QuoteEmailRequest = await req.json();
     const { clientName, clientEmail, quoteAmount, desiredDate } = emailData;
 
-    console.log(`📧 Envoi d'email de devis pour: ${clientEmail}`);
+    console.log(`📧 Traitement envoi email pour: ${clientEmail}`);
 
-    // Récupérer les paramètres de l'entreprise
+    // Récupérer les paramètres de l'entreprise (OBLIGATOIRE)
     const { data: settings, error: settingsError } = await supabase
       .from('company_settings')
       .select('*')
@@ -188,61 +326,33 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (settingsError) {
       console.error("❌ Erreur lors de la récupération des paramètres:", settingsError);
+      throw new Error("Impossible de récupérer les paramètres de l'entreprise");
     }
 
-    const companySettings = settings || {
-      company_name: 'MatchMove',
-      company_email: 'contact@matchmove.fr',
-      company_phone: '+33 1 23 45 67 89',
-      company_address: 'France',
-      smtp_enabled: false,
-      smtp_host: '',
-      smtp_port: 587,
-      smtp_username: '',
-      smtp_password: '',
-      smtp_secure: 'tls'
-    };
-
-    // Générer le PDF en base64
-    const pdfBase64 = emailData.pdfBase64 || await generatePDFBase64(emailData, companySettings);
-
-    // Préparer les données pour le script PHP
-    const phpData = {
-      clientName,
-      clientEmail,
-      quoteAmount,
-      desiredDate,
-      pdfBase64,
-      companySettings
-    };
-
-    // URL de votre script PHP (vous devrez ajuster cette URL selon votre domaine)
-    const phpScriptUrl = 'https://your-domain.com/send-email.php';
-    
-    console.log("📤 Envoi vers le script PHP:", phpScriptUrl);
-
-    // Appeler le script PHP
-    const phpResponse = await fetch(phpScriptUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(phpData)
-    });
-
-    const phpResult = await phpResponse.json();
-
-    if (!phpResponse.ok) {
-      throw new Error(`Erreur PHP: ${phpResult.error || 'Erreur inconnue'}`);
+    if (!settings) {
+      throw new Error("Aucune configuration d'entreprise trouvée");
     }
 
-    console.log("✅ Email envoyé avec succès via PHP:", phpResult);
+    // Vérifier la configuration SMTP
+    if (!settings.smtp_enabled || !settings.smtp_host || !settings.smtp_username || !settings.smtp_password) {
+      throw new Error("Configuration SMTP incomplète. Veuillez configurer le SMTP dans les paramètres admin.");
+    }
+
+    console.log("✅ Configuration SMTP trouvée et validée");
+
+    // Générer le PDF
+    const pdfBase64 = emailData.pdfBase64 || await generatePDFBase64(emailData, settings);
+
+    // Envoyer l'email via SMTP
+    const result = await sendEmailSMTP(emailData, settings, pdfBase64);
+
+    console.log("✅ Email envoyé avec succès via SMTP");
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Email envoyé avec succès via PHP',
-      method: phpResult.method || 'PHP',
-      details: phpResult
+      message: 'Email envoyé avec succès via SMTP',
+      method: 'SMTP',
+      details: result
     }), {
       status: 200,
       headers: {
@@ -252,11 +362,12 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
   } catch (error: any) {
-    console.error("❌ Error in send-quote-email function:", error);
+    console.error("❌ Erreur dans send-quote-email:", error);
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message 
+        error: error.message,
+        method: 'SMTP'
       }),
       {
         status: 500,
