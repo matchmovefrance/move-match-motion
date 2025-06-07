@@ -92,20 +92,25 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
   try {
     console.log(`📤 Envoi email vers: ${emailData.clientEmail}`);
 
-    // Connexion SMTP avec support TLS/SSL
+    // Connexion SMTP avec la même logique que la fonction de test
     let conn;
-    const connectOptions: any = {
-      hostname: settings.smtp_host,
-      port: settings.smtp_port,
-    };
-
-    // Si le port est 465 (SSL) ou smtp_secure est true, utiliser TLS
-    if (settings.smtp_port === 465 || settings.smtp_secure) {
-      connectOptions.transport = 'tls';
-    }
-
     try {
-      conn = await Deno.connect(connectOptions);
+      // Pour les ports SSL (465) ou si smtp_secure est true, utiliser une connexion TLS directe
+      if (settings.smtp_port === 465 || (settings.smtp_secure && settings.smtp_port !== 587)) {
+        console.log("🔒 Connexion TLS directe...");
+        conn = await Deno.connectTls({
+          hostname: settings.smtp_host,
+          port: settings.smtp_port,
+        });
+      } else {
+        // Connexion normale pour les autres cas
+        console.log("🔌 Connexion TCP normale...");
+        conn = await Deno.connect({
+          hostname: settings.smtp_host,
+          port: settings.smtp_port,
+        });
+      }
+
       console.log("✅ Connexion SMTP établie");
     } catch (error) {
       console.error("❌ Erreur connexion SMTP:", error);
@@ -121,7 +126,12 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
       await conn.write(encoder.encode(command));
       
       const buffer = new Uint8Array(1024);
-      const n = await conn.read(buffer);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout de lecture")), 10000);
+      });
+      
+      const readPromise = conn.read(buffer);
+      const n = await Promise.race([readPromise, timeoutPromise]);
       const response = decoder.decode(buffer.subarray(0, n || 0));
       console.log(`📥 SMTP: ${response.trim()}`);
       
@@ -143,7 +153,7 @@ const sendEmailSMTP = async (emailData: QuoteEmailRequest, settings: any) => {
       await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
       
       // STARTTLS si nécessaire (port 587 ou demandé explicitement)
-      if (settings.smtp_port === 587 || (settings.smtp_secure && settings.smtp_port !== 465)) {
+      if (settings.smtp_port === 587 && settings.smtp_secure) {
         console.log("🔒 Activation STARTTLS...");
         await sendCommand("STARTTLS\r\n");
         
