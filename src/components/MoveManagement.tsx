@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro } from 'lucide-react';
@@ -100,136 +99,93 @@ const MoveManagement = () => {
     setFilteredMoves(filteredData);
   };
 
-  const cleanStringField = (value: any): string | null => {
-    if (!value || value === '') return null;
-    const trimmed = String(value).trim();
-    return trimmed === '' ? null : trimmed;
+  const validateRequiredFields = (formData: any) => {
+    const requiredFields = ['mover_name', 'company_name', 'departure_city', 'arrival_city', 'departure_date', 'max_volume'];
+    const missingFields = [];
+
+    for (const field of requiredFields) {
+      if (!formData[field] || String(formData[field]).trim() === '') {
+        missingFields.push(field);
+      }
+    }
+
+    return missingFields;
   };
 
-  const cleanDateField = (value: any): string | null => {
-    if (!value || value === '') return null;
-    const trimmed = String(value).trim();
-    return trimmed === '' ? null : trimmed;
-  };
-
-  const cleanFormData = (formData: any) => {
+  const cleanAndProcessFormData = (formData: any) => {
     const parseNumeric = (value: any): number | null => {
       if (value === null || value === undefined || value === '') return null;
       const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
       return isNaN(parsed) ? null : parsed;
     };
 
-    const parseInteger = (value: any): number => {
-      if (value === null || value === undefined || value === '') return 0;
-      const parsed = typeof value === 'string' ? parseInt(value) : Number(value);
-      return isNaN(parsed) ? 0 : parsed;
-    };
-
     return {
-      // Champs obligatoires pour confirmed_moves
-      mover_id: parseInteger(formData.mover_id) || 1,
-      truck_id: parseInteger(formData.truck_id) || 1,
-      departure_city: cleanStringField(formData.departure_city) || 'Paris',
-      departure_postal_code: cleanStringField(formData.departure_postal_code) || '75000',
-      arrival_city: cleanStringField(formData.arrival_city) || 'Lyon',
-      arrival_postal_code: cleanStringField(formData.arrival_postal_code) || '69000',
-      departure_date: cleanDateField(formData.departure_date) || new Date().toISOString().split('T')[0],
+      mover_name: formData.mover_name?.trim() || null,
+      company_name: formData.company_name?.trim() || null,
+      truck_identifier: formData.truck_identifier?.trim() || `TRUCK-${Date.now()}`,
+      departure_address: formData.departure_address?.trim() || null,
+      departure_city: formData.departure_city?.trim() || '',
+      departure_postal_code: formData.departure_postal_code?.trim() || '',
+      departure_country: formData.departure_country?.trim() || 'France',
+      arrival_address: formData.arrival_address?.trim() || null,
+      arrival_city: formData.arrival_city?.trim() || '',
+      arrival_postal_code: formData.arrival_postal_code?.trim() || '',
+      arrival_country: formData.arrival_country?.trim() || 'France',
+      departure_date: formData.departure_date || new Date().toISOString().split('T')[0],
+      departure_time: formData.departure_time || null,
+      arrival_time: formData.arrival_time || null,
+      estimated_arrival_date: formData.estimated_arrival_date || null,
+      estimated_arrival_time: formData.estimated_arrival_time || null,
+      max_volume: parseNumeric(formData.max_volume) || 50,
       used_volume: parseNumeric(formData.used_volume) || 0,
-      status: cleanStringField(formData.status) || 'confirmed',
-      created_by: user?.id,
-
-      // Champs optionnels avec nettoyage approprié
-      mover_name: cleanStringField(formData.mover_name),
-      company_name: cleanStringField(formData.company_name),
-      truck_identifier: cleanStringField(formData.truck_identifier),
-      departure_address: cleanStringField(formData.departure_address),
-      departure_country: cleanStringField(formData.departure_country) || 'France',
-      arrival_address: cleanStringField(formData.arrival_address),
-      arrival_country: cleanStringField(formData.arrival_country) || 'France',
-      departure_time: cleanDateField(formData.departure_time),
-      arrival_time: cleanDateField(formData.arrival_time),
-      estimated_arrival_date: cleanDateField(formData.estimated_arrival_date),
-      estimated_arrival_time: cleanDateField(formData.estimated_arrival_time),
-      max_volume: parseNumeric(formData.max_volume),
       price_per_m3: parseNumeric(formData.price_per_m3),
       total_price: parseNumeric(formData.total_price),
-      description: cleanStringField(formData.description),
-      special_requirements: cleanStringField(formData.special_requirements),
-      access_conditions: cleanStringField(formData.access_conditions),
-      contact_phone: cleanStringField(formData.contact_phone),
-      contact_email: cleanStringField(formData.contact_email),
-      available_volume: parseNumeric(formData.available_volume),
-      truck_type: cleanStringField(formData.truck_type) || 'Semi-remorque',
-      status_custom: cleanStringField(formData.status_custom) || 'en_cours',
-      route_type: cleanStringField(formData.route_type) || 'direct',
-      special_conditions: cleanStringField(formData.special_conditions),
-      equipment_available: cleanStringField(formData.equipment_available),
-      insurance_details: cleanStringField(formData.insurance_details),
-      number_of_clients: parseInteger(formData.number_of_clients) || 0,
-      max_weight: parseNumeric(formData.max_weight),
-      base_rate: parseNumeric(formData.base_rate),
-      fuel_surcharge: parseNumeric(formData.fuel_surcharge),
-      additional_fees: parseNumeric(formData.additional_fees),
-      total_cost: parseNumeric(formData.total_cost)
+      description: formData.description?.trim() || null,
+      special_requirements: formData.special_requirements?.trim() || null,
+      access_conditions: formData.access_conditions?.trim() || null,
+      contact_phone: formData.contact_phone?.trim() || null,
+      contact_email: formData.contact_email?.trim() || null,
+      status: formData.status || 'confirmed'
     };
   };
 
   const handleFormSubmit = async (formData: any) => {
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour effectuer cette action",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('Original move form data:', formData);
       
       // Validation des champs obligatoires
-      if (!formData.mover_name?.trim() || !formData.company_name?.trim()) {
+      const missingFields = validateRequiredFields(formData);
+      if (missingFields.length > 0) {
         toast({
           title: "Erreur",
-          description: "Le nom du déménageur et de l'entreprise sont obligatoires",
+          description: `Les champs suivants sont obligatoires : ${missingFields.join(', ')}`,
           variant: "destructive",
         });
         return;
       }
 
-      // Créer un déménageur 
-      const { data: moverData, error: moverError } = await supabase
-        .from('movers')
-        .insert({
-          name: formData.mover_name.trim(),
-          company_name: formData.company_name.trim(),
-          email: formData.contact_email?.trim() || `test-${Date.now()}@example.com`,
-          phone: formData.contact_phone?.trim() || '0123456789',
-          created_by: user?.id
-        })
-        .select()
-        .single();
-
-      if (moverError) throw moverError;
-
-      // Créer un camion 
-      const { data: truckData, error: truckError } = await supabase
-        .from('trucks')
-        .insert({
-          mover_id: moverData.id,
-          identifier: formData.truck_identifier?.trim() || `TRUCK-${Date.now()}`,
-          max_volume: parseFloat(formData.max_volume) || 50
-        })
-        .select()
-        .single();
-
-      if (truckError) throw truckError;
-
-      // Nettoyer et valider les données avec les bons IDs
-      const cleanData = {
-        ...cleanFormData(formData),
-        mover_id: moverData.id,
-        truck_id: truckData.id
-      };
-
-      console.log('Processed move data:', cleanData);
+      // Nettoyer et traiter les données
+      const processedData = cleanAndProcessFormData(formData);
+      console.log('Processed move data:', processedData);
 
       if (editingMove) {
+        // Mode édition
         const { error } = await supabase
           .from('confirmed_moves')
-          .update(cleanData)
+          .update({
+            ...processedData,
+            created_by: user.id
+          })
           .eq('id', editingMove.id);
 
         if (error) throw error;
@@ -239,11 +195,53 @@ const MoveManagement = () => {
           description: "Déménagement mis à jour avec succès",
         });
       } else {
-        const { error } = await supabase
-          .from('confirmed_moves')
-          .insert(cleanData);
+        // Mode création - Créer d'abord un déménageur et un camion
+        const { data: moverData, error: moverError } = await supabase
+          .from('movers')
+          .insert({
+            name: processedData.mover_name,
+            company_name: processedData.company_name,
+            email: processedData.contact_email || `mover-${Date.now()}@example.com`,
+            phone: processedData.contact_phone || '0123456789',
+            created_by: user.id
+          })
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (moverError) {
+          console.error('Mover creation error:', moverError);
+          throw moverError;
+        }
+
+        const { data: truckData, error: truckError } = await supabase
+          .from('trucks')
+          .insert({
+            mover_id: moverData.id,
+            identifier: processedData.truck_identifier,
+            max_volume: processedData.max_volume
+          })
+          .select()
+          .single();
+
+        if (truckError) {
+          console.error('Truck creation error:', truckError);
+          throw truckError;
+        }
+
+        // Créer le déménagement avec les IDs corrects
+        const { error: moveError } = await supabase
+          .from('confirmed_moves')
+          .insert({
+            ...processedData,
+            mover_id: moverData.id,
+            truck_id: truckData.id,
+            created_by: user.id
+          });
+
+        if (moveError) {
+          console.error('Move creation error:', moveError);
+          throw moveError;
+        }
 
         toast({
           title: "Succès",
@@ -251,7 +249,7 @@ const MoveManagement = () => {
         });
       }
 
-      // Fermer les formulaires et rafraîchir la liste
+      // Fermer les formulaires et retourner à la liste
       setShowAddForm(false);
       setEditingMove(null);
       await fetchMoves();
@@ -293,176 +291,7 @@ const MoveManagement = () => {
     }
   };
 
-  const renderMoveCard = (move: Move) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-800 mb-2">
-            {move.company_name || 'Entreprise non renseignée'} - {move.mover_name || 'Déménageur non renseigné'}
-          </h3>
-          
-          <div className="space-y-2 text-sm text-gray-600">
-            <div className="flex items-center space-x-2">
-              <MapPin className="h-4 w-4 text-green-600" />
-              <span>{move.departure_postal_code} {move.departure_city} → {move.arrival_postal_code} {move.arrival_city}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-purple-600" />
-              <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
-            </div>
-            {move.max_volume && (
-              <div className="flex items-center space-x-2">
-                <Volume2 className="h-4 w-4 text-orange-600" />
-                <span>Volume: {move.used_volume}m³ / {move.max_volume}m³ (Disponible: {move.available_volume}m³)</span>
-              </div>
-            )}
-            {move.total_price && (
-              <div className="flex items-center space-x-2">
-                <Euro className="h-4 w-4 text-green-600" />
-                <span>{move.total_price}€</span>
-              </div>
-            )}
-            {move.contact_phone && (
-              <div className="flex items-center space-x-2">
-                <User className="h-4 w-4 text-blue-600" />
-                <span>{move.contact_phone}</span>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-3">
-            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-              move.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-              move.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-              move.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {move.status === 'pending' ? 'En attente' : 
-               move.status === 'confirmed' ? 'Confirmé' :
-               move.status === 'completed' ? 'Terminé' : move.status}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditingMove(move)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer le déménagement</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer le déménagement de {move.company_name || 'cette entreprise'} ? 
-                  Cette action est irréversible.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteMove(move.id)}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  Supprimer
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  const renderMoveListItem = (move: Move) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex-1">
-        <div className="flex items-center space-x-4">
-          <div>
-            <h4 className="font-medium text-gray-800">{move.company_name || 'Entreprise non renseignée'}</h4>
-            <p className="text-sm text-gray-600">{move.mover_name || 'Déménageur non renseigné'}</p>
-          </div>
-          <div className="text-sm text-gray-500">
-            <span>{move.departure_city} → {move.arrival_city}</span>
-          </div>
-          <div className="text-sm text-gray-500">
-            <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
-          </div>
-          {move.available_volume && (
-            <div className="text-sm text-gray-500">
-              <span>{move.available_volume}m³ disponible</span>
-            </div>
-          )}
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            move.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-            move.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-            move.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {move.status === 'pending' ? 'En attente' : 
-             move.status === 'confirmed' ? 'Confirmé' :
-             move.status === 'completed' ? 'Terminé' : move.status}
-          </div>
-        </div>
-      </div>
-      <div className="flex space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setEditingMove(move)}
-        >
-          <Edit className="h-3 w-3" />
-        </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer le déménagement</AlertDialogTitle>
-              <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer le déménagement de {move.company_name || 'cette entreprise'} ? 
-                Cette action est irréversible.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annuler</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deleteMove(move.id)}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Supprimer
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </div>
-  );
-
-  if (loading) {
+  if (loading && !showAddForm && !editingMove) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -623,7 +452,7 @@ const MoveManagement = () => {
                         Supprimer
                       </AlertDialogAction>
                     </AlertDialogFooter>
-                    </AlertDialogContent>
+                  </AlertDialogContent>
                 </AlertDialog>
               </div>
             </div>

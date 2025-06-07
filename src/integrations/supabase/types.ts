@@ -135,6 +135,13 @@ export type Database = {
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_client_requests_client_id"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clients: {
@@ -313,6 +320,20 @@ export type Database = {
           },
           {
             foreignKeyName: "confirmed_moves_truck_id_fkey"
+            columns: ["truck_id"]
+            isOneToOne: false
+            referencedRelation: "trucks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_confirmed_moves_mover_id"
+            columns: ["mover_id"]
+            isOneToOne: false
+            referencedRelation: "movers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_confirmed_moves_truck_id"
             columns: ["truck_id"]
             isOneToOne: false
             referencedRelation: "trucks"
@@ -572,6 +593,13 @@ export type Database = {
           mover_id?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_trucks_mover_id"
+            columns: ["mover_id"]
+            isOneToOne: false
+            referencedRelation: "movers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "trucks_mover_id_fkey"
             columns: ["mover_id"]

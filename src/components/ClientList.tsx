@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye } from 'lucide-react';
@@ -90,59 +89,99 @@ const ClientList = () => {
     }
   };
 
-  const cleanDateField = (value: any): string | null => {
-    if (!value || value === '') return null;
-    const trimmed = String(value).trim();
-    return trimmed === '' ? null : trimmed;
+  const validateRequiredFields = (formData: any) => {
+    const requiredFields = ['name', 'email', 'phone', 'departure_city', 'arrival_city', 'estimated_volume', 'desired_date'];
+    const missingFields = [];
+
+    for (const field of requiredFields) {
+      if (!formData[field] || String(formData[field]).trim() === '') {
+        missingFields.push(field);
+      }
+    }
+
+    return missingFields;
   };
 
-  const cleanStringField = (value: any): string | null => {
-    if (!value || value === '') return null;
-    const trimmed = String(value).trim();
-    return trimmed === '' ? null : trimmed;
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const cleanAndProcessFormData = (formData: any) => {
+    return {
+      name: formData.name?.trim() || null,
+      email: formData.email?.trim().toLowerCase() || null,
+      phone: formData.phone?.trim() || null,
+      departure_address: formData.departure_address?.trim() || null,
+      departure_city: formData.departure_city?.trim() || '',
+      departure_postal_code: formData.departure_postal_code?.trim() || '',
+      departure_country: formData.departure_country?.trim() || 'France',
+      departure_time: formData.departure_time || null,
+      arrival_address: formData.arrival_address?.trim() || null,
+      arrival_city: formData.arrival_city?.trim() || '',
+      arrival_postal_code: formData.arrival_postal_code?.trim() || '',
+      arrival_country: formData.arrival_country?.trim() || 'France',
+      desired_date: formData.desired_date || new Date().toISOString().split('T')[0],
+      estimated_arrival_date: formData.estimated_arrival_date || null,
+      estimated_arrival_time: formData.estimated_arrival_time || null,
+      estimated_volume: formData.estimated_volume ? parseFloat(formData.estimated_volume) : 0,
+      description: formData.description?.trim() || null,
+      budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
+      budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
+      quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
+      special_requirements: formData.special_requirements?.trim() || null,
+      access_conditions: formData.access_conditions?.trim() || null,
+      inventory_list: formData.inventory_list?.trim() || null,
+      flexible_dates: formData.flexible_dates || false,
+      date_range_start: formData.date_range_start || null,
+      date_range_end: formData.date_range_end || null,
+      status: 'pending',
+      is_matched: false,
+      match_status: 'pending'
+    };
   };
 
   const handleFormSubmit = async (formData: any) => {
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour effectuer cette action",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('Original form data:', formData);
 
-      // Nettoyer toutes les données avec gestion spéciale pour les dates
-      const processedData = {
-        name: cleanStringField(formData.name),
-        email: cleanStringField(formData.email),
-        phone: cleanStringField(formData.phone),
-        departure_address: cleanStringField(formData.departure_address),
-        departure_city: cleanStringField(formData.departure_city) || '',
-        departure_postal_code: cleanStringField(formData.departure_postal_code) || '',
-        departure_country: cleanStringField(formData.departure_country) || 'France',
-        departure_time: cleanDateField(formData.departure_time),
-        arrival_address: cleanStringField(formData.arrival_address),
-        arrival_city: cleanStringField(formData.arrival_city) || '',
-        arrival_postal_code: cleanStringField(formData.arrival_postal_code) || '',
-        arrival_country: cleanStringField(formData.arrival_country) || 'France',
-        desired_date: cleanStringField(formData.desired_date) || new Date().toISOString().split('T')[0],
-        estimated_arrival_date: cleanDateField(formData.estimated_arrival_date),
-        estimated_arrival_time: cleanDateField(formData.estimated_arrival_time),
-        estimated_volume: formData.estimated_volume ? parseFloat(formData.estimated_volume) : 0,
-        description: cleanStringField(formData.description),
-        budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
-        budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
-        quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
-        special_requirements: cleanStringField(formData.special_requirements),
-        access_conditions: cleanStringField(formData.access_conditions),
-        inventory_list: cleanStringField(formData.inventory_list),
-        flexible_dates: formData.flexible_dates || false,
-        date_range_start: cleanDateField(formData.date_range_start),
-        date_range_end: cleanDateField(formData.date_range_end),
-        status: 'pending',
-        is_matched: false,
-        match_status: 'pending'
-      };
+      // Validation des champs obligatoires
+      const missingFields = validateRequiredFields(formData);
+      if (missingFields.length > 0) {
+        toast({
+          title: "Erreur",
+          description: `Les champs suivants sont obligatoires : ${missingFields.join(', ')}`,
+          variant: "destructive",
+        });
+        return;
+      }
 
-      console.log('Processed data before save:', processedData);
+      // Validation email
+      if (formData.email && !validateEmail(formData.email)) {
+        toast({
+          title: "Erreur",
+          description: "Veuillez entrer une adresse email valide",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Nettoyer les données
+      const processedData = cleanAndProcessFormData(formData);
+      console.log('Processed data:', processedData);
 
       if (editingClient) {
+        // Mode édition
         const { error } = await supabase
           .from('client_requests')
           .update(processedData)
@@ -155,53 +194,47 @@ const ClientList = () => {
           description: "Demande client mise à jour avec succès",
         });
       } else {
-        // Validation des champs obligatoires pour nouveaux clients
-        if (!processedData.name?.trim() || !processedData.email?.trim() || !processedData.phone?.trim()) {
-          toast({
-            title: "Erreur",
-            description: "Les champs nom, email et téléphone sont obligatoires",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Validation email
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(processedData.email)) {
-          toast({
-            title: "Erreur",
-            description: "Veuillez entrer une adresse email valide",
-            variant: "destructive",
-          });
-          return;
-        }
-
+        // Mode création
         // Créer d'abord un client dans la table clients
         const { data: clientData, error: clientError } = await supabase
           .from('clients')
           .insert({
-            name: processedData.name.trim(),
-            email: processedData.email.trim().toLowerCase(),
-            phone: processedData.phone.trim(),
-            created_by: user?.id,
+            name: processedData.name,
+            email: processedData.email,
+            phone: processedData.phone,
+            created_by: user.id,
           })
           .select('id')
           .single();
 
-        if (clientError) throw clientError;
+        if (clientError) {
+          console.error('Client creation error:', clientError);
+          if (clientError.code === '23505') {
+            toast({
+              title: "Erreur",
+              description: "Un client avec cette adresse email existe déjà",
+              variant: "destructive",
+            });
+          } else {
+            throw clientError;
+          }
+          return;
+        }
 
-        // Insérer ensuite la demande client avec le bon client_id
-        const { error } = await supabase
+        // Insérer ensuite la demande client
+        const { error: requestError } = await supabase
           .from('client_requests')
           .insert({
             ...processedData,
-            email: processedData.email.trim().toLowerCase(),
-            created_by: user?.id,
+            created_by: user.id,
             client_id: clientData.id,
-            estimated_volume_backup: parseFloat(formData.estimated_volume) || 0
+            estimated_volume_backup: processedData.estimated_volume
           });
 
-        if (error) throw error;
+        if (requestError) {
+          console.error('Client request creation error:', requestError);
+          throw requestError;
+        }
 
         toast({
           title: "Succès",
@@ -209,25 +242,16 @@ const ClientList = () => {
         });
       }
 
-      // Fermer les formulaires et rafraîchir la liste
+      // Fermer les formulaires et retourner à la liste
       setShowAddForm(false);
       setEditingClient(null);
       await fetchClients();
       
     } catch (error: any) {
       console.error('Error saving client:', error);
-      
-      let errorMessage = "Impossible de sauvegarder la demande client";
-      
-      if (error.code === '23505') {
-        errorMessage = "Un client avec cette adresse email existe déjà";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Erreur",
-        description: errorMessage,
+        description: `Impossible de sauvegarder la demande client: ${error.message}`,
         variant: "destructive",
       });
     } finally {
@@ -237,7 +261,7 @@ const ClientList = () => {
 
   const deleteClient = async (id: number, clientId: number) => {
     try {
-      console.log('Deleting client:', clientId, 'and client request:', id);
+      console.log('Deleting client request:', id, 'and client:', clientId);
       
       // Supprimer le client (cela supprimera automatiquement la demande client avec CASCADE)
       const { error: clientError } = await supabase
@@ -250,16 +274,12 @@ const ClientList = () => {
         throw clientError;
       }
 
-      // Mettre à jour l'état local immédiatement après la suppression réussie
-      setClients(prevClients => {
-        const updatedClients = prevClients.filter(c => c.id !== id);
-        console.log('Updated clients list:', updatedClients);
-        return updatedClients;
-      });
+      // Mettre à jour l'état local
+      setClients(prevClients => prevClients.filter(c => c.id !== id));
 
       toast({
         title: "Succès",
-        description: "Client supprimé avec succès de la base de données",
+        description: "Client supprimé avec succès",
       });
 
     } catch (error: any) {
@@ -281,206 +301,6 @@ const ClientList = () => {
     setShowClientDetails(false);
     setSelectedClient(null);
   };
-
-  const renderClientCard = (client: ClientRequest) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-800 mb-2">
-            {client.name || 'Client non renseigné'}
-          </h3>
-          
-          <div className="space-y-2 text-sm text-gray-600">
-            <div className="flex items-center space-x-2">
-              <MapPin className="h-4 w-4 text-green-600" />
-              <span>{client.departure_postal_code} {client.departure_city} → {client.arrival_postal_code} {client.arrival_city}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-purple-600" />
-              <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
-              {client.departure_time && <span>à {client.departure_time}</span>}
-            </div>
-            {client.estimated_volume && (
-              <div className="flex items-center space-x-2">
-                <Volume2 className="h-4 w-4 text-orange-600" />
-                <span>Volume: {client.estimated_volume}m³</span>
-              </div>
-            )}
-            {client.budget_max && (
-              <div className="flex items-center space-x-2">
-                <Euro className="h-4 w-4 text-green-600" />
-                <span>Budget: {client.budget_min || 0}€ - {client.budget_max}€</span>
-              </div>
-            )}
-            {client.email && (
-              <div className="text-blue-600">
-                <a 
-                  href={`mailto:${client.email}`}
-                  className="hover:underline"
-                  title="Envoyer un email"
-                >
-                  {client.email}
-                </a>
-              </div>
-            )}
-            {client.phone && (
-              <div className="text-blue-600">
-                <a 
-                  href={`tel:${client.phone}`}
-                  className="hover:underline"
-                  title="Appeler ce numéro"
-                >
-                  {client.phone}
-                </a>
-              </div>
-            )}
-            <div className="text-xs text-gray-400 mt-3">
-              Créé le {new Date(client.created_at).toLocaleDateString('fr-FR')}
-            </div>
-          </div>
-          
-          <div className="mt-3 flex space-x-2">
-            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-              client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-              client.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-              client.status === 'rejected' ? 'bg-red-100 text-red-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {client.status === 'pending' ? 'En attente' : 
-               client.status === 'confirmed' ? 'Confirmé' :
-               client.status === 'rejected' ? 'Rejeté' : client.status}
-            </span>
-            {client.is_matched && (
-              <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                client.match_status === 'accepted' ? 'bg-green-100 text-green-800' :
-                client.match_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                'bg-blue-100 text-blue-800'
-              }`}>
-                Match: {client.match_status === 'accepted' ? 'Accepté' :
-                       client.match_status === 'rejected' ? 'Rejeté' : 'En attente'}
-              </span>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex space-x-2">
-          <QuoteGenerator client={client} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditingClient(client)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
-                  Cette action supprimera définitivement la demande client de la base de données.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteClient(client.id, client.client_id)}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  Supprimer
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  const renderClientListItem = (client: ClientRequest) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex-1">
-        <div className="flex items-center space-x-4">
-          <div>
-            <h4 className="font-medium text-gray-800">{client.name || 'Client non renseigné'}</h4>
-            <p className="text-sm text-gray-600">{client.email}</p>
-          </div>
-          <div className="text-sm text-gray-500">
-            <span>{client.departure_city} → {client.arrival_city}</span>
-          </div>
-          <div className="text-sm text-gray-500">
-            <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
-          </div>
-          {client.estimated_volume && (
-            <div className="text-sm text-gray-500">
-              <span>{client.estimated_volume}m³</span>
-            </div>
-          )}
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            client.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-            client.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-            client.status === 'rejected' ? 'bg-red-100 text-red-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {client.status === 'pending' ? 'En attente' : 
-             client.status === 'confirmed' ? 'Confirmé' :
-             client.status === 'rejected' ? 'Rejeté' : client.status}
-          </div>
-        </div>
-      </div>
-      <div className="flex space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setEditingClient(client)}
-        >
-          <Edit className="h-3 w-3" />
-        </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer la demande client</AlertDialogTitle>
-              <AlertDialogDescription>
-                Êtes-vous sûr de vouloir supprimer la demande de {client.name || 'ce client'} ? 
-                Cette action supprimera définitivement la demande client de la base de données.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annuler</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deleteClient(client.id, client.client_id)}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Supprimer
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </div>
-  );
 
   if (loading) {
     return (
