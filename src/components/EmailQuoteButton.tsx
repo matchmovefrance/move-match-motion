@@ -42,7 +42,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     if (!client.email) {
       toast({
         title: "Erreur",
-        description: "Aucune adresse email renseignée pour ce client",
+        description: "Aucune adresse email renseignée",
         variant: "destructive",
       });
       return;
@@ -50,7 +50,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
 
     if (!client.quote_amount) {
       toast({
-        title: "Erreur",
+        title: "Erreur", 
         description: "Aucun montant de devis renseigné",
         variant: "destructive",
       });
@@ -60,10 +60,9 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     setIsLoading(true);
     
     try {
-      console.log('📧 Envoi email de devis à:', client.email);
+      console.log('📧 Envoi devis à:', client.email);
       
-      // Préparer les données pour l'edge function
-      const emailData = {
+      const emailPayload = {
         clientName: client.name || 'Client',
         clientEmail: client.email,
         quoteAmount: client.quote_amount,
@@ -78,47 +77,43 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         estimatedVolume: client.estimated_volume
       };
 
-      console.log('📦 Données email:', emailData);
+      console.log('📦 Payload:', emailPayload);
 
-      // Appel de l'edge function
       const { data, error } = await supabase.functions.invoke('send-quote-email', {
-        body: emailData
+        body: emailPayload
       });
 
-      console.log('📨 Réponse edge function:', { data, error });
+      console.log('📨 Réponse:', { data, error });
 
       if (error) {
-        console.error('❌ Erreur edge function:', error);
-        throw error;
+        console.error('❌ Erreur Supabase:', error);
+        throw new Error(error.message || 'Erreur lors de l\'appel de la fonction');
       }
 
-      if (!data?.success) {
-        throw new Error(data?.error || 'Erreur inconnue lors de l\'envoi');
+      if (data?.success === false) {
+        throw new Error(data.error || 'L\'envoi a échoué');
       }
 
       toast({
-        title: "Email envoyé",
-        description: `Le devis a été envoyé avec succès à ${client.email}`,
+        title: "✅ Email envoyé",
+        description: `Le devis a été envoyé à ${client.email}`,
       });
       setIsOpen(false);
       
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'envoi:', error);
-      
-      let errorMessage = "Impossible d'envoyer l'email";
-      if (error.message) {
-        errorMessage += `: ${error.message}`;
-      }
+      console.error('💥 Erreur complète:', error);
       
       toast({
-        title: "Erreur",
-        description: errorMessage,
+        title: "❌ Erreur d'envoi",
+        description: error.message || "Impossible d'envoyer l'email",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
+
+  const isDisabled = !client.email || !client.quote_amount;
 
   return (
     <>
@@ -127,10 +122,8 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         variant="outline"
         size="sm"
         className="text-blue-600 hover:text-blue-700"
-        disabled={!client.email || !client.quote_amount}
-        title={!client.email ? "Aucune adresse email renseignée" : 
-               !client.quote_amount ? "Aucun montant de devis renseigné" : 
-               "Envoyer le devis par email"}
+        disabled={isDisabled}
+        title={isDisabled ? "Email ou montant manquant" : "Envoyer le devis par email"}
       >
         <Mail className="h-4 w-4" />
       </Button>
@@ -143,7 +136,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
               <span>Envoyer le devis par email</span>
             </DialogTitle>
             <DialogDescription>
-              Le devis sera envoyé directement en HTML dans l'email avec un design professionnel
+              Le devis sera envoyé directement en HTML dans l'email
             </DialogDescription>
           </DialogHeader>
 
@@ -151,33 +144,17 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="font-medium text-gray-600">De :</span>
-                  <p className="text-gray-800">MatchMove</p>
-                </div>
-                <div>
                   <span className="font-medium text-gray-600">À :</span>
                   <p className="text-gray-800">{client.name || 'Client'}</p>
                   <p className="text-blue-600">{client.email}</p>
                 </div>
+                <div>
+                  <span className="font-medium text-gray-600">Montant :</span>
+                  <p className="text-green-600 font-bold text-lg">
+                    {client.quote_amount?.toLocaleString('fr-FR')} € TTC
+                  </p>
+                </div>
               </div>
-              <div className="mt-3">
-                <span className="font-medium text-gray-600">Objet :</span>
-                <p className="text-gray-800">
-                  Votre devis de déménagement - {new Date(client.desired_date).toLocaleDateString('fr-FR')}
-                </p>
-              </div>
-              <div className="mt-3">
-                <span className="font-medium text-gray-600">Montant :</span>
-                <p className="text-green-600 font-bold text-lg">
-                  {client.quote_amount?.toLocaleString('fr-FR')} € TTC
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 rounded-lg p-3">
-              <p className="text-sm text-blue-800">
-                ✨ Email professionnel avec design moderne et toutes les informations du déménagement
-              </p>
             </div>
           </div>
 
