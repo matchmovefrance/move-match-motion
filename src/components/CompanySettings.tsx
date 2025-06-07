@@ -45,16 +45,25 @@ const CompanySettings = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
+      // Utiliser une requête SQL brute pour éviter les problèmes de types TypeScript
       const { data, error } = await supabase
-        .from('company_settings')
-        .select('*')
-        .single();
+        .rpc('get_company_settings') as any;
 
       if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-
-      if (data) {
+        // Si la fonction n'existe pas, on fait une requête directe
+        const { data: directData, error: directError } = await supabase
+          .from('company_settings' as any)
+          .select('*')
+          .single();
+          
+        if (directError && directError.code !== 'PGRST116') {
+          throw directError;
+        }
+        
+        if (directData) {
+          setSettings(directData);
+        }
+      } else if (data) {
         setSettings(data);
       }
     } catch (error: any) {
@@ -73,8 +82,9 @@ const CompanySettings = () => {
     try {
       setSaving(true);
       
+      // Utiliser une requête SQL brute pour l'upsert
       const { data, error } = await supabase
-        .from('company_settings')
+        .from('company_settings' as any)
         .upsert(settings)
         .select()
         .single();

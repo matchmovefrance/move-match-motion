@@ -171,6 +171,51 @@ export type Database = {
         }
         Relationships: []
       }
+      company_settings: {
+        Row: {
+          company_address: string
+          company_email: string
+          company_name: string
+          company_phone: string
+          created_at: string | null
+          id: number
+          smtp_enabled: boolean
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_username: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_address?: string
+          company_email?: string
+          company_name?: string
+          company_phone?: string
+          created_at?: string | null
+          id?: number
+          smtp_enabled?: boolean
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_username?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_address?: string
+          company_email?: string
+          company_name?: string
+          company_phone?: string
+          created_at?: string | null
+          id?: number
+          smtp_enabled?: boolean
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_username?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       confirmed_moves: {
         Row: {
           access_conditions: string | null

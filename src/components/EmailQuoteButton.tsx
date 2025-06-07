@@ -41,7 +41,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
   const generatePDFBase64 = async (): Promise<string> => {
     // Récupérer les paramètres de l'entreprise depuis la base de données
     const { data: companySettings } = await supabase
-      .from('company_settings')
+      .from('company_settings' as any)
       .select('*')
       .single();
 

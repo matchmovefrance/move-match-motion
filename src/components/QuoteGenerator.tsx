@@ -1,3 +1,4 @@
+
 import jsPDF from 'jspdf';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,7 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
   const generatePDF = async () => {
     // Récupérer les paramètres de l'entreprise depuis la base de données
     const { data: companySettings } = await supabase
-      .from('company_settings')
+      .from('company_settings' as any)
       .select('*')
       .single();
 
