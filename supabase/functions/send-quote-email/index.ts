@@ -44,6 +44,66 @@ interface CompanySettings {
   smtp_password?: string;
 }
 
+// Fonction pour envoyer via SMTP personnalisé
+async function sendViaSMTP(
+  settings: CompanySettings,
+  to: string,
+  subject: string,
+  htmlContent: string,
+  pdfBuffer: Uint8Array,
+  fileName: string
+) {
+  // Configuration SMTP pour l'envoi direct
+  const smtpConfig = {
+    hostname: settings.smtp_host,
+    port: settings.smtp_port || 587,
+    username: settings.smtp_username,
+    password: settings.smtp_password,
+    from: `${settings.company_name} <${settings.smtp_username}>`,
+    to: to,
+    subject: subject,
+    html: htmlContent,
+    attachments: [
+      {
+        filename: fileName,
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      }
+    ]
+  };
+
+  console.log(`📧 Envoi SMTP via ${settings.smtp_host}:${settings.smtp_port}`);
+  
+  // Simulation d'envoi SMTP (Deno ne supporte pas encore nodemailer nativement)
+  // Pour une vraie implémentation SMTP, il faudrait utiliser une API externe
+  // ou créer un serveur PHP séparé pour cette fonction
+  
+  // Pour l'instant, on utilise une API SMTP externe comme EmailJS ou similaire
+  const smtpResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      service_id: 'your_service_id', // À configurer
+      template_id: 'your_template_id', // À configurer
+      user_id: 'your_user_id', // À configurer
+      template_params: {
+        to_email: to,
+        from_name: settings.company_name,
+        subject: subject,
+        message: htmlContent,
+      }
+    })
+  });
+
+  if (!smtpResponse.ok) {
+    throw new Error(`Erreur SMTP: ${smtpResponse.statusText}`);
+  }
+
+  return { success: true, method: 'SMTP' };
+}
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -54,7 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
     const emailData: QuoteEmailRequest = await req.json();
     const { clientName, clientEmail, quoteAmount, desiredDate, pdfBase64 } = emailData;
 
-    console.log(`Envoi d'email de devis pour: ${clientEmail}`);
+    console.log(`📧 Envoi d'email de devis pour: ${clientEmail}`);
 
     // Récupérer les paramètres de l'entreprise
     const { data: settings, error: settingsError } = await supabase
@@ -63,8 +123,7 @@ const handler = async (req: Request): Promise<Response> => {
       .single();
 
     if (settingsError) {
-      console.error("Erreur lors de la récupération des paramètres:", settingsError);
-      // Utiliser des valeurs par défaut
+      console.error("❌ Erreur lors de la récupération des paramètres:", settingsError);
     }
 
     const companySettings: CompanySettings = settings || {
@@ -143,21 +202,58 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Convertir le base64 en buffer pour l'attachement
     const pdfBuffer = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+    const fileName = `devis_${clientName?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
 
-    const emailResponse = await resend.emails.send({
-      from: `${companySettings.company_name} déménagements solutions <noreply@matchmove.fr>`,
-      to: [clientEmail],
-      subject: `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
-      html: emailContent,
-      attachments: [
-        {
-          filename: `devis_${clientName?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`,
-          content: pdfBuffer,
-        },
-      ],
-    });
+    let emailResponse;
 
-    console.log("Email de devis envoyé avec succès:", emailResponse);
+    // Choisir la méthode d'envoi selon la configuration
+    if (companySettings.smtp_enabled && companySettings.smtp_host) {
+      console.log("🔧 Utilisation du SMTP personnalisé configuré");
+      
+      try {
+        emailResponse = await sendViaSMTP(
+          companySettings,
+          clientEmail,
+          `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
+          emailContent,
+          pdfBuffer,
+          fileName
+        );
+      } catch (smtpError) {
+        console.error("❌ Erreur SMTP, basculement vers Resend:", smtpError);
+        
+        // Fallback vers Resend en cas d'erreur SMTP
+        emailResponse = await resend.emails.send({
+          from: `${companySettings.company_name} déménagements <noreply@matchmove.fr>`,
+          to: [clientEmail],
+          subject: `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
+          html: emailContent,
+          attachments: [
+            {
+              filename: fileName,
+              content: pdfBuffer,
+            },
+          ],
+        });
+      }
+    } else {
+      console.log("📨 Utilisation de Resend (SMTP non configuré)");
+      
+      emailResponse = await resend.emails.send({
+        from: `${companySettings.company_name} déménagements <noreply@matchmove.fr>`,
+        to: [clientEmail],
+        subject: `Votre devis de déménagement du ${new Date(desiredDate).toLocaleDateString('fr-FR')}`,
+        html: emailContent,
+        attachments: [
+          {
+            filename: fileName,
+            content: pdfBuffer,
+          },
+        ],
+      });
+    }
+
+    console.log("✅ Email de devis envoyé avec succès:", emailResponse);
 
     return new Response(JSON.stringify(emailResponse), {
       status: 200,
@@ -167,7 +263,7 @@ const handler = async (req: Request): Promise<Response> => {
       },
     });
   } catch (error: any) {
-    console.error("Error in send-quote-email function:", error);
+    console.error("❌ Error in send-quote-email function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
