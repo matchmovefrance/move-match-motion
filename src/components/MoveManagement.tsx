@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro } from 'lucide-react';
+import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ListView } from '@/components/ui/list-view';
 import {
@@ -19,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import MoveForm from './MoveForm';
 import DateFilter from './DateFilter';
+import SyncStatusDialog from './SyncStatusDialog';
 
 interface Move {
   id: number;
@@ -57,6 +59,7 @@ const MoveManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingMove, setEditingMove] = useState<Move | null>(null);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -69,12 +72,19 @@ const MoveManagement = () => {
 
   const fetchMoves = async () => {
     try {
+      setLoading(true);
+      console.log('🔄 Fetching moves from database...');
+      
       const { data, error } = await supabase
         .from('confirmed_moves')
         .select('*')
+        .eq('created_by', user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching moves:', error);
+        throw error;
+      }
       
       const movesWithCalculatedVolume = (data || []).map(move => ({
         ...move,
@@ -82,6 +92,7 @@ const MoveManagement = () => {
         status: (move.status as 'pending' | 'confirmed' | 'completed') || 'confirmed'
       }));
       
+      console.log('✅ Moves fetched from DB:', movesWithCalculatedVolume.length);
       setMoves(movesWithCalculatedVolume);
     } catch (error) {
       console.error('Error fetching moves:', error);
@@ -161,7 +172,7 @@ const MoveManagement = () => {
 
     try {
       setLoading(true);
-      console.log('Original move form data:', formData);
+      console.log('📝 Move form submission:', { isEditing: !!editingMove, formData });
       
       // Validation des champs obligatoires
       const missingFields = validateRequiredFields(formData);
@@ -180,22 +191,32 @@ const MoveManagement = () => {
 
       if (editingMove) {
         // Mode édition
+        console.log('✏️ Updating existing move:', editingMove.id);
+        
         const { error } = await supabase
           .from('confirmed_moves')
           .update({
             ...processedData,
             created_by: user.id
           })
-          .eq('id', editingMove.id);
+          .eq('id', editingMove.id)
+          .eq('created_by', user.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Move update error:', error);
+          throw error;
+        }
 
+        console.log('✅ Move updated successfully');
         toast({
           title: "Succès",
           description: "Déménagement mis à jour avec succès",
         });
       } else {
-        // Mode création - Créer d'abord un déménageur et un camion
+        // Mode création
+        console.log('➕ Creating new move');
+        
+        // Créer d'abord un déménageur et un camion
         const { data: moverData, error: moverError } = await supabase
           .from('movers')
           .insert({
@@ -209,7 +230,7 @@ const MoveManagement = () => {
           .single();
 
         if (moverError) {
-          console.error('Mover creation error:', moverError);
+          console.error('❌ Mover creation error:', moverError);
           throw moverError;
         }
 
@@ -224,7 +245,7 @@ const MoveManagement = () => {
           .single();
 
         if (truckError) {
-          console.error('Truck creation error:', truckError);
+          console.error('❌ Truck creation error:', truckError);
           throw truckError;
         }
 
@@ -239,10 +260,11 @@ const MoveManagement = () => {
           });
 
         if (moveError) {
-          console.error('Move creation error:', moveError);
+          console.error('❌ Move creation error:', moveError);
           throw moveError;
         }
 
+        console.log('✅ Move created successfully');
         toast({
           title: "Succès",
           description: "Déménagement ajouté avec succès",
@@ -255,7 +277,7 @@ const MoveManagement = () => {
       await fetchMoves();
       
     } catch (error: any) {
-      console.error('Error saving move:', error);
+      console.error('❌ Error saving move:', error);
       toast({
         title: "Erreur",
         description: `Impossible de sauvegarder le déménagement: ${error.message}`,
@@ -267,14 +289,26 @@ const MoveManagement = () => {
   };
 
   const deleteMove = async (id: number) => {
+    if (!user) return;
+    
     try {
+      setLoading(true);
+      console.log('🗑️ Deleting move:', id);
+      
       const { error } = await supabase
         .from('confirmed_moves')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('created_by', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error deleting move:', error);
+        throw error;
+      }
 
+      console.log('✅ Move deleted successfully');
+      
+      // Mettre à jour l'état local immédiatement
       setMoves(prevMoves => prevMoves.filter(m => m.id !== id));
 
       toast({
@@ -282,13 +316,24 @@ const MoveManagement = () => {
         description: "Déménagement supprimé avec succès",
       });
     } catch (error: any) {
-      console.error('Error deleting move:', error);
+      console.error('❌ Error deleting move:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le déménagement",
+        description: `Impossible de supprimer le déménagement: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleSyncComplete = () => {
+    setShowSyncDialog(false);
+    fetchMoves();
+    toast({
+      title: "Succès",
+      description: "Synchronisation terminée avec succès",
+    });
   };
 
   if (loading && !showAddForm && !editingMove) {
@@ -343,13 +388,23 @@ const MoveManagement = () => {
           <Truck className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Déménagements</h2>
         </div>
-        <Button
-          onClick={() => setShowAddForm(true)}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Ajouter un déménagement
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowSyncDialog(true)}
+            title="Vérifier la synchronisation"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Sync
+          </Button>
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter un déménagement
+          </Button>
+        </div>
       </div>
 
       <DateFilter 
@@ -533,6 +588,12 @@ const MoveManagement = () => {
         emptyStateMessage="Aucun déménagement trouvé"
         emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
+      />
+
+      <SyncStatusDialog
+        isOpen={showSyncDialog}
+        onClose={() => setShowSyncDialog(false)}
+        onSyncComplete={handleSyncComplete}
       />
     </div>
   );

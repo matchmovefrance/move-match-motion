@@ -20,7 +20,7 @@ interface SyncStatusDialogProps {
 }
 
 interface SyncIssue {
-  type: 'duplicate' | 'orphaned' | 'missing_relation';
+  type: 'duplicate' | 'orphaned' | 'missing_relation' | 'invalid_data';
   table: string;
   message: string;
   data?: any;
@@ -39,6 +39,8 @@ const SyncStatusDialog = ({ isOpen, onClose, onSyncComplete }: SyncStatusDialogP
     const foundIssues: SyncIssue[] = [];
 
     try {
+      console.log('🔍 Checking sync status for all tables...');
+
       // Vérifier les doublons clients
       const { data: clients } = await supabase
         .from('clients')
@@ -95,9 +97,98 @@ const SyncStatusDialog = ({ isOpen, onClose, onSyncComplete }: SyncStatusDialogP
         });
       }
 
+      // Vérifier les doublons déménageurs
+      const { data: movers } = await supabase
+        .from('movers')
+        .select('email, created_by')
+        .eq('created_by', user.id);
+
+      if (movers) {
+        const moverEmailCounts: { [key: string]: number } = {};
+        movers.forEach(m => {
+          moverEmailCounts[m.email] = (moverEmailCounts[m.email] || 0) + 1;
+        });
+
+        Object.entries(moverEmailCounts).forEach(([email, count]) => {
+          if (count > 1) {
+            foundIssues.push({
+              type: 'duplicate',
+              table: 'movers',
+              message: `Email déménageur ${email} dupliqué ${count} fois`,
+              data: { email, count }
+            });
+          }
+        });
+      }
+
+      // Vérifier les camions orphelins
+      const { data: orphanedTrucks } = await supabase
+        .from('trucks')
+        .select('id, mover_id');
+
+      if (orphanedTrucks) {
+        for (const truck of orphanedTrucks) {
+          const { data: mover } = await supabase
+            .from('movers')
+            .select('id')
+            .eq('id', truck.mover_id)
+            .single();
+
+          if (!mover) {
+            foundIssues.push({
+              type: 'orphaned',
+              table: 'trucks',
+              message: `Camion ${truck.id} sans déménageur associé`,
+              data: truck
+            });
+          }
+        }
+      }
+
+      // Vérifier les déménagements orphelins
+      const { data: orphanedMoves } = await supabase
+        .from('confirmed_moves')
+        .select('id, mover_id, truck_id')
+        .eq('created_by', user.id);
+
+      if (orphanedMoves) {
+        for (const move of orphanedMoves) {
+          const { data: mover } = await supabase
+            .from('movers')
+            .select('id')
+            .eq('id', move.mover_id)
+            .single();
+
+          const { data: truck } = await supabase
+            .from('trucks')
+            .select('id')
+            .eq('id', move.truck_id)
+            .single();
+
+          if (!mover) {
+            foundIssues.push({
+              type: 'orphaned',
+              table: 'confirmed_moves',
+              message: `Déménagement ${move.id} sans déménageur associé`,
+              data: move
+            });
+          }
+
+          if (!truck) {
+            foundIssues.push({
+              type: 'orphaned',
+              table: 'confirmed_moves',
+              message: `Déménagement ${move.id} sans camion associé`,
+              data: move
+            });
+          }
+        }
+      }
+
+      console.log('🔍 Sync check completed. Found issues:', foundIssues.length);
       setIssues(foundIssues);
     } catch (error) {
-      console.error('Erreur lors de la vérification de synchronisation:', error);
+      console.error('❌ Erreur lors de la vérification de synchronisation:', error);
     } finally {
       setChecking(false);
     }
@@ -108,43 +199,78 @@ const SyncStatusDialog = ({ isOpen, onClose, onSyncComplete }: SyncStatusDialogP
     
     setFixing(true);
     try {
+      console.log('🔧 Fixing sync issues...');
+      
       for (const issue of issues) {
-        if (issue.type === 'orphaned' && issue.table === 'client_requests') {
-          // Supprimer les demandes orphelines
-          await supabase
-            .from('client_requests')
-            .delete()
-            .eq('id', issue.data.id)
-            .eq('created_by', user.id);
+        console.log('Fixing issue:', issue);
+        
+        if (issue.type === 'orphaned') {
+          if (issue.table === 'client_requests') {
+            await supabase
+              .from('client_requests')
+              .delete()
+              .eq('id', issue.data.id)
+              .eq('created_by', user.id);
+          } else if (issue.table === 'trucks') {
+            await supabase
+              .from('trucks')
+              .delete()
+              .eq('id', issue.data.id);
+          } else if (issue.table === 'confirmed_moves') {
+            await supabase
+              .from('confirmed_moves')
+              .delete()
+              .eq('id', issue.data.id)
+              .eq('created_by', user.id);
+          }
         }
         
-        if (issue.type === 'duplicate' && issue.table === 'service_providers') {
-          // Garder seulement le premier prestataire avec cet email
-          const { data: duplicates } = await supabase
-            .from('service_providers')
-            .select('id, created_at')
-            .eq('email', issue.data.email)
-            .eq('created_by', user.id)
-            .order('created_at', { ascending: true });
+        if (issue.type === 'duplicate') {
+          if (issue.table === 'service_providers') {
+            const { data: duplicates } = await supabase
+              .from('service_providers')
+              .select('id, created_at')
+              .eq('email', issue.data.email)
+              .eq('created_by', user.id)
+              .order('created_at', { ascending: true });
 
-          if (duplicates && duplicates.length > 1) {
-            // Supprimer tous sauf le premier
-            const toDelete = duplicates.slice(1);
-            for (const dup of toDelete) {
-              await supabase
-                .from('service_providers')
-                .delete()
-                .eq('id', dup.id)
-                .eq('created_by', user.id);
+            if (duplicates && duplicates.length > 1) {
+              const toDelete = duplicates.slice(1);
+              for (const dup of toDelete) {
+                await supabase
+                  .from('service_providers')
+                  .delete()
+                  .eq('id', dup.id)
+                  .eq('created_by', user.id);
+              }
+            }
+          } else if (issue.table === 'movers') {
+            const { data: duplicates } = await supabase
+              .from('movers')
+              .select('id, created_at')
+              .eq('email', issue.data.email)
+              .eq('created_by', user.id)
+              .order('created_at', { ascending: true });
+
+            if (duplicates && duplicates.length > 1) {
+              const toDelete = duplicates.slice(1);
+              for (const dup of toDelete) {
+                await supabase
+                  .from('movers')
+                  .delete()
+                  .eq('id', dup.id)
+                  .eq('created_by', user.id);
+              }
             }
           }
         }
       }
 
+      console.log('✅ All sync issues fixed');
       setIssues([]);
       onSyncComplete();
     } catch (error) {
-      console.error('Erreur lors de la correction:', error);
+      console.error('❌ Erreur lors de la correction:', error);
     } finally {
       setFixing(false);
     }
@@ -181,7 +307,7 @@ const SyncStatusDialog = ({ isOpen, onClose, onSyncComplete }: SyncStatusDialogP
             <Alert>
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-600">
-                Aucun problème de synchronisation détecté. L'application et la base de données sont synchronisées.
+                Aucun problème de synchronisation détecté. L'application et la base de données sont parfaitement synchronisées.
               </AlertDescription>
             </Alert>
           )}
