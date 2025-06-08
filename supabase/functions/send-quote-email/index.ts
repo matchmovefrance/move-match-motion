@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
+import { Resend } from "npm:resend@2.0.0";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -28,110 +29,45 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-const sendQuoteEmail = async (emailData: QuoteEmailRequest, settings: any) => {
-  console.log(`🚀 Envoi email de devis à: ${emailData.clientEmail}`);
-  console.log(`📧 Configuration SMTP:`, {
-    host: settings.smtp_host,
-    port: settings.smtp_port,
-    username: settings.smtp_username,
-    secure: settings.smtp_secure
-  });
-  
+const handler = async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    let connection;
+    console.log("🌟 === DÉBUT ENVOI EMAIL DEVIS ===");
     
-    // Connexion identique au test-smtp qui fonctionne
-    if (settings.smtp_port === 465) {
-      console.log("🔒 Connexion SSL sur port 465");
-      connection = await Deno.connectTls({
-        hostname: settings.smtp_host,
-        port: settings.smtp_port,
-      });
-    } else {
-      console.log("🔌 Connexion TCP puis STARTTLS sur port", settings.smtp_port);
-      connection = await Deno.connect({
-        hostname: settings.smtp_host,
-        port: settings.smtp_port,
-      });
+    const emailData: QuoteEmailRequest = await req.json();
+    console.log(`📧 Email destinataire: ${emailData.clientEmail}`);
+    console.log(`💰 Montant devis: ${emailData.quoteAmount}€`);
+
+    // Récupération paramètres de l'entreprise
+    console.log("🔍 Récupération configuration entreprise...");
+    const { data: settings, error: settingsError } = await supabase
+      .from('company_settings')
+      .select('*')
+      .single();
+
+    if (settingsError || !settings) {
+      console.error("❌ Erreur configuration entreprise:", settingsError);
+      throw new Error("Configuration entreprise introuvable");
     }
 
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+    console.log("✅ Configuration entreprise récupérée");
 
-    const readResponse = async () => {
-      const buffer = new Uint8Array(1024);
-      const n = await connection.read(buffer);
-      const response = decoder.decode(buffer.subarray(0, n || 0));
-      console.log(`📥 ${response.trim()}`);
-      return response;
-    };
-
-    const sendCommand = async (command: string) => {
-      console.log(`📤 ${command.trim()}`);
-      await connection.write(encoder.encode(command));
-      return await readResponse();
-    };
-
-    // Protocol SMTP exactement comme test-smtp
-    console.log("🔗 Initialisation connexion SMTP...");
-    const welcome = await readResponse();
-    if (!welcome.startsWith('220')) {
-      throw new Error(`Erreur connexion SMTP: ${welcome}`);
+    // Vérifier si on a une clé Resend
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      throw new Error("RESEND_API_KEY non configurée");
     }
 
-    console.log("👋 Envoi EHLO...");
-    await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
-    
-    // STARTTLS si port 587
-    if (settings.smtp_port === 587) {
-      console.log("🔒 Demande STARTTLS...");
-      const tlsResponse = await sendCommand("STARTTLS\r\n");
-      if (tlsResponse.startsWith('220')) {
-        console.log("🔒 Upgrade vers TLS...");
-        const tlsConnection = await Deno.startTls(connection, { 
-          hostname: settings.smtp_host 
-        });
-        connection.close();
-        connection = tlsConnection;
-        console.log("🔒 TLS établi, nouvel EHLO...");
-        await sendCommand(`EHLO ${settings.smtp_host}\r\n`);
-      } else {
-        console.error("❌ STARTTLS échoué:", tlsResponse);
-        throw new Error(`STARTTLS failed: ${tlsResponse}`);
-      }
-    }
+    console.log("✅ Clé Resend trouvée");
+    const resend = new Resend(resendApiKey);
 
-    // Authentification LOGIN identique au test
-    console.log("🔐 Début authentification LOGIN...");
-    const authStartResponse = await sendCommand("AUTH LOGIN\r\n");
-    if (!authStartResponse.startsWith('334')) {
-      throw new Error(`AUTH LOGIN failed: ${authStartResponse}`);
-    }
-    
-    console.log("👤 Envoi username...");
-    const usernameResponse = await sendCommand(`${btoa(settings.smtp_username)}\r\n`);
-    if (!usernameResponse.startsWith('334')) {
-      throw new Error(`Username failed: ${usernameResponse}`);
-    }
-    
-    console.log("🔑 Envoi password...");
-    const passwordResponse = await sendCommand(`${btoa(settings.smtp_password)}\r\n`);
-    if (!passwordResponse.startsWith('235')) {
-      console.error(`❌ Authentification échouée: ${passwordResponse}`);
-      throw new Error(`Password failed: ${passwordResponse}`);
-    }
-    
-    console.log("✅ Authentification réussie!");
-
-    // Envoi de l'email
-    console.log("📬 Début envoi email...");
-    await sendCommand(`MAIL FROM:<${settings.smtp_username}>\r\n`);
-    await sendCommand(`RCPT TO:<${emailData.clientEmail}>\r\n`);
-    await sendCommand("DATA\r\n");
-
-    // Construction email HTML
+    // Construction du contenu email HTML
     const subject = `Votre devis de déménagement - ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
-    const fromName = settings.smtp_from_name || settings.company_name || "MatchMove";
+    const fromName = settings.company_name || "MatchMove";
+    const fromEmail = settings.company_email || "contact@matchmove.fr";
     
     const htmlBody = `
 <!DOCTYPE html>
@@ -155,7 +91,7 @@ const sendQuoteEmail = async (emailData: QuoteEmailRequest, settings: any) => {
 <body>
     <div class="container">
         <div class="header">
-            <h1>${settings.company_name || 'MatchMove'}</h1>
+            <h1>${fromName}</h1>
             <p style="margin: 10px 0 0 0; font-size: 18px;">Votre devis de déménagement</p>
         </div>
         
@@ -200,99 +136,36 @@ const sendQuoteEmail = async (emailData: QuoteEmailRequest, settings: any) => {
             <p style="color: #374151;">Pour toute question ou pour confirmer votre déménagement, n'hésitez pas à nous contacter :</p>
             <p style="color: #374151;">
                 📞 ${settings.company_phone || 'Nous contacter'}<br>
-                📧 ${settings.company_email || 'contact@matchmove.fr'}
+                📧 ${fromEmail}
             </p>
             
-            <p style="color: #374151;">Cordialement,<br><strong>${settings.company_name || 'MatchMove'}</strong></p>
+            <p style="color: #374151;">Cordialement,<br><strong>${fromName}</strong></p>
         </div>
         
         <div class="footer">
-            <p style="margin: 0;">${settings.company_name || 'MatchMove'} - ${settings.company_email || 'contact@matchmove.fr'}</p>
+            <p style="margin: 0;">${fromName} - ${fromEmail}</p>
             <p style="margin: 5px 0 0 0; font-size: 12px;">Devis généré automatiquement le ${new Date().toLocaleDateString('fr-FR')}</p>
         </div>
     </div>
 </body>
 </html>`;
 
-    // Construction message SMTP avec encodage UTF-8 correct
-    const emailMessage = [
-      `From: ${fromName} <${settings.smtp_username}>`,
-      `To: ${emailData.clientEmail}`,
-      `Subject: =?UTF-8?B?${btoa(subject)}?=`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=utf-8`,
-      `Content-Transfer-Encoding: 8bit`,
-      ``,
-      htmlBody,
-      ``
-    ].join('\r\n');
+    console.log("📤 Envoi email via Resend...");
 
-    console.log("📤 Envoi du contenu email...");
-    await connection.write(encoder.encode(emailMessage));
-    
-    console.log("🏁 Finalisation envoi...");
-    const endResult = await sendCommand(".\r\n");
-    
-    if (!endResult.startsWith('250')) {
-      console.error(`❌ Erreur envoi final: ${endResult}`);
-      throw new Error(`Erreur envoi final: ${endResult}`);
-    }
+    // Envoi de l'email avec Resend
+    const emailResponse = await resend.emails.send({
+      from: `${fromName} <onboarding@resend.dev>`, // Utilise le domaine par défaut de Resend
+      to: [emailData.clientEmail],
+      subject: subject,
+      html: htmlBody,
+    });
 
-    console.log("✅ Email envoyé avec succès!");
-    await sendCommand("QUIT\r\n");
-    connection.close();
+    console.log("✅ Email envoyé avec succès!", emailResponse);
 
-    return { success: true, message: "Email envoyé avec succès" };
-
-  } catch (error) {
-    console.error("❌ Erreur envoi email:", error);
-    throw error;
-  }
-};
-
-const handler = async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    console.log("🌟 === DÉBUT ENVOI EMAIL DEVIS ===");
-    
-    const emailData: QuoteEmailRequest = await req.json();
-    console.log(`📧 Email destinataire: ${emailData.clientEmail}`);
-    console.log(`💰 Montant devis: ${emailData.quoteAmount}€`);
-
-    // Récupération paramètres SMTP
-    console.log("🔍 Récupération configuration SMTP...");
-    const { data: settings, error: settingsError } = await supabase
-      .from('company_settings')
-      .select('*')
-      .single();
-
-    if (settingsError || !settings) {
-      console.error("❌ Erreur configuration SMTP:", settingsError);
-      throw new Error("Configuration SMTP introuvable");
-    }
-
-    // Validation paramètres SMTP obligatoires
-    const requiredFields = ['smtp_host', 'smtp_username', 'smtp_password'];
-    const missingFields = requiredFields.filter(field => !settings[field]);
-    
-    if (missingFields.length > 0) {
-      console.error("❌ Paramètres SMTP manquants:", missingFields);
-      throw new Error(`Paramètres SMTP manquants: ${missingFields.join(', ')}`);
-    }
-
-    console.log("✅ Configuration SMTP valide");
-
-    // Envoi email
-    await sendQuoteEmail(emailData, settings);
-
-    console.log("🌟 === EMAIL ENVOYÉ AVEC SUCCÈS ===");
-    
     return new Response(JSON.stringify({
       success: true,
-      message: 'Devis envoyé par email avec succès'
+      message: 'Email envoyé avec succès',
+      emailId: emailResponse.data?.id
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },

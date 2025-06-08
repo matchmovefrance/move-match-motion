@@ -60,7 +60,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
     setIsLoading(true);
     
     try {
-      console.log('📧 Envoi email de devis à:', client.email);
+      console.log('📧 Préparation envoi email de devis à:', client.email);
       
       // Préparer les données pour l'edge function
       const emailData = {
@@ -78,24 +78,27 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
         estimatedVolume: client.estimated_volume
       };
 
-      console.log('📦 Données email:', emailData);
+      console.log('📦 Données préparées:', emailData);
 
-      // Appel de l'edge function
+      // Appel de l'edge function avec une gestion d'erreur améliorée
       const { data, error } = await supabase.functions.invoke('send-quote-email', {
         body: emailData
       });
 
-      console.log('📨 Réponse edge function:', { data, error });
+      console.log('📨 Réponse complète:', { data, error });
 
       if (error) {
         console.error('❌ Erreur edge function:', error);
-        throw error;
+        throw new Error(error.message || 'Erreur lors de l\'appel de la fonction');
       }
 
       if (!data?.success) {
+        console.error('❌ Échec envoi:', data);
         throw new Error(data?.error || 'Erreur inconnue lors de l\'envoi');
       }
 
+      console.log('✅ Email envoyé avec succès');
+      
       toast({
         title: "Email envoyé",
         description: `Le devis a été envoyé avec succès à ${client.email}`,
@@ -103,7 +106,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
       setIsOpen(false);
       
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'envoi:', error);
+      console.error('❌ Erreur complète:', error);
       
       let errorMessage = "Impossible d'envoyer l'email";
       if (error.message) {
@@ -111,7 +114,7 @@ const EmailQuoteButton = ({ client }: EmailQuoteButtonProps) => {
       }
       
       toast({
-        title: "Erreur",
+        title: "Erreur d'envoi",
         description: errorMessage,
         variant: "destructive",
       });
