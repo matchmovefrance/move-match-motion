@@ -67,7 +67,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Construction du contenu email HTML
     const subject = `Votre devis de déménagement - ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
     const fromName = settings.company_name || "MatchMove";
-    const fromEmail = settings.company_email || "contact@matchmove.fr";
+    const fromEmail = "noreply@matchmove.tanjaconnect.com"; // Utilisation du domaine vérifié
     
     const htmlBody = `
 <!DOCTYPE html>
@@ -154,7 +154,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Envoi de l'email avec Resend
     const emailResponse = await resend.emails.send({
-      from: `${fromName} <onboarding@resend.dev>`, // Utilise le domaine par défaut de Resend
+      from: `${fromName} <${fromEmail}>`, // Utilisation du domaine vérifié
       to: [emailData.clientEmail],
       subject: subject,
       html: htmlBody,
