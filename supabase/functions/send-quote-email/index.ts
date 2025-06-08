@@ -29,105 +29,6 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-// Fonction pour générer le PDF du devis
-const generateQuotePDF = (emailData: QuoteEmailRequest, settings: any): string => {
-  // Simuler la génération d'un PDF basique en base64
-  // En production, vous pourriez utiliser une vraie librairie PDF comme jsPDF ou Puppeteer
-  const pdfContent = `
-%PDF-1.4
-1 0 obj
-<<
-/Type /Catalog
-/Pages 2 0 R
->>
-endobj
-
-2 0 obj
-<<
-/Type /Pages
-/Kids [3 0 R]
-/Count 1
->>
-endobj
-
-3 0 obj
-<<
-/Type /Page
-/Parent 2 0 R
-/MediaBox [0 0 612 792]
-/Contents 4 0 R
-/Resources <<
-/Font <<
-/F1 5 0 R
->>
->>
->>
-endobj
-
-4 0 obj
-<<
-/Length 500
->>
-stream
-BT
-/F1 12 Tf
-50 750 Td
-(${settings.company_name || 'MatchMove'}) Tj
-0 -20 Td
-(DEVIS DE DEMENAGEMENT) Tj
-0 -40 Td
-(Client: ${emailData.clientName}) Tj
-0 -20 Td
-(Email: ${emailData.clientEmail}) Tj
-0 -20 Td
-(Date souhaitee: ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}) Tj
-0 -20 Td
-(Depart: ${emailData.departurePostalCode || ''} ${emailData.departureCity || ''}) Tj
-0 -20 Td
-(Arrivee: ${emailData.arrivalPostalCode || ''} ${emailData.arrivalCity || ''}) Tj
-0 -40 Td
-(MONTANT: ${emailData.quoteAmount.toFixed(2)} EUR TTC) Tj
-0 -40 Td
-(Devis valable 30 jours) Tj
-0 -20 Td
-(Date d'emission: ${new Date().toLocaleDateString('fr-FR')}) Tj
-0 -40 Td
-(Signature client: ________________) Tj
-0 -20 Td
-(Date de signature: ________________) Tj
-ET
-endstream
-endobj
-
-5 0 obj
-<<
-/Type /Font
-/Subtype /Type1
-/BaseFont /Helvetica
->>
-endobj
-
-xref
-0 6
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000274 00000 n 
-0000000826 00000 n 
-trailer
-<<
-/Size 6
-/Root 1 0 R
->>
-startxref
-899
-%%EOF`;
-
-  // Convertir en base64
-  return btoa(pdfContent);
-};
-
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -163,11 +64,6 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("✅ Clé Resend trouvée");
     const resend = new Resend(resendApiKey);
 
-    // Générer le PDF du devis
-    console.log("📄 Génération du PDF...");
-    const pdfBase64 = generateQuotePDF(emailData, settings);
-    const pdfBuffer = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
-
     // Configuration email avec domaine vérifié et informations entreprise
     const subject = `Votre devis de déménagement - ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
     const fromName = settings.company_name || "MatchMove";
@@ -193,9 +89,6 @@ const handler = async (req: Request): Promise<Response> => {
         .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
         .detail-row:last-child { border-bottom: none; }
         .footer { background: #f1f5f9; padding: 20px; text-align: center; color: #64748b; }
-        .important-note { background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 20px; margin: 20px 0; }
-        .important-note h3 { color: #92400e; margin: 0 0 10px 0; }
-        .important-note p { color: #92400e; margin: 0; }
     </style>
 </head>
 <body>
@@ -242,15 +135,6 @@ const handler = async (req: Request): Promise<Response> => {
                     <span>${emailData.clientPhone}</span>
                 </div>` : ''}
             </div>
-
-            <div class="important-note">
-                <h3>📎 DEVIS EN PIÈCE JOINTE</h3>
-                <p><strong>Vous trouverez le devis détaillé en pièce jointe de cet email.</strong></p>
-                <p style="margin-top: 10px;"><strong>Pour confirmer votre réservation :</strong></p>
-                <p style="margin-top: 5px;">1. Signez le devis en pièce jointe</p>
-                <p>2. Renvoyez-nous le devis signé par email à : <strong>${replyToEmail}</strong></p>
-                <p>3. Nous vous confirmerons votre réservation sous 24h</p>
-            </div>
             
             <p style="color: #374151;">Pour toute question ou pour confirmer votre déménagement, n'hésitez pas à nous contacter :</p>
             <p style="color: #374151;">
@@ -273,30 +157,20 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("📤 Envoi email via Resend...");
 
-    // Nom du fichier PDF
-    const fileName = `devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
-
-    // Envoi de l'email avec Resend et pièce jointe
+    // Envoi de l'email avec Resend
     const emailResponse = await resend.emails.send({
       from: `${fromName} <${fromEmail}>`, // Utilisation du domaine vérifié pour l'envoi
       to: [emailData.clientEmail],
       reply_to: replyToEmail, // Utilisation de l'email de l'entreprise pour les réponses
       subject: subject,
       html: htmlBody,
-      attachments: [
-        {
-          filename: fileName,
-          content: pdfBuffer,
-          content_type: 'application/pdf'
-        }
-      ]
     });
 
     console.log("✅ Email envoyé avec succès!", emailResponse);
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Email envoyé avec succès avec pièce jointe PDF',
+      message: 'Email envoyé avec succès',
       emailId: emailResponse.data?.id
     }), {
       status: 200,
