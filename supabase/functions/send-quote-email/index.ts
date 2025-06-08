@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
 import { Resend } from "npm:resend@2.0.0";
-import jsPDF from "npm:jspdf@2.5.1";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -30,164 +29,103 @@ interface QuoteEmailRequest {
   estimatedVolume?: number;
 }
 
-const generatePDF = (emailData: QuoteEmailRequest, settings: any) => {
-  const doc = new jsPDF();
-  
-  // Couleurs vertes
-  const primaryColor = '#22c55e'; // vert
-  const secondaryColor = '#64748b'; // gris
-  
-  // En-tête avec fond vert
-  doc.setFillColor(34, 197, 94); // vert
-  doc.rect(0, 0, 210, 40, 'F');
-  
-  // Titre de l'entreprise
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
-  doc.text(settings.company_name, 20, 25);
-  
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Solutions de déménagement', 20, 32);
-  
-  // Titre du document
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DEVIS DE DÉMÉNAGEMENT', 20, 60);
-  
-  // Informations de la société
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(settings.company_name, 140, 60);
-  doc.text(`Email: ${settings.company_email}`, 140, 67);
-  doc.text(`Téléphone: ${settings.company_phone}`, 140, 74);
-  if (settings.company_address) {
-    doc.text(`Adresse: ${settings.company_address}`, 140, 81);
-  }
-  
-  // Ligne de séparation
-  doc.setDrawColor(200, 200, 200);
-  doc.line(20, 90, 190, 90);
-  
-  // Informations client
-  doc.setTextColor(34, 197, 94);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('INFORMATIONS CLIENT', 20, 105);
-  
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  let yPos = 115;
-  
-  if (emailData.clientName) {
-    doc.text(`Nom: ${emailData.clientName}`, 20, yPos);
-    yPos += 7;
-  }
-  
-  if (emailData.clientEmail) {
-    doc.text(`Email: ${emailData.clientEmail}`, 20, yPos);
-    yPos += 7;
-  }
-  
-  if (emailData.clientPhone) {
-    doc.text(`Téléphone: ${emailData.clientPhone}`, 20, yPos);
-    yPos += 7;
-  }
-  
-  // Détails du déménagement
-  yPos += 10;
-  doc.setTextColor(34, 197, 94);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DÉTAILS DU DÉMÉNAGEMENT', 20, yPos);
-  
-  yPos += 10;
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  
-  // Adresses
-  doc.text('Adresse de départ:', 20, yPos);
-  yPos += 7;
-  const departureAddr = `${emailData.departureAddress || ''} ${emailData.departurePostalCode} ${emailData.departureCity}`.trim();
-  doc.text(departureAddr, 25, yPos);
-  
-  yPos += 10;
-  doc.text('Adresse d\'arrivée:', 20, yPos);
-  yPos += 7;
-  const arrivalAddr = `${emailData.arrivalAddress || ''} ${emailData.arrivalPostalCode} ${emailData.arrivalCity}`.trim();
-  doc.text(arrivalAddr, 25, yPos);
-  
-  yPos += 10;
-  doc.text(`Date souhaitée: ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`, 20, yPos);
-  
-  if (emailData.estimatedVolume) {
-    yPos += 7;
-    doc.text(`Volume estimé: ${emailData.estimatedVolume} m³`, 20, yPos);
-  }
-  
-  // Prix
-  if (emailData.quoteAmount) {
-    yPos += 20;
-    
-    // Encadré pour le prix avec fond vert clair
-    doc.setFillColor(240, 253, 244);
-    doc.rect(20, yPos - 5, 170, 25, 'F');
-    doc.setDrawColor(34, 197, 94);
-    doc.rect(20, yPos - 5, 170, 25);
-    
-    doc.setTextColor(34, 197, 94);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT DU DEVIS', 25, yPos + 5);
-    
-    doc.setFontSize(20);
-    doc.text(`${emailData.quoteAmount.toFixed(2).replace('.', ',')} € TTC`, 25, yPos + 15);
-  }
-  
-  // Zone de signature
-  yPos += 50;
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SIGNATURE CLIENT (OBLIGATOIRE)', 20, yPos);
-  
-  yPos += 10;
-  doc.setFont('helvetica', 'normal');
-  doc.text('Nom et prénom : ________________________', 20, yPos);
-  yPos += 10;
-  doc.text('Date : ____________________', 20, yPos);
-  yPos += 15;
-  doc.text('Signature :', 20, yPos);
-  
-  // Cadre pour la signature
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(20, yPos + 5, 80, 30);
-  
-  // Conditions
-  yPos += 45;
-  doc.setTextColor(100, 116, 139);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Conditions générales:', 20, yPos);
-  yPos += 5;
-  doc.text('• Ce devis est valable 30 jours à compter de sa date d\'émission', 20, yPos);
-  yPos += 4;
-  doc.text('• Les prix sont exprimés en euros TTC', 20, yPos);
-  yPos += 4;
-  doc.text('• Signature requise pour valider la prestation', 20, yPos);
-  
-  // Pied de page
-  doc.setTextColor(100, 116, 139);
-  doc.setFontSize(8);
-  doc.text(`Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, 20, 280);
-  doc.text(`${settings.company_name} - Solutions de déménagement professionnelles`, 20, 285);
-  
-  return doc.output('arraybuffer');
+// Fonction pour générer le PDF du devis
+const generateQuotePDF = (emailData: QuoteEmailRequest, settings: any): string => {
+  // Simuler la génération d'un PDF basique en base64
+  // En production, vous pourriez utiliser une vraie librairie PDF comme jsPDF ou Puppeteer
+  const pdfContent = `
+%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 500
+>>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(${settings.company_name || 'MatchMove'}) Tj
+0 -20 Td
+(DEVIS DE DEMENAGEMENT) Tj
+0 -40 Td
+(Client: ${emailData.clientName}) Tj
+0 -20 Td
+(Email: ${emailData.clientEmail}) Tj
+0 -20 Td
+(Date souhaitee: ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}) Tj
+0 -20 Td
+(Depart: ${emailData.departurePostalCode || ''} ${emailData.departureCity || ''}) Tj
+0 -20 Td
+(Arrivee: ${emailData.arrivalPostalCode || ''} ${emailData.arrivalCity || ''}) Tj
+0 -40 Td
+(MONTANT: ${emailData.quoteAmount.toFixed(2)} EUR TTC) Tj
+0 -40 Td
+(Devis valable 30 jours) Tj
+0 -20 Td
+(Date d'emission: ${new Date().toLocaleDateString('fr-FR')}) Tj
+0 -40 Td
+(Signature client: ________________) Tj
+0 -20 Td
+(Date de signature: ________________) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000274 00000 n 
+0000000826 00000 n 
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+899
+%%EOF`;
+
+  // Convertir en base64
+  return btoa(pdfContent);
 };
 
 const handler = async (req: Request): Promise<Response> => {
@@ -225,16 +163,18 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("✅ Clé Resend trouvée");
     const resend = new Resend(resendApiKey);
 
-    // Générer le PDF
+    // Générer le PDF du devis
     console.log("📄 Génération du PDF...");
-    const pdfBuffer = generatePDF(emailData, settings);
-    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
+    const pdfBase64 = generateQuotePDF(emailData, settings);
+    const pdfBuffer = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
 
-    // Construction du contenu email HTML
+    // Configuration email avec domaine vérifié et informations entreprise
     const subject = `Votre devis de déménagement - ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
     const fromName = settings.company_name || "MatchMove";
-    const fromEmail = "noreply@matchmove.tanjaconnect.com"; // Utilisation du domaine vérifié
-    const replyToEmail = settings.company_email || "contact@matchmove.fr";
+    const fromEmail = "noreply@matchmove.tanjaconnect.com"; // Domaine vérifié pour l'envoi
+    const replyToEmail = settings.company_email || "contact@matchmove.fr"; // Email de l'entreprise pour les réponses
+    const companyPhone = settings.company_phone || "Nous contacter";
+    const companyAddress = settings.company_address || "";
     
     const htmlBody = `
 <!DOCTYPE html>
@@ -252,8 +192,10 @@ const handler = async (req: Request): Promise<Response> => {
         .details { background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; }
         .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
         .detail-row:last-child { border-bottom: none; }
-        .signature-box { background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 20px; margin: 20px 0; }
         .footer { background: #f1f5f9; padding: 20px; text-align: center; color: #64748b; }
+        .important-note { background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 20px; margin: 20px 0; }
+        .important-note h3 { color: #92400e; margin: 0 0 10px 0; }
+        .important-note p { color: #92400e; margin: 0; }
     </style>
 </head>
 <body>
@@ -301,29 +243,28 @@ const handler = async (req: Request): Promise<Response> => {
                 </div>` : ''}
             </div>
 
-            <div class="signature-box">
-                <h3 style="margin: 0 0 15px 0; color: #856404;">📎 Document joint important</h3>
-                <p style="color: #856404; margin: 0;">
-                    <strong>Vous trouverez en pièce jointe votre devis détaillé au format PDF.</strong><br>
-                    Pour confirmer votre déménagement, veuillez :<br>
-                    • Imprimer le document PDF<br>
-                    • Le signer dans l'espace prévu à cet effet<br>
-                    • Nous le retourner signé par email
-                </p>
+            <div class="important-note">
+                <h3>📎 DEVIS EN PIÈCE JOINTE</h3>
+                <p><strong>Vous trouverez le devis détaillé en pièce jointe de cet email.</strong></p>
+                <p style="margin-top: 10px;"><strong>Pour confirmer votre réservation :</strong></p>
+                <p style="margin-top: 5px;">1. Signez le devis en pièce jointe</p>
+                <p>2. Renvoyez-nous le devis signé par email à : <strong>${replyToEmail}</strong></p>
+                <p>3. Nous vous confirmerons votre réservation sous 24h</p>
             </div>
             
             <p style="color: #374151;">Pour toute question ou pour confirmer votre déménagement, n'hésitez pas à nous contacter :</p>
             <p style="color: #374151;">
-                📞 ${settings.company_phone || 'Nous contacter'}<br>
-                📧 ${settings.company_email}<br>
-                📍 ${settings.company_address || ''}
+                📞 ${companyPhone}<br>
+                📧 ${replyToEmail}
+                ${companyAddress ? `<br>📍 ${companyAddress}` : ''}
             </p>
             
-            <p style="color: #374151;">Cordialement,<br><strong>L'équipe ${fromName}</strong></p>
+            <p style="color: #374151;">Cordialement,<br><strong>${fromName}</strong></p>
         </div>
         
         <div class="footer">
-            <p style="margin: 0;">${fromName}</p>
+            <p style="margin: 0;">${fromName} - ${replyToEmail}</p>
+            ${companyPhone !== 'Nous contacter' ? `<p style="margin: 5px 0 0 0;">Tél: ${companyPhone}</p>` : ''}
             <p style="margin: 5px 0 0 0; font-size: 12px;">Devis généré automatiquement le ${new Date().toLocaleDateString('fr-FR')}</p>
         </div>
     </div>
@@ -333,21 +274,20 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("📤 Envoi email via Resend...");
 
     // Nom du fichier PDF
-    const fileName = `devis_${emailData.clientName?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const fileName = `devis_${emailData.clientName?.replace(/[^a-zA-Z0-9]/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
 
-    // Envoi de l'email avec Resend
+    // Envoi de l'email avec Resend et pièce jointe
     const emailResponse = await resend.emails.send({
-      from: `${fromName} <${fromEmail}>`, // Utilisation du domaine vérifié
+      from: `${fromName} <${fromEmail}>`, // Utilisation du domaine vérifié pour l'envoi
       to: [emailData.clientEmail],
-      replyTo: replyToEmail, // Reply-to utilise l'email de l'entreprise
+      reply_to: replyToEmail, // Utilisation de l'email de l'entreprise pour les réponses
       subject: subject,
       html: htmlBody,
       attachments: [
         {
           filename: fileName,
-          content: pdfBase64,
-          type: 'application/pdf',
-          disposition: 'attachment'
+          content: pdfBuffer,
+          content_type: 'application/pdf'
         }
       ]
     });
