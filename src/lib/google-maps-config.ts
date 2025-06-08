@@ -72,7 +72,7 @@ export const loadGoogleMapsScript = (): Promise<void> => {
     script.onerror = (error) => {
       console.error('Error loading Google Maps script:', error);
       reject(new Error('Failed to load Google Maps script'));
-    });
+    };
 
     document.head.appendChild(script);
   });
