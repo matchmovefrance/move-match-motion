@@ -64,10 +64,13 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("✅ Clé Resend trouvée");
     const resend = new Resend(resendApiKey);
 
-    // Construction du contenu email HTML
+    // Configuration email avec domaine vérifié et informations entreprise
     const subject = `Votre devis de déménagement - ${new Date(emailData.desiredDate).toLocaleDateString('fr-FR')}`;
     const fromName = settings.company_name || "MatchMove";
-    const fromEmail = "noreply@matchmove.tanjaconnect.com"; // Utilisation du domaine vérifié
+    const fromEmail = "noreply@matchmove.tanjaconnect.com"; // Domaine vérifié pour l'envoi
+    const replyToEmail = settings.company_email || "contact@matchmove.fr"; // Email de l'entreprise pour les réponses
+    const companyPhone = settings.company_phone || "Nous contacter";
+    const companyAddress = settings.company_address || "";
     
     const htmlBody = `
 <!DOCTYPE html>
@@ -135,15 +138,17 @@ const handler = async (req: Request): Promise<Response> => {
             
             <p style="color: #374151;">Pour toute question ou pour confirmer votre déménagement, n'hésitez pas à nous contacter :</p>
             <p style="color: #374151;">
-                📞 ${settings.company_phone || 'Nous contacter'}<br>
-                📧 ${fromEmail}
+                📞 ${companyPhone}<br>
+                📧 ${replyToEmail}
+                ${companyAddress ? `<br>📍 ${companyAddress}` : ''}
             </p>
             
             <p style="color: #374151;">Cordialement,<br><strong>${fromName}</strong></p>
         </div>
         
         <div class="footer">
-            <p style="margin: 0;">${fromName} - ${fromEmail}</p>
+            <p style="margin: 0;">${fromName} - ${replyToEmail}</p>
+            ${companyPhone !== 'Nous contacter' ? `<p style="margin: 5px 0 0 0;">Tél: ${companyPhone}</p>` : ''}
             <p style="margin: 5px 0 0 0; font-size: 12px;">Devis généré automatiquement le ${new Date().toLocaleDateString('fr-FR')}</p>
         </div>
     </div>
@@ -154,8 +159,9 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Envoi de l'email avec Resend
     const emailResponse = await resend.emails.send({
-      from: `${fromName} <${fromEmail}>`, // Utilisation du domaine vérifié
+      from: `${fromName} <${fromEmail}>`, // Utilisation du domaine vérifié pour l'envoi
       to: [emailData.clientEmail],
+      reply_to: replyToEmail, // Utilisation de l'email de l'entreprise pour les réponses
       subject: subject,
       html: htmlBody,
     });

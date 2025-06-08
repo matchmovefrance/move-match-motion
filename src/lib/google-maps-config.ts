@@ -1,8 +1,33 @@
 
-// Configuration pour Google Maps API
+// Configuration pour Google Maps API utilisant la config centralisée
+declare global {
+  interface Window {
+    APP_CONFIG: {
+      GOOGLE_MAPS_API_KEY: string;
+      EMAIL_DOMAIN: string;
+      NOREPLY_EMAIL: string;
+      SUPABASE_URL: string;
+      SUPABASE_ANON_KEY: string;
+      CONFIG_VERSION: string;
+      LAST_UPDATED: string;
+    };
+  }
+}
+
+// Fonction pour récupérer la configuration depuis le fichier centralisé
+const getGoogleMapsApiKey = (): string => {
+  // Fallback si la config centralisée n'est pas chargée
+  if (typeof window !== 'undefined' && window.APP_CONFIG) {
+    return window.APP_CONFIG.GOOGLE_MAPS_API_KEY;
+  }
+  
+  // Fallback vers la clé par défaut
+  return 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
+};
+
 export const GOOGLE_MAPS_CONFIG = {
-  // Utiliser la clé API Google Maps valide
-  apiKey: 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y',
+  // Utiliser la clé API depuis la configuration centralisée
+  apiKey: getGoogleMapsApiKey(),
   libraries: ['places', 'geometry'] as const,
   region: 'FR',
   language: 'fr'
@@ -31,8 +56,11 @@ export const loadGoogleMapsScript = (): Promise<void> => {
       return;
     }
 
+    // Récupérer la clé API depuis la config centralisée
+    const apiKey = getGoogleMapsApiKey();
+    
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_CONFIG.apiKey}&libraries=${GOOGLE_MAPS_CONFIG.libraries.join(',')}&region=${GOOGLE_MAPS_CONFIG.region}&language=${GOOGLE_MAPS_CONFIG.language}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${GOOGLE_MAPS_CONFIG.libraries.join(',')}&region=${GOOGLE_MAPS_CONFIG.region}&language=${GOOGLE_MAPS_CONFIG.language}`;
     script.async = true;
     script.defer = true;
     
@@ -44,7 +72,7 @@ export const loadGoogleMapsScript = (): Promise<void> => {
     script.onerror = (error) => {
       console.error('Error loading Google Maps script:', error);
       reject(new Error('Failed to load Google Maps script'));
-    };
+    });
 
     document.head.appendChild(script);
   });
