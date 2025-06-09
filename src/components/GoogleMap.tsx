@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { loadGoogleMapsScript } from '@/lib/google-maps-config';
-import { MapPin, Truck, Navigation, Calendar, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { MapPin, Truck, Navigation, Calendar, CheckCircle, Clock } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import StatusToggle from './StatusToggle';
@@ -51,7 +51,6 @@ const GoogleMapComponent: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
-  // Fonction pour géocoder une adresse
   const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number }> => {
     try {
       const geocoder = new google.maps.Geocoder();
@@ -72,9 +71,57 @@ const GoogleMapComponent: React.FC = () => {
       };
     } catch (error) {
       console.error('Erreur de géocodage:', error);
-      // Retourner des coordonnées par défaut pour la France
       return { lat: 46.603354, lng: 1.888334 };
     }
+  };
+
+  // Fonction corrigée pour calculer la VRAIE distance Google Maps via Directions API
+  const calculateGoogleMapsRouteDistance = async (
+    clientDepartureCoords: { lat: number; lng: number },
+    clientArrivalCoords: { lat: number; lng: number },
+    moverDepartureCoords: { lat: number; lng: number },
+    moverArrivalCoords: { lat: number; lng: number }
+  ): Promise<number> => {
+    return new Promise((resolve) => {
+      if (!window.google?.maps) {
+        console.warn('Google Maps API not loaded');
+        resolve(500); // Distance par défaut réaliste
+        return;
+      }
+
+      const directionsService = new google.maps.DirectionsService();
+      
+      // Calculer la distance réelle de la route du déménageur
+      directionsService.route({
+        origin: new google.maps.LatLng(moverDepartureCoords.lat, moverDepartureCoords.lng),
+        destination: new google.maps.LatLng(moverArrivalCoords.lat, moverArrivalCoords.lng),
+        travelMode: google.maps.TravelMode.DRIVING,
+        unitSystem: google.maps.UnitSystem.METRIC,
+        region: 'FR',
+        language: 'fr'
+      }, (result, status) => {
+        if (status === 'OK' && result?.routes[0]) {
+          const route = result.routes[0];
+          const totalDistance = route.legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+          const distanceKm = Math.round(totalDistance / 1000);
+          
+          console.log(`Distance route Google Maps: ${distanceKm}km`);
+          console.log(`Trajet: ${moverDepartureCoords.lat},${moverDepartureCoords.lng} -> ${moverArrivalCoords.lat},${moverArrivalCoords.lng}`);
+          
+          resolve(distanceKm);
+        } else {
+          console.warn('Erreur calcul distance Google Maps:', status);
+          // Fallback: calcul de distance à vol d'oiseau approximatif
+          const distance = calculateHaversineDistance(
+            moverDepartureCoords.lat,
+            moverDepartureCoords.lng,
+            moverArrivalCoords.lat,
+            moverArrivalCoords.lng
+          );
+          resolve(Math.round(distance));
+        }
+      });
+    });
   };
 
   // Fonction améliorée pour calculer la distance réelle entre un client et un trajet fournisseur
@@ -85,145 +132,21 @@ const GoogleMapComponent: React.FC = () => {
     moverArrivalCoords: { lat: number; lng: number }
   ): Promise<number> => {
     try {
-      if (!window.google?.maps) {
-        console.warn('Google Maps API non disponible, utilisation du calcul de distance basique');
-        return calculateDistanceToLine(
-          clientDepartureCoords.lat,
-          clientDepartureCoords.lng,
-          moverDepartureCoords.lat,
-          moverDepartureCoords.lng,
-          moverArrivalCoords.lat,
-          moverArrivalCoords.lng
-        );
-      }
-
-      const directionsService = new google.maps.DirectionsService();
+      // Utiliser la nouvelle fonction qui calcule la vraie distance de route
+      const routeDistance = await calculateGoogleMapsRouteDistance(
+        clientDepartureCoords,
+        clientArrivalCoords,
+        moverDepartureCoords,
+        moverArrivalCoords
+      );
       
-      // Obtenir l'itinéraire détaillé du fournisseur avec plus de détails
-      const routeResult = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
-        directionsService.route({
-          origin: new google.maps.LatLng(moverDepartureCoords.lat, moverDepartureCoords.lng),
-          destination: new google.maps.LatLng(moverArrivalCoords.lat, moverArrivalCoords.lng),
-          travelMode: google.maps.TravelMode.DRIVING,
-          unitSystem: google.maps.UnitSystem.METRIC,
-          region: 'FR',
-          avoidHighways: false,
-          avoidTolls: false
-        }, (result, status) => {
-          if (status === 'OK' && result) {
-            resolve(result);
-          } else {
-            reject(new Error(`Directions failed: ${status}`));
-          }
-        });
-      });
-
-      if (!routeResult.routes || routeResult.routes.length === 0) {
-        throw new Error('Aucun itinéraire trouvé');
-      }
-
-      const route = routeResult.routes[0];
-      
-      // Utiliser les étapes détaillées de l'itinéraire pour une meilleure précision
-      const allRoutePoints: google.maps.LatLng[] = [];
-      
-      // Ajouter tous les points de toutes les étapes
-      route.legs.forEach(leg => {
-        leg.steps.forEach(step => {
-          // Ajouter le point de départ de l'étape
-          allRoutePoints.push(step.start_location);
-          
-          // Ajouter des points intermédiaires basés sur la géométrie polyline
-          if (step.path && step.path.length > 0) {
-            step.path.forEach(point => {
-              allRoutePoints.push(point);
-            });
-          }
-          
-          // Ajouter le point de fin de l'étape
-          allRoutePoints.push(step.end_location);
-        });
-      });
-
-      // Si pas de points détaillés, utiliser le chemin global
-      if (allRoutePoints.length === 0 && route.overview_path) {
-        allRoutePoints.push(...route.overview_path);
-      }
-
-      if (allRoutePoints.length === 0) {
-        throw new Error('Aucun point trouvé sur l\'itinéraire');
-      }
-
-      console.log(`Analyse de ${allRoutePoints.length} points sur l'itinéraire du fournisseur`);
-
-      // Calculer la distance minimale pour le départ ET l'arrivée du client
-      let minDistanceFromClientDeparture = Infinity;
-      let minDistanceFromClientArrival = Infinity;
-      let bestPointForDeparture: google.maps.LatLng | null = null;
-      let bestPointForArrival: google.maps.LatLng | null = null;
-
-      // Analyser chaque point de l'itinéraire
-      allRoutePoints.forEach((routePoint, index) => {
-        // Distance du point de départ client à ce point de l'itinéraire
-        const distFromClientDeparture = calculateHaversineDistance(
-          clientDepartureCoords.lat,
-          clientDepartureCoords.lng,
-          routePoint.lat(),
-          routePoint.lng()
-        );
-        
-        // Distance du point d'arrivée client à ce point de l'itinéraire
-        const distFromClientArrival = calculateHaversineDistance(
-          clientArrivalCoords.lat,
-          clientArrivalCoords.lng,
-          routePoint.lat(),
-          routePoint.lng()
-        );
-        
-        if (distFromClientDeparture < minDistanceFromClientDeparture) {
-          minDistanceFromClientDeparture = distFromClientDeparture;
-          bestPointForDeparture = routePoint;
-        }
-        
-        if (distFromClientArrival < minDistanceFromClientArrival) {
-          minDistanceFromClientArrival = distFromClientArrival;
-          bestPointForArrival = routePoint;
-        }
-      });
-
-      // Calculer aussi la distance entre les points optimaux trouvés
-      let routeDistanceBetweenOptimalPoints = 0;
-      if (bestPointForDeparture && bestPointForArrival) {
-        routeDistanceBetweenOptimalPoints = calculateHaversineDistance(
-          bestPointForDeparture.lat(),
-          bestPointForDeparture.lng(),
-          bestPointForArrival.lat(),
-          bestPointForArrival.lng()
-        );
-      }
-
-      // La distance finale est la somme des détours nécessaires
-      // Plus la distance entre les deux points optimaux sur l'itinéraire
-      const totalDetourDistance = minDistanceFromClientDeparture + minDistanceFromClientArrival + routeDistanceBetweenOptimalPoints;
-      
-      console.log(`Distance optimisée calculée: 
-        - Détour départ client: ${Math.round(minDistanceFromClientDeparture)}km
-        - Détour arrivée client: ${Math.round(minDistanceFromClientArrival)}km  
-        - Distance entre points optimaux: ${Math.round(routeDistanceBetweenOptimalPoints)}km
-        - Total: ${Math.round(totalDetourDistance)}km`);
-      
-      // Retourner la distance de détour la plus significative (mais pas la somme totale qui serait trop pessimiste)
-      const finalDistance = Math.max(minDistanceFromClientDeparture, minDistanceFromClientArrival);
-      
-      return finalDistance;
+      return routeDistance;
 
     } catch (error) {
       console.error('Erreur lors du calcul de distance avec Google Maps:', error);
       
-      // Fallback vers le calcul de distance géométrique
-      return calculateDistanceToLine(
-        clientDepartureCoords.lat,
-        clientDepartureCoords.lng,
+      // Fallback vers le calcul de distance haversine
+      return calculateHaversineDistance(
         moverDepartureCoords.lat,
         moverDepartureCoords.lng,
         moverArrivalCoords.lat,
@@ -232,7 +155,6 @@ const GoogleMapComponent: React.FC = () => {
     }
   };
 
-  // Fonction pour calculer la distance haversine entre deux points
   const calculateHaversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
     const R = 6371; // Rayon de la Terre en kilomètres
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -245,27 +167,18 @@ const GoogleMapComponent: React.FC = () => {
     return R * c;
   };
 
-  // Fonction pour calculer la distance minimale d'un point à une ligne (trajet) - Fallback
   const calculateDistanceToLine = (pointLat: number, pointLng: number, line1Lat: number, line1Lng: number, line2Lat: number, line2Lng: number): number => {
-    // Conversion des degrés en radians
     const toRad = (deg: number) => deg * (Math.PI / 180);
-    
-    // Rayon de la Terre en km
     const R = 6371;
     
-    // Coordonnées du point
     const px = toRad(pointLat);
     const py = toRad(pointLng);
-    
-    // Coordonnées de la ligne (segment)
     const x1 = toRad(line1Lat);
     const y1 = toRad(line1Lng);
     const x2 = toRad(line2Lat);
     const y2 = toRad(line2Lng);
     
-    // Si c'est un point (pas une ligne)
     if (Math.abs(x2 - x1) < 0.0001 && Math.abs(y2 - y1) < 0.0001) {
-      // Distance entre deux points sur une sphère (formule haversine)
       const dLat = px - x1;
       const dLng = py - y1;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -275,18 +188,11 @@ const GoogleMapComponent: React.FC = () => {
       return R * c;
     }
     
-    // Vecteur de la ligne
     const dx = x2 - x1;
     const dy = y2 - y1;
-    
-    // Projection du point sur la ligne
     const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
-    
-    // Point le plus proche sur la ligne
     const closestX = x1 + t * dx;
     const closestY = y1 + t * dy;
-    
-    // Distance entre le point et le point le plus proche sur la ligne
     const dLat = px - closestX;
     const dLng = py - closestY;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -297,12 +203,10 @@ const GoogleMapComponent: React.FC = () => {
     return R * c;
   };
 
-  // Charger toutes les données de déménagement et demandes clients
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Charger les déménagements confirmés
       const { data: movesData, error: movesError } = await supabase
         .from('confirmed_moves')
         .select('*')
@@ -310,7 +214,6 @@ const GoogleMapComponent: React.FC = () => {
 
       if (movesError) throw movesError;
 
-      // Charger les demandes clients actives
       const { data: clientRequestsData, error: clientRequestsError } = await supabase
         .from('client_requests')
         .select('*')
@@ -320,10 +223,7 @@ const GoogleMapComponent: React.FC = () => {
       if (clientRequestsError) throw clientRequestsError;
 
       if (movesData && movesData.length > 0) {
-        // Séparer les trajets actifs (non terminés) des trajets terminés
         const activeMovesData = movesData.filter(move => move.status !== 'termine');
-        
-        // Géocoder seulement les trajets actifs pour la carte
         const activeMovesWithCoords: Move[] = [];
         
         for (const move of activeMovesData.slice(0, 10)) {
@@ -352,7 +252,6 @@ const GoogleMapComponent: React.FC = () => {
       }
 
       if (clientRequestsData && clientRequestsData.length > 0) {
-        // Géocoder les demandes clients actives
         const activeClientRequestsWithCoords: ClientRequest[] = [];
         
         for (const request of clientRequestsData.slice(0, 10)) {
@@ -385,7 +284,6 @@ const GoogleMapComponent: React.FC = () => {
     }
   }, []);
 
-  // Initialiser la carte
   const initializeMap = useCallback(async () => {
     if (!mapRef.current) return;
 
@@ -393,7 +291,7 @@ const GoogleMapComponent: React.FC = () => {
       await loadGoogleMapsScript();
       
       const mapInstance = new google.maps.Map(mapRef.current, {
-        center: { lat: 46.603354, lng: 1.888334 }, // Centre de la France
+        center: { lat: 46.603354, lng: 1.888334 },
         zoom: 6,
         styles: [
           {
@@ -416,15 +314,12 @@ const GoogleMapComponent: React.FC = () => {
     }
   }, []);
 
-  // Ajouter les marqueurs et trajets pour les déménagements confirmés et demandes clients
   const addMarkersAndRoutes = useCallback(async () => {
     if (!map) return;
 
-    // Ajouter les trajets de déménageurs confirmés (bleu)
     activeMoves.forEach((move, index) => {
       if (!move.departure_lat || !move.departure_lng || !move.arrival_lat || !move.arrival_lng) return;
 
-      // Marqueur de départ (vert)
       const departureMarker = new google.maps.Marker({
         position: { lat: move.departure_lat, lng: move.departure_lng },
         map: map,
@@ -435,7 +330,6 @@ const GoogleMapComponent: React.FC = () => {
         }
       });
 
-      // Marqueur d'arrivée (rouge)
       new google.maps.Marker({
         position: { lat: move.arrival_lat, lng: move.arrival_lng },
         map: map,
@@ -446,7 +340,6 @@ const GoogleMapComponent: React.FC = () => {
         }
       });
 
-      // Ligne de trajet déménageur (bleu)
       new google.maps.Polyline({
         path: [
           { lat: move.departure_lat, lng: move.departure_lng },
@@ -459,7 +352,6 @@ const GoogleMapComponent: React.FC = () => {
         map: map
       });
 
-      // InfoWindow pour les détails du déménagement
       const infoWindow = new google.maps.InfoWindow({
         content: `
           <div style="padding: 10px; max-width: 200px;">
@@ -487,11 +379,9 @@ const GoogleMapComponent: React.FC = () => {
       });
     });
 
-    // Ajouter les trajets de demandes clients (orange) avec calcul de distance optimisé
     for (const [index, request] of activeClientRequests.entries()) {
       if (!request.departure_lat || !request.departure_lng || !request.arrival_lat || !request.arrival_lng) continue;
 
-      // Calculer la distance minimale à tous les trajets de déménageurs avec l'algorithme optimisé
       let minDistance = Infinity;
       let closestMove: Move | null = null;
       let bestMatchDetails = '';
@@ -512,14 +402,13 @@ const GoogleMapComponent: React.FC = () => {
               bestMatchDetails = `Meilleur match avec trajet #${move.id} (${move.company_name || 'N/A'})`;
             }
             
-            console.log(`Client #${request.id} -> Trajet #${move.id}: distance optimisée = ${Math.round(distance)}km`);
+            console.log(`Client #${request.id} -> Trajet #${move.id}: distance Google Maps = ${Math.round(distance)}km`);
           } catch (error) {
             console.error(`Erreur lors du calcul de distance pour le client ${request.id} et le trajet ${move.id}:`, error);
           }
         }
       }
 
-      // Marqueur de départ client (jaune)
       const clientDepartureMarker = new google.maps.Marker({
         position: { lat: request.departure_lat, lng: request.departure_lng },
         map: map,
@@ -530,7 +419,6 @@ const GoogleMapComponent: React.FC = () => {
         }
       });
 
-      // Marqueur d'arrivée client (orange)
       new google.maps.Marker({
         position: { lat: request.arrival_lat, lng: request.arrival_lng },
         map: map,
@@ -541,7 +429,6 @@ const GoogleMapComponent: React.FC = () => {
         }
       });
 
-      // Ligne de trajet client (orange)
       new google.maps.Polyline({
         path: [
           { lat: request.departure_lat, lng: request.departure_lng },
@@ -554,7 +441,6 @@ const GoogleMapComponent: React.FC = () => {
         map: map
       });
 
-      // InfoWindow pour les détails de la demande client avec distance optimisée
       const clientInfoWindow = new google.maps.InfoWindow({
         content: `
           <div style="padding: 10px; max-width: 250px;">
@@ -582,7 +468,7 @@ const GoogleMapComponent: React.FC = () => {
             ${minDistance !== Infinity ? `
               <div style="margin: 8px 0; padding: 6px; background: ${minDistance <= 50 ? '#ecfdf5' : minDistance <= 100 ? '#fef3c7' : '#fef2f2'}; border-radius: 4px;">
                 <p style="margin: 0; font-size: 12px; color: ${minDistance <= 50 ? '#10b981' : minDistance <= 100 ? '#f59e0b' : '#ef4444'}; font-weight: bold;">
-                  <strong>Distance optimisée:</strong> ${Math.round(minDistance)}km
+                  <strong>Distance Google Maps:</strong> ${Math.round(minDistance)}km
                 </p>
                 <p style="margin: 2px 0 0 0; font-size: 10px; color: #6b7280;">
                   ${bestMatchDetails}
@@ -598,7 +484,6 @@ const GoogleMapComponent: React.FC = () => {
       });
     }
 
-    // Ajuster la vue pour inclure tous les marqueurs
     const allPoints = [
       ...activeMoves.filter(move => move.departure_lat && move.departure_lng).map(move => ({ lat: move.departure_lat!, lng: move.departure_lng! })),
       ...activeMoves.filter(move => move.arrival_lat && move.arrival_lng).map(move => ({ lat: move.arrival_lat!, lng: move.arrival_lng! })),
@@ -624,7 +509,6 @@ const GoogleMapComponent: React.FC = () => {
 
       if (error) throw error;
 
-      // Recharger les données pour mettre à jour la carte et la liste
       await loadData();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error);
@@ -752,7 +636,6 @@ const GoogleMapComponent: React.FC = () => {
         </div>
       )}
 
-      {/* Liste des trajets avec historique */}
       {showHistory && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-200">
