@@ -50,6 +50,10 @@ interface Move {
   status: string;
   status_custom: string | null;
   route_type: string | null;
+  departure_address?: string;
+  departure_country?: string;
+  arrival_address?: string;
+  arrival_country?: string;
 }
 
 interface Match {
@@ -235,7 +239,7 @@ const MatchFinder = () => {
   };
 
   // Nouvelle fonction pour calculer la distance réelle avec Google Maps API
-  const calculateRealDistance = async (clientDepartureAddress: string, clientArrivalAddress: string, moveDepartureAddress: string, moveArrivalAddress: string): Promise<number> => {
+  const calculateRealDistance = async (client: ClientRequest, move: Move): Promise<number> => {
     return new Promise((resolve) => {
       if (!window.google?.maps) {
         console.warn('Google Maps API not loaded, using fallback distance calculation');
@@ -246,7 +250,19 @@ const MatchFinder = () => {
       const directionsService = new google.maps.DirectionsService();
       const geocoder = new google.maps.Geocoder();
 
-      // D'abord, obtenir l'itinéraire du fournisseur
+      // Construire les adresses avec les données disponibles - en utilisant seulement les propriétés qui existent
+      const clientDepartureAddress = `${client.departure_address || ''} ${client.departure_postal_code} ${client.departure_city}, ${client.departure_country || 'France'}`.trim();
+      const clientArrivalAddress = `${client.arrival_address || ''} ${client.arrival_postal_code} ${client.arrival_city}, ${client.arrival_country || 'France'}`.trim();
+      
+      // Pour les moves, utiliser seulement les propriétés qui existent réellement selon la table confirmed_moves
+      const moveDepartureAddress = `${move.departure_address || ''} ${move.departure_postal_code} ${move.departure_city}, ${move.departure_country || 'France'}`.trim();
+      const moveArrivalAddress = `${move.arrival_address || ''} ${move.arrival_postal_code} ${move.arrival_city}, ${move.arrival_country || 'France'}`.trim();
+
+      console.log(`Calcul distance pour client ${client.id} -> move ${move.id}`);
+      console.log(`Client: ${clientDepartureAddress} -> ${clientArrivalAddress}`);
+      console.log(`Move: ${moveDepartureAddress} -> ${moveArrivalAddress}`);
+
+      // Obtenir l'itinéraire du fournisseur
       directionsService.route({
         origin: moveDepartureAddress,
         destination: moveArrivalAddress,
@@ -258,13 +274,14 @@ const MatchFinder = () => {
           return;
         }
 
-        // Obtenir les coordonnées du client (départ et arrivée)
+        // Obtenir les coordonnées du client
         Promise.all([
           new Promise<google.maps.LatLng | null>((resolveGeocode) => {
             geocoder.geocode({ address: clientDepartureAddress }, (results, status) => {
               if (status === 'OK' && results && results[0]) {
                 resolveGeocode(results[0].geometry.location);
               } else {
+                console.warn('Géocodage échoué pour:', clientDepartureAddress, status);
                 resolveGeocode(null);
               }
             });
@@ -274,6 +291,7 @@ const MatchFinder = () => {
               if (status === 'OK' && results && results[0]) {
                 resolveGeocode(results[0].geometry.location);
               } else {
+                console.warn('Géocodage échoué pour:', clientArrivalAddress, status);
                 resolveGeocode(null);
               }
             });
@@ -285,42 +303,53 @@ const MatchFinder = () => {
             return;
           }
 
-          // Analyser l'itinéraire pour trouver les points les plus proches
+          // Analyser l'itinéraire pour trouver le point le plus proche
           const route = result.routes[0];
-          let minDistanceDeparture = Infinity;
-          let minDistanceArrival = Infinity;
+          let minDistance = Infinity;
+          let routePoints: google.maps.LatLng[] = [];
 
-          // Parcourir tous les segments de l'itinéraire
+          // Collecter tous les points de l'itinéraire
           route.legs.forEach(leg => {
             leg.steps.forEach(step => {
-              const stepPath = step.path || [];
-              stepPath.forEach(point => {
-                // Distance pour le départ client
-                const distToDeparture = google.maps.geometry.spherical.computeDistanceBetween(
-                  clientDeparture,
-                  point
-                );
-                if (distToDeparture < minDistanceDeparture) {
-                  minDistanceDeparture = distToDeparture;
-                }
-
-                // Distance pour l'arrivée client
-                const distToArrival = google.maps.geometry.spherical.computeDistanceBetween(
-                  clientArrival,
-                  point
-                );
-                if (distToArrival < minDistanceArrival) {
-                  minDistanceArrival = distToArrival;
-                }
-              });
+              if (step.path) {
+                routePoints = routePoints.concat(step.path);
+              }
             });
           });
 
-          // Prendre la distance minimale (soit départ, soit arrivée)
-          const finalDistance = Math.min(minDistanceDeparture, minDistanceArrival);
-          const finalDistanceKm = Math.round(finalDistance / 1000);
+          if (routePoints.length === 0) {
+            route.legs.forEach(leg => {
+              leg.steps.forEach(step => {
+                routePoints.push(step.start_location);
+                routePoints.push(step.end_location);
+              });
+            });
+          }
+
+          console.log(`Analyse de ${routePoints.length} points sur l'itinéraire`);
+
+          // Tester la distance depuis le départ ET l'arrivée du client
+          [clientDeparture, clientArrival].forEach((clientPoint, index) => {
+            const pointType = index === 0 ? 'départ' : 'arrivée';
+            
+            routePoints.forEach((routePoint, pointIndex) => {
+              if (window.google?.maps?.geometry?.spherical) {
+                const distance = google.maps.geometry.spherical.computeDistanceBetween(
+                  clientPoint,
+                  routePoint
+                );
+                
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  console.log(`Nouvelle distance min: ${Math.round(distance/1000)}km (${pointType} client -> point ${pointIndex})`);
+                }
+              }
+            });
+          });
+
+          const finalDistanceKm = Math.round(minDistance / 1000);
+          console.log(`Distance finale calculée: ${finalDistanceKm}km`);
           
-          console.log(`Distance calculée via Google Maps: ${finalDistanceKm}km`);
           resolve(finalDistanceKm);
         });
       });
@@ -353,12 +382,7 @@ const MatchFinder = () => {
           const moveArrivalAddress = `${move.arrival_address || ''} ${move.arrival_postal_code} ${move.arrival_city}, ${move.arrival_country || 'France'}`.trim();
           
           // Calculer la distance réelle avec Google Maps
-          const distanceKm = await calculateRealDistance(
-            clientDepartureAddress,
-            clientArrivalAddress,
-            moveDepartureAddress,
-            moveArrivalAddress
-          );
+          const distanceKm = await calculateRealDistance(client, move);
           
           console.log(`Distance calculée pour client ${client.id} -> move ${move.id}: ${distanceKm}km`);
           
