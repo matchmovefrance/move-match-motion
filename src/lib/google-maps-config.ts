@@ -16,35 +16,29 @@ declare global {
 
 // Fonction pour récupérer la configuration depuis le fichier centralisé
 const getGoogleMapsApiKey = (): string => {
-  // Fallback si la config centralisée n'est pas chargée
   if (typeof window !== 'undefined' && window.APP_CONFIG) {
     return window.APP_CONFIG.GOOGLE_MAPS_API_KEY;
   }
   
-  // Fallback vers la clé par défaut
   return 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
 };
 
 export const GOOGLE_MAPS_CONFIG = {
-  // Utiliser la clé API depuis la configuration centralisée
   apiKey: getGoogleMapsApiKey(),
-  libraries: ['places', 'geometry'] as const,
+  libraries: ['places', 'geometry', 'directions'] as const, // Ajout de 'directions'
   region: 'FR',
   language: 'fr'
 };
 
-// Fonction pour charger le script Google Maps de manière asynchrone
+// Fonction pour charger le script Google Maps avec les services de directions
 export const loadGoogleMapsScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    // Vérifier si le script est déjà chargé
     if (window.google && window.google.maps) {
       resolve();
       return;
     }
 
-    // Vérifier s'il y a déjà un script en cours de chargement
     if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-      // Attendre que le script existant se charge
       const checkLoaded = () => {
         if (window.google && window.google.maps) {
           resolve();
@@ -56,7 +50,6 @@ export const loadGoogleMapsScript = (): Promise<void> => {
       return;
     }
 
-    // Récupérer la clé API depuis la config centralisée
     const apiKey = getGoogleMapsApiKey();
     
     const script = document.createElement('script');
@@ -65,7 +58,7 @@ export const loadGoogleMapsScript = (): Promise<void> => {
     script.defer = true;
     
     script.onload = () => {
-      console.log('Google Maps script loaded successfully');
+      console.log('Google Maps script loaded with Directions API');
       resolve();
     };
     
@@ -75,5 +68,46 @@ export const loadGoogleMapsScript = (): Promise<void> => {
     };
 
     document.head.appendChild(script);
+  });
+};
+
+// Fonction utilitaire pour calculer la distance entre deux points avec Google Directions API
+export const calculateGoogleMapsDistance = async (
+  origin: string,
+  destination: string
+): Promise<{ distance: number; duration: number } | null> => {
+  return new Promise((resolve) => {
+    if (!window.google?.maps) {
+      console.warn('Google Maps API not loaded');
+      resolve(null);
+      return;
+    }
+
+    const directionsService = new google.maps.DirectionsService();
+    
+    directionsService.route({
+      origin: origin,
+      destination: destination,
+      travelMode: google.maps.TravelMode.DRIVING,
+      region: 'FR',
+      language: 'fr'
+    }, (result, status) => {
+      if (status === 'OK' && result?.routes[0]) {
+        const leg = result.routes[0].legs[0];
+        const distanceKm = Math.round(leg.distance!.value / 1000);
+        const durationMin = Math.round(leg.duration!.value / 60);
+        
+        console.log(`Distance calculée Google Maps: ${distanceKm}km, Durée: ${durationMin}min`);
+        console.log(`Trajet: ${origin} -> ${destination}`);
+        
+        resolve({
+          distance: distanceKm,
+          duration: durationMin
+        });
+      } else {
+        console.warn('Erreur calcul distance Google Maps:', status);
+        resolve(null);
+      }
+    });
   });
 };
