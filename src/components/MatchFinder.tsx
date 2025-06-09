@@ -50,10 +50,6 @@ interface Move {
   status: string;
   status_custom: string | null;
   route_type: string | null;
-  departure_address?: string;
-  departure_country?: string;
-  arrival_address?: string;
-  arrival_country?: string;
 }
 
 interface Match {
@@ -238,29 +234,29 @@ const MatchFinder = () => {
     }
   };
 
-  // Fonction corrigée pour calculer la distance réelle comme sur la carte Google Maps
+  // Fonction corrigée pour calculer la VRAIE distance entre les trajets via Google Maps API
   const calculateRealDistance = async (client: ClientRequest, move: Move): Promise<number> => {
     return new Promise((resolve) => {
       if (!window.google?.maps) {
-        console.warn('Google Maps API not loaded, using fallback distance calculation');
-        resolve(150); // Distance par défaut plus réaliste
+        console.warn('Google Maps API not loaded');
+        resolve(500);
         return;
       }
 
       const directionsService = new google.maps.DirectionsService();
 
-      // Construire les adresses comme dans GoogleMap.tsx
+      // Construire les adresses complètes
       const clientDepartureAddress = `${client.departure_postal_code} ${client.departure_city}, France`;
       const clientArrivalAddress = `${client.arrival_postal_code} ${client.arrival_city}, France`;
       const moveDepartureAddress = `${move.departure_postal_code} ${move.departure_city}, France`;
       const moveArrivalAddress = `${move.arrival_postal_code} ${move.arrival_city}, France`;
 
-      console.log(`=== Calcul distance pour client ${client.id} -> move ${move.id} ===`);
-      console.log(`Client trajet: ${clientDepartureAddress} -> ${clientArrivalAddress}`);
-      console.log(`Move trajet: ${moveDepartureAddress} -> ${moveArrivalAddress}`);
+      console.log(`=== Calcul VRAIE distance pour client ${client.id} -> move ${move.id} ===`);
+      console.log(`Client: ${clientDepartureAddress} -> ${clientArrivalAddress}`);
+      console.log(`Move: ${moveDepartureAddress} -> ${moveArrivalAddress}`);
 
-      // Calculer la distance entre les deux trajets (comme dans GoogleMap.tsx)
-      Promise.all([
+      // Calculer 4 distances possibles entre les trajets
+      const distancePromises = [
         // Distance départ client -> départ move
         new Promise<number>((resolveDistance) => {
           directionsService.route({
@@ -273,11 +269,12 @@ const MatchFinder = () => {
               console.log(`Distance départ client -> départ move: ${distanceKm}km`);
               resolveDistance(distanceKm);
             } else {
-              console.warn('Erreur calcul distance départ:', status);
+              console.warn('Erreur calcul distance départ-départ:', status);
               resolveDistance(999);
             }
           });
         }),
+        
         // Distance arrivée client -> arrivée move  
         new Promise<number>((resolveDistance) => {
           directionsService.route({
@@ -290,12 +287,13 @@ const MatchFinder = () => {
               console.log(`Distance arrivée client -> arrivée move: ${distanceKm}km`);
               resolveDistance(distanceKm);
             } else {
-              console.warn('Erreur calcul distance arrivée:', status);
+              console.warn('Erreur calcul distance arrivée-arrivée:', status);
               resolveDistance(999);
             }
           });
         }),
-        // Distance départ client -> arrivée move (pour trajets croisés)
+        
+        // Distance départ client -> arrivée move (trajets croisés)
         new Promise<number>((resolveDistance) => {
           directionsService.route({
             origin: clientDepartureAddress,
@@ -312,7 +310,8 @@ const MatchFinder = () => {
             }
           });
         }),
-        // Distance arrivée client -> départ move (pour trajets croisés)
+        
+        // Distance arrivée client -> départ move (trajets croisés)
         new Promise<number>((resolveDistance) => {
           directionsService.route({
             origin: clientArrivalAddress,
@@ -329,17 +328,20 @@ const MatchFinder = () => {
             }
           });
         })
-      ]).then(([departDist, arrivalDist, crossDist1, crossDist2]) => {
-        // Prendre la distance minimale comme dans GoogleMap.tsx
-        const minDistance = Math.min(departDist, arrivalDist, crossDist1, crossDist2);
+      ];
+
+      // Attendre tous les calculs et prendre la distance minimale
+      Promise.all(distancePromises).then((distances) => {
+        const validDistances = distances.filter(d => d < 999);
+        const minDistance = validDistances.length > 0 ? Math.min(...validDistances) : 500;
         
-        console.log(`Distances calculées: départ=${departDist}km, arrivée=${arrivalDist}km, croisé1=${crossDist1}km, croisé2=${crossDist2}km`);
-        console.log(`Distance finale retenue: ${minDistance}km`);
+        console.log(`Distances calculées: ${distances.join('km, ')}km`);
+        console.log(`Distance finale (minimum) : ${minDistance}km`);
         
         resolve(minDistance);
       }).catch(error => {
         console.error('Erreur lors du calcul des distances:', error);
-        resolve(150);
+        resolve(500);
       });
     });
   };
@@ -360,13 +362,16 @@ const MatchFinder = () => {
 
       for (const client of clientRequests) {
         for (const move of moves) {
+          console.log(`\n=== Calcul match pour client ${client.id} (${client.departure_city}->${client.arrival_city}) et move ${move.id} (${move.departure_city}->${move.arrival_city}) ===`);
+          
           const distanceKm = await calculateRealDistance(client, move);
           
-          console.log(`Distance calculée pour client ${client.id} -> move ${move.id}: ${distanceKm}km`);
+          console.log(`Distance Google Maps calculée: ${distanceKm}km`);
           
           const datesCompatible = areDatesCompatible(client, move.departure_date);
           
           if (!datesCompatible) {
+            console.log('Dates incompatibles, skip ce match');
             continue;
           }
           
@@ -381,7 +386,7 @@ const MatchFinder = () => {
           
           const isValid = distanceKm <= 100 && dateDiffDays <= maxAllowedDays && volumeOk;
           
-          console.log(`Match validity pour client ${client.id} -> move ${move.id}: distance=${distanceKm}km, dateDiff=${dateDiffDays}j, volumeOk=${volumeOk}, isValid=${isValid}`);
+          console.log(`Résultat: distance=${distanceKm}km, dateDiff=${dateDiffDays}j, volumeOk=${volumeOk}, isValid=${isValid}`);
           
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
@@ -421,6 +426,8 @@ const MatchFinder = () => {
 
             if (error) {
               console.error('Error inserting match:', error);
+            } else {
+              console.log(`Match créé avec distance réelle: ${distanceKm}km`);
             }
           }
         }
@@ -428,7 +435,7 @@ const MatchFinder = () => {
 
       toast({
         title: "Succès",
-        description: "Recherche de correspondances terminée avec distances Google Maps",
+        description: "Recherche terminée avec distances Google Maps réelles",
       });
 
       fetchData();
@@ -482,7 +489,7 @@ const MatchFinder = () => {
     // Compter TOUS les matches qui existent dans la base de données
     // Cela inclut : en attente, acceptés, rejetés, même ceux avec des trajets/demandes terminés
     console.log(`Total des matches en base: ${matches.length}`);
-    console.log('Détail des matches:', matches.map(m => ({ id: m.id, status: m.status })));
+    console.log('Détail des matches:', matches.map(m => ({ id: m.id, status: m.status, distance: m.distance_km })));
     
     return matches.length;
   };
@@ -600,7 +607,6 @@ const MatchFinder = () => {
               
               if (!client || !move) return null;
 
-              // Recalculer la compatibilité pour l'affichage avec la logique corrigée
               const isDistanceOk = match.distance_km <= 100;
               const isVolumeOk = match.volume_ok;
               const isDateOk = client.flexible_dates ? 
@@ -719,11 +725,11 @@ const MatchFinder = () => {
                     </div>
                   </div>
 
-                  {/* Détails du match - affichage des vraies distances Google Maps */}
+                  {/* Détails du match avec vraies distances Google Maps */}
                   <div className="border-t pt-3 mt-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Distance (Google Maps):</span>
+                        <span className="text-gray-500">Distance Google Maps:</span>
                         <span className={`ml-2 font-medium ${
                           isDistanceOk ? 'text-green-600' : 'text-red-600'
                         }`}>
