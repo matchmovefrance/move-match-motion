@@ -238,120 +238,108 @@ const MatchFinder = () => {
     }
   };
 
-  // Nouvelle fonction pour calculer la distance réelle avec Google Maps API
+  // Fonction corrigée pour calculer la distance réelle comme sur la carte Google Maps
   const calculateRealDistance = async (client: ClientRequest, move: Move): Promise<number> => {
     return new Promise((resolve) => {
       if (!window.google?.maps) {
         console.warn('Google Maps API not loaded, using fallback distance calculation');
-        resolve(50); // Distance par défaut
+        resolve(150); // Distance par défaut plus réaliste
         return;
       }
 
       const directionsService = new google.maps.DirectionsService();
-      const geocoder = new google.maps.Geocoder();
 
-      // Construire les adresses avec les données disponibles - en utilisant seulement les propriétés qui existent
-      const clientDepartureAddress = `${client.departure_address || ''} ${client.departure_postal_code} ${client.departure_city}, ${client.departure_country || 'France'}`.trim();
-      const clientArrivalAddress = `${client.arrival_address || ''} ${client.arrival_postal_code} ${client.arrival_city}, ${client.arrival_country || 'France'}`.trim();
-      
-      // Pour les moves, utiliser seulement les propriétés qui existent réellement selon la table confirmed_moves
-      const moveDepartureAddress = `${move.departure_address || ''} ${move.departure_postal_code} ${move.departure_city}, ${move.departure_country || 'France'}`.trim();
-      const moveArrivalAddress = `${move.arrival_address || ''} ${move.arrival_postal_code} ${move.arrival_city}, ${move.arrival_country || 'France'}`.trim();
+      // Construire les adresses comme dans GoogleMap.tsx
+      const clientDepartureAddress = `${client.departure_postal_code} ${client.departure_city}, France`;
+      const clientArrivalAddress = `${client.arrival_postal_code} ${client.arrival_city}, France`;
+      const moveDepartureAddress = `${move.departure_postal_code} ${move.departure_city}, France`;
+      const moveArrivalAddress = `${move.arrival_postal_code} ${move.arrival_city}, France`;
 
-      console.log(`Calcul distance pour client ${client.id} -> move ${move.id}`);
-      console.log(`Client: ${clientDepartureAddress} -> ${clientArrivalAddress}`);
-      console.log(`Move: ${moveDepartureAddress} -> ${moveArrivalAddress}`);
+      console.log(`=== Calcul distance pour client ${client.id} -> move ${move.id} ===`);
+      console.log(`Client trajet: ${clientDepartureAddress} -> ${clientArrivalAddress}`);
+      console.log(`Move trajet: ${moveDepartureAddress} -> ${moveArrivalAddress}`);
 
-      // Obtenir l'itinéraire du fournisseur
-      directionsService.route({
-        origin: moveDepartureAddress,
-        destination: moveArrivalAddress,
-        travelMode: google.maps.TravelMode.DRIVING
-      }, (result, status) => {
-        if (status !== 'OK' || !result) {
-          console.warn('Erreur lors du calcul de l\'itinéraire fournisseur:', status);
-          resolve(50);
-          return;
-        }
-
-        // Obtenir les coordonnées du client
-        Promise.all([
-          new Promise<google.maps.LatLng | null>((resolveGeocode) => {
-            geocoder.geocode({ address: clientDepartureAddress }, (results, status) => {
-              if (status === 'OK' && results && results[0]) {
-                resolveGeocode(results[0].geometry.location);
-              } else {
-                console.warn('Géocodage échoué pour:', clientDepartureAddress, status);
-                resolveGeocode(null);
-              }
-            });
-          }),
-          new Promise<google.maps.LatLng | null>((resolveGeocode) => {
-            geocoder.geocode({ address: clientArrivalAddress }, (results, status) => {
-              if (status === 'OK' && results && results[0]) {
-                resolveGeocode(results[0].geometry.location);
-              } else {
-                console.warn('Géocodage échoué pour:', clientArrivalAddress, status);
-                resolveGeocode(null);
-              }
-            });
-          })
-        ]).then(([clientDeparture, clientArrival]) => {
-          if (!clientDeparture || !clientArrival) {
-            console.warn('Impossible de géocoder les adresses client');
-            resolve(50);
-            return;
-          }
-
-          // Analyser l'itinéraire pour trouver le point le plus proche
-          const route = result.routes[0];
-          let minDistance = Infinity;
-          let routePoints: google.maps.LatLng[] = [];
-
-          // Collecter tous les points de l'itinéraire
-          route.legs.forEach(leg => {
-            leg.steps.forEach(step => {
-              if (step.path) {
-                routePoints = routePoints.concat(step.path);
-              }
-            });
+      // Calculer la distance entre les deux trajets (comme dans GoogleMap.tsx)
+      Promise.all([
+        // Distance départ client -> départ move
+        new Promise<number>((resolveDistance) => {
+          directionsService.route({
+            origin: clientDepartureAddress,
+            destination: moveDepartureAddress,
+            travelMode: google.maps.TravelMode.DRIVING
+          }, (result, status) => {
+            if (status === 'OK' && result?.routes[0]) {
+              const distanceKm = Math.round(result.routes[0].legs[0].distance!.value / 1000);
+              console.log(`Distance départ client -> départ move: ${distanceKm}km`);
+              resolveDistance(distanceKm);
+            } else {
+              console.warn('Erreur calcul distance départ:', status);
+              resolveDistance(999);
+            }
           });
-
-          if (routePoints.length === 0) {
-            route.legs.forEach(leg => {
-              leg.steps.forEach(step => {
-                routePoints.push(step.start_location);
-                routePoints.push(step.end_location);
-              });
-            });
-          }
-
-          console.log(`Analyse de ${routePoints.length} points sur l'itinéraire`);
-
-          // Tester la distance depuis le départ ET l'arrivée du client
-          [clientDeparture, clientArrival].forEach((clientPoint, index) => {
-            const pointType = index === 0 ? 'départ' : 'arrivée';
-            
-            routePoints.forEach((routePoint, pointIndex) => {
-              if (window.google?.maps?.geometry?.spherical) {
-                const distance = google.maps.geometry.spherical.computeDistanceBetween(
-                  clientPoint,
-                  routePoint
-                );
-                
-                if (distance < minDistance) {
-                  minDistance = distance;
-                  console.log(`Nouvelle distance min: ${Math.round(distance/1000)}km (${pointType} client -> point ${pointIndex})`);
-                }
-              }
-            });
+        }),
+        // Distance arrivée client -> arrivée move  
+        new Promise<number>((resolveDistance) => {
+          directionsService.route({
+            origin: clientArrivalAddress,
+            destination: moveArrivalAddress,
+            travelMode: google.maps.TravelMode.DRIVING
+          }, (result, status) => {
+            if (status === 'OK' && result?.routes[0]) {
+              const distanceKm = Math.round(result.routes[0].legs[0].distance!.value / 1000);
+              console.log(`Distance arrivée client -> arrivée move: ${distanceKm}km`);
+              resolveDistance(distanceKm);
+            } else {
+              console.warn('Erreur calcul distance arrivée:', status);
+              resolveDistance(999);
+            }
           });
-
-          const finalDistanceKm = Math.round(minDistance / 1000);
-          console.log(`Distance finale calculée: ${finalDistanceKm}km`);
-          
-          resolve(finalDistanceKm);
-        });
+        }),
+        // Distance départ client -> arrivée move (pour trajets croisés)
+        new Promise<number>((resolveDistance) => {
+          directionsService.route({
+            origin: clientDepartureAddress,
+            destination: moveArrivalAddress,
+            travelMode: google.maps.TravelMode.DRIVING
+          }, (result, status) => {
+            if (status === 'OK' && result?.routes[0]) {
+              const distanceKm = Math.round(result.routes[0].legs[0].distance!.value / 1000);
+              console.log(`Distance départ client -> arrivée move: ${distanceKm}km`);
+              resolveDistance(distanceKm);
+            } else {
+              console.warn('Erreur calcul distance croisée 1:', status);
+              resolveDistance(999);
+            }
+          });
+        }),
+        // Distance arrivée client -> départ move (pour trajets croisés)
+        new Promise<number>((resolveDistance) => {
+          directionsService.route({
+            origin: clientArrivalAddress,
+            destination: moveDepartureAddress,
+            travelMode: google.maps.TravelMode.DRIVING
+          }, (result, status) => {
+            if (status === 'OK' && result?.routes[0]) {
+              const distanceKm = Math.round(result.routes[0].legs[0].distance!.value / 1000);
+              console.log(`Distance arrivée client -> départ move: ${distanceKm}km`);
+              resolveDistance(distanceKm);
+            } else {
+              console.warn('Erreur calcul distance croisée 2:', status);
+              resolveDistance(999);
+            }
+          });
+        })
+      ]).then(([departDist, arrivalDist, crossDist1, crossDist2]) => {
+        // Prendre la distance minimale comme dans GoogleMap.tsx
+        const minDistance = Math.min(departDist, arrivalDist, crossDist1, crossDist2);
+        
+        console.log(`Distances calculées: départ=${departDist}km, arrivée=${arrivalDist}km, croisé1=${crossDist1}km, croisé2=${crossDist2}km`);
+        console.log(`Distance finale retenue: ${minDistance}km`);
+        
+        resolve(minDistance);
+      }).catch(error => {
+        console.error('Erreur lors du calcul des distances:', error);
+        resolve(150);
       });
     });
   };
@@ -361,50 +349,33 @@ const MatchFinder = () => {
       setLoading(true);
       setIsSearching(true);
       
-      // Animation radar de 4 secondes
       setTimeout(() => {
         setIsSearching(false);
       }, 4000);
       
-      // Supprimer les anciens matches sans action (pending)
       await supabase
         .from('move_matches')
         .delete()
         .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
 
-      // Calculer les nouveaux matches avec la nouvelle logique de distance
       for (const client of clientRequests) {
         for (const move of moves) {
-          // Construire les adresses complètes
-          const clientDepartureAddress = `${client.departure_address || ''} ${client.departure_postal_code} ${client.departure_city}, ${client.departure_country || 'France'}`.trim();
-          const clientArrivalAddress = `${client.arrival_address || ''} ${client.arrival_postal_code} ${client.arrival_city}, ${client.arrival_country || 'France'}`.trim();
-          const moveDepartureAddress = `${move.departure_address || ''} ${move.departure_postal_code} ${move.departure_city}, ${move.departure_country || 'France'}`.trim();
-          const moveArrivalAddress = `${move.arrival_address || ''} ${move.arrival_postal_code} ${move.arrival_city}, ${move.arrival_country || 'France'}`.trim();
-          
-          // Calculer la distance réelle avec Google Maps
           const distanceKm = await calculateRealDistance(client, move);
           
           console.log(`Distance calculée pour client ${client.id} -> move ${move.id}: ${distanceKm}km`);
           
-          // Vérifier la compatibilité des dates avec gestion des dates flexibles
           const datesCompatible = areDatesCompatible(client, move.departure_date);
           
           if (!datesCompatible) {
-            continue; // Ignorer ce match si les dates ne sont pas compatibles
+            continue;
           }
           
-          // Calculer la différence de dates avec gestion des dates flexibles
           const dateDiffDays = calculateDateDifference(client, move.departure_date);
-          
-          // Vérifier si le volume est compatible
           const clientVolume = client.estimated_volume || 0;
           const availableVolume = move.available_volume || 0;
           const volumeOk = clientVolume <= availableVolume;
-          
-          // Calculer le volume combiné
           const combinedVolume = (move.used_volume || 0) + clientVolume;
           
-          // Déterminer si c'est un match valide - distance <= 100km, volume OK et dates compatibles
           const maxAllowedDays = client.flexible_dates ? 
             (dateDiffDays === 0 ? 0 : 15) : 15;
           
@@ -412,7 +383,6 @@ const MatchFinder = () => {
           
           console.log(`Match validity pour client ${client.id} -> move ${move.id}: distance=${distanceKm}km, dateDiff=${dateDiffDays}j, volumeOk=${volumeOk}, isValid=${isValid}`);
           
-          // Déterminer le type de match
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
               client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
@@ -431,13 +401,11 @@ const MatchFinder = () => {
             }
           }
 
-          // Vérifier s'il existe déjà un match pour cette combinaison
           const existingMatch = matches.find(m => 
             m.client_request_id === client.id && m.move_id === move.id
           );
 
           if (!existingMatch) {
-            // Insérer le match
             const { error } = await supabase
               .from('move_matches')
               .insert({
