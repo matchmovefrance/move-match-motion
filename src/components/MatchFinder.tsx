@@ -27,6 +27,10 @@ interface ClientRequest {
   flexible_dates: boolean | null;
   date_range_start?: string;
   date_range_end?: string;
+  departure_address?: string;
+  departure_country?: string;
+  arrival_address?: string;
+  arrival_country?: string;
 }
 
 interface Move {
@@ -230,179 +234,97 @@ const MatchFinder = () => {
     }
   };
 
-  // Fonction pour calculer la distance réelle entre un point et un trajet
-  const calculateDistanceToRoute = (clientDepartureCode: string, clientArrivalCode: string, moveDepartureCode: string, moveArrivalCode: string) => {
-    // Conversion simplifiée des codes postaux en coordonnées GPS approximatives
-    const getCoordinatesFromPostalCode = (postalCode: string) => {
-      const dept = parseInt(postalCode.substring(0, 2));
-      
-      // Coordonnées approximatives des départements français (en degrés)
-      const deptCoords: { [key: number]: { lat: number, lng: number } } = {
-        1: { lat: 46.2044, lng: 5.2256 }, // Ain
-        2: { lat: 49.5667, lng: 3.6233 }, // Aisne
-        3: { lat: 46.5667, lng: 2.6000 }, // Allier
-        4: { lat: 44.2500, lng: 6.2333 }, // Alpes-de-Haute-Provence
-        5: { lat: 44.6667, lng: 6.0833 }, // Hautes-Alpes
-        6: { lat: 43.7000, lng: 7.2667 }, // Alpes-Maritimes
-        7: { lat: 44.7333, lng: 4.6000 }, // Ardèche
-        8: { lat: 49.7667, lng: 4.7167 }, // Ardennes
-        9: { lat: 42.9667, lng: 1.6000 }, // Ariège
-        10: { lat: 48.3000, lng: 4.0833 }, // Aube
-        11: { lat: 43.2167, lng: 2.3500 }, // Aude
-        12: { lat: 44.3500, lng: 2.5833 }, // Aveyron
-        13: { lat: 43.5333, lng: 5.1333 }, // Bouches-du-Rhône
-        14: { lat: 49.1833, lng: -0.3667 }, // Calvados
-        15: { lat: 45.0333, lng: 2.4167 }, // Cantal
-        16: { lat: 45.6500, lng: 0.1500 }, // Charente
-        17: { lat: 45.7500, lng: -0.6333 }, // Charente-Maritime
-        18: { lat: 47.0833, lng: 2.3833 }, // Cher
-        19: { lat: 45.1667, lng: 2.0333 }, // Corrèze
-        21: { lat: 47.3167, lng: 5.0167 }, // Côte-d'Or
-        22: { lat: 48.5167, lng: -2.7667 }, // Côtes-d'Armor
-        23: { lat: 46.1667, lng: 2.2333 }, // Creuse
-        24: { lat: 45.1833, lng: 0.7167 }, // Dordogne
-        25: { lat: 47.2333, lng: 6.0333 }, // Doubs
-        26: { lat: 44.7333, lng: 5.0833 }, // Drôme
-        27: { lat: 49.0667, lng: 1.1500 }, // Eure
-        28: { lat: 48.4500, lng: 1.4833 }, // Eure-et-Loir
-        29: { lat: 48.1000, lng: -4.1000 }, // Finistère
-        30: { lat: 43.8333, lng: 4.3667 }, // Gard
-        31: { lat: 43.6000, lng: 1.4333 }, // Haute-Garonne
-        32: { lat: 43.6500, lng: 0.5833 }, // Gers
-        33: { lat: 44.8333, lng: -0.5667 }, // Gironde
-        34: { lat: 43.6000, lng: 3.8833 }, // Hérault
-        35: { lat: 48.1167, lng: -1.6833 }, // Ille-et-Vilaine
-        36: { lat: 46.8167, lng: 1.6833 }, // Indre
-        37: { lat: 47.3833, lng: 0.6833 }, // Indre-et-Loire
-        38: { lat: 45.1667, lng: 5.7167 }, // Isère
-        39: { lat: 46.6833, lng: 5.9000 }, // Jura
-        40: { lat: 44.0000, lng: -0.7667 }, // Landes
-        41: { lat: 47.6000, lng: 1.3333 }, // Loir-et-Cher
-        42: { lat: 45.4333, lng: 4.3833 }, // Loire
-        43: { lat: 45.0433, lng: 3.8833 }, // Haute-Loire
-        44: { lat: 47.2167, lng: -1.5500 }, // Loire-Atlantique
-        45: { lat: 47.9000, lng: 2.2333 }, // Loiret
-        46: { lat: 44.4500, lng: 1.4333 }, // Lot
-        47: { lat: 44.2000, lng: 0.6167 }, // Lot-et-Garonne
-        48: { lat: 44.5167, lng: 3.5000 }, // Lozère
-        49: { lat: 47.4667, lng: -0.5500 }, // Maine-et-Loire
-        50: { lat: 49.1167, lng: -1.3000 }, // Manche
-        51: { lat: 49.0500, lng: 4.0333 }, // Marne
-        52: { lat: 48.1167, lng: 5.1333 }, // Haute-Marne
-        53: { lat: 48.0667, lng: -0.7667 }, // Mayenne
-        54: { lat: 48.6833, lng: 6.1833 }, // Meurthe-et-Moselle
-        55: { lat: 49.1500, lng: 5.3833 }, // Meuse
-        56: { lat: 47.7500, lng: -2.7500 }, // Morbihan
-        57: { lat: 49.1167, lng: 6.1833 }, // Moselle
-        58: { lat: 47.0000, lng: 3.5167 }, // Nièvre
-        59: { lat: 50.6333, lng: 3.0667 }, // Nord
-        60: { lat: 49.4167, lng: 2.8000 }, // Oise
-        61: { lat: 48.7333, lng: 0.0833 }, // Orne
-        62: { lat: 50.4167, lng: 2.8333 }, // Pas-de-Calais
-        63: { lat: 45.7833, lng: 3.0833 }, // Puy-de-Dôme
-        64: { lat: 43.3000, lng: -0.3667 }, // Pyrénées-Atlantiques
-        65: { lat: 43.2333, lng: 0.0833 }, // Hautes-Pyrénées
-        66: { lat: 42.6833, lng: 2.8833 }, // Pyrénées-Orientales
-        67: { lat: 48.5833, lng: 7.7500 }, // Bas-Rhin
-        68: { lat: 47.7500, lng: 7.3333 }, // Haut-Rhin
-        69: { lat: 45.7500, lng: 4.8500 }, // Rhône
-        70: { lat: 47.6333, lng: 6.1500 }, // Haute-Saône
-        71: { lat: 46.5500, lng: 4.3500 }, // Saône-et-Loire
-        72: { lat: 48.0000, lng: 0.2000 }, // Sarthe
-        73: { lat: 45.5667, lng: 6.3667 }, // Savoie
-        74: { lat: 46.0667, lng: 6.7167 }, // Haute-Savoie
-        75: { lat: 48.8566, lng: 2.3522 }, // Paris
-        76: { lat: 49.4333, lng: 1.0833 }, // Seine-Maritime
-        77: { lat: 48.5333, lng: 2.6667 }, // Seine-et-Marne
-        78: { lat: 48.8000, lng: 2.1333 }, // Yvelines
-        79: { lat: 46.3167, lng: -0.4667 }, // Deux-Sèvres
-        80: { lat: 49.8833, lng: 2.3000 }, // Somme
-        81: { lat: 43.9283, lng: 2.1497 }, // Tarn
-        82: { lat: 44.0167, lng: 1.3500 }, // Tarn-et-Garonne
-        83: { lat: 43.1250, lng: 6.0167 }, // Var
-        84: { lat: 44.0500, lng: 5.0500 }, // Vaucluse
-        85: { lat: 46.6667, lng: -1.4333 }, // Vendée
-        86: { lat: 46.5833, lng: 0.3333 }, // Vienne
-        87: { lat: 45.8333, lng: 1.2667 }, // Haute-Vienne
-        88: { lat: 48.1667, lng: 6.4500 }, // Vosges
-        89: { lat: 47.7967, lng: 3.5675 }, // Yonne
-        90: { lat: 47.6333, lng: 6.8667 }, // Territoire de Belfort
-        91: { lat: 48.6333, lng: 2.4333 }, // Essonne
-        92: { lat: 48.8167, lng: 2.2167 }, // Hauts-de-Seine
-        93: { lat: 48.9167, lng: 2.4500 }, // Seine-Saint-Denis
-        94: { lat: 48.7667, lng: 2.4833 }, // Val-de-Marne
-        95: { lat: 49.0833, lng: 2.1167 }  // Val-d'Oise
-      };
-      
-      const coords = deptCoords[dept] || { lat: 46.603354, lng: 1.888334 }; // Centre de la France par défaut
-      return coords;
-    };
-
-    // Fonction pour calculer la distance en km entre deux points GPS
-    const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-      const R = 6371; // Rayon de la Terre en km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLng/2) * Math.sin(dLng/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    };
-
-    // Fonction pour calculer la distance d'un point à une ligne (segment)
-    const distancePointToLine = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
-      const A = px - x1;
-      const B = py - y1;
-      const C = x2 - x1;
-      const D = y2 - y1;
-      
-      const dot = A * C + B * D;
-      const lenSq = C * C + D * D;
-      
-      if (lenSq === 0) {
-        // Le segment est un point
-        return calculateDistance(py, px, y1, x1);
+  // Nouvelle fonction pour calculer la distance réelle avec Google Maps API
+  const calculateRealDistance = async (clientDepartureAddress: string, clientArrivalAddress: string, moveDepartureAddress: string, moveArrivalAddress: string): Promise<number> => {
+    return new Promise((resolve) => {
+      if (!window.google?.maps) {
+        console.warn('Google Maps API not loaded, using fallback distance calculation');
+        resolve(50); // Distance par défaut
+        return;
       }
 
-      let param = dot / lenSq;
-      
-      let xx, yy;
-      if (param < 0) {
-        xx = x1;
-        yy = y1;
-      } else if (param > 1) {
-        xx = x2;
-        yy = y2;
-      } else {
-        xx = x1 + param * C;
-        yy = y1 + param * D;
-      }
+      const directionsService = new google.maps.DirectionsService();
+      const geocoder = new google.maps.Geocoder();
 
-      return calculateDistance(py, px, yy, xx);
-    };
+      // D'abord, obtenir l'itinéraire du fournisseur
+      directionsService.route({
+        origin: moveDepartureAddress,
+        destination: moveArrivalAddress,
+        travelMode: google.maps.TravelMode.DRIVING
+      }, (result, status) => {
+        if (status !== 'OK' || !result) {
+          console.warn('Erreur lors du calcul de l\'itinéraire fournisseur:', status);
+          resolve(50);
+          return;
+        }
 
-    const clientDep = getCoordinatesFromPostalCode(clientDepartureCode);
-    const clientArr = getCoordinatesFromPostalCode(clientArrivalCode);
-    const moveDep = getCoordinatesFromPostalCode(moveDepartureCode);
-    const moveArr = getCoordinatesFromPostalCode(moveArrivalCode);
+        // Obtenir les coordonnées du client (départ et arrivée)
+        Promise.all([
+          new Promise<google.maps.LatLng | null>((resolveGeocode) => {
+            geocoder.geocode({ address: clientDepartureAddress }, (results, status) => {
+              if (status === 'OK' && results && results[0]) {
+                resolveGeocode(results[0].geometry.location);
+              } else {
+                resolveGeocode(null);
+              }
+            });
+          }),
+          new Promise<google.maps.LatLng | null>((resolveGeocode) => {
+            geocoder.geocode({ address: clientArrivalAddress }, (results, status) => {
+              if (status === 'OK' && results && results[0]) {
+                resolveGeocode(results[0].geometry.location);
+              } else {
+                resolveGeocode(null);
+              }
+            });
+          })
+        ]).then(([clientDeparture, clientArrival]) => {
+          if (!clientDeparture || !clientArrival) {
+            console.warn('Impossible de géocoder les adresses client');
+            resolve(50);
+            return;
+          }
 
-    // Calculer la distance du point de départ client au trajet du déménageur
-    const distanceDeparture = distancePointToLine(
-      clientDep.lng, clientDep.lat,
-      moveDep.lng, moveDep.lat,
-      moveArr.lng, moveArr.lat
-    );
+          // Analyser l'itinéraire pour trouver les points les plus proches
+          const route = result.routes[0];
+          let minDistanceDeparture = Infinity;
+          let minDistanceArrival = Infinity;
 
-    // Calculer la distance du point d'arrivée client au trajet du déménageur
-    const distanceArrival = distancePointToLine(
-      clientArr.lng, clientArr.lat,
-      moveDep.lng, moveDep.lat,
-      moveArr.lng, moveArr.lat
-    );
+          // Parcourir tous les segments de l'itinéraire
+          route.legs.forEach(leg => {
+            leg.steps.forEach(step => {
+              const stepPath = step.path || [];
+              stepPath.forEach(point => {
+                // Distance pour le départ client
+                const distToDeparture = google.maps.geometry.spherical.computeDistanceBetween(
+                  clientDeparture,
+                  point
+                );
+                if (distToDeparture < minDistanceDeparture) {
+                  minDistanceDeparture = distToDeparture;
+                }
 
-    // Retourner la distance minimale arrondie
-    return Math.round(Math.min(distanceDeparture, distanceArrival));
+                // Distance pour l'arrivée client
+                const distToArrival = google.maps.geometry.spherical.computeDistanceBetween(
+                  clientArrival,
+                  point
+                );
+                if (distToArrival < minDistanceArrival) {
+                  minDistanceArrival = distToArrival;
+                }
+              });
+            });
+          });
+
+          // Prendre la distance minimale (soit départ, soit arrivée)
+          const finalDistance = Math.min(minDistanceDeparture, minDistanceArrival);
+          const finalDistanceKm = Math.round(finalDistance / 1000);
+          
+          console.log(`Distance calculée via Google Maps: ${finalDistanceKm}km`);
+          resolve(finalDistanceKm);
+        });
+      });
+    });
   };
 
   const findMatches = useCallback(async () => {
@@ -424,12 +346,18 @@ const MatchFinder = () => {
       // Calculer les nouveaux matches avec la nouvelle logique de distance
       for (const client of clientRequests) {
         for (const move of moves) {
-          // Calculer la distance par rapport au trajet complet
-          const distanceKm = calculateDistanceToRoute(
-            client.departure_postal_code,
-            client.arrival_postal_code,
-            move.departure_postal_code,
-            move.arrival_postal_code
+          // Construire les adresses complètes
+          const clientDepartureAddress = `${client.departure_address || ''} ${client.departure_postal_code} ${client.departure_city}, ${client.departure_country || 'France'}`.trim();
+          const clientArrivalAddress = `${client.arrival_address || ''} ${client.arrival_postal_code} ${client.arrival_city}, ${client.arrival_country || 'France'}`.trim();
+          const moveDepartureAddress = `${move.departure_address || ''} ${move.departure_postal_code} ${move.departure_city}, ${move.departure_country || 'France'}`.trim();
+          const moveArrivalAddress = `${move.arrival_address || ''} ${move.arrival_postal_code} ${move.arrival_city}, ${move.arrival_country || 'France'}`.trim();
+          
+          // Calculer la distance réelle avec Google Maps
+          const distanceKm = await calculateRealDistance(
+            clientDepartureAddress,
+            clientArrivalAddress,
+            moveDepartureAddress,
+            moveArrivalAddress
           );
           
           console.log(`Distance calculée pour client ${client.id} -> move ${move.id}: ${distanceKm}km`);
@@ -508,7 +436,7 @@ const MatchFinder = () => {
 
       toast({
         title: "Succès",
-        description: "Recherche de correspondances terminée avec calcul de distance corrigé",
+        description: "Recherche de correspondances terminée avec distances Google Maps",
       });
 
       fetchData();
@@ -799,11 +727,11 @@ const MatchFinder = () => {
                     </div>
                   </div>
 
-                  {/* Détails du match - logique de compatibilité corrigée */}
+                  {/* Détails du match - affichage des vraies distances Google Maps */}
                   <div className="border-t pt-3 mt-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Distance:</span>
+                        <span className="text-gray-500">Distance (Google Maps):</span>
                         <span className={`ml-2 font-medium ${
                           isDistanceOk ? 'text-green-600' : 'text-red-600'
                         }`}>
