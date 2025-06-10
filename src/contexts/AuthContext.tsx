@@ -41,14 +41,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
+    let loadingTimeout: NodeJS.Timeout;
 
     const initializeAuth = async () => {
       try {
         console.log('🔄 Initializing auth...');
         
+        // Set a maximum loading time to prevent infinite loading
+        loadingTimeout = setTimeout(() => {
+          if (mounted) {
+            console.log('⏰ Auth initialization timeout, stopping loading');
+            setLoading(false);
+          }
+        }, 8000); // 8 seconds max
+
         // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
+        if (error && !error.message?.includes('session')) {
           console.error('❌ Error getting session:', error);
         } else {
           console.log('✅ Session retrieved:', session?.user?.email || 'No session');
@@ -63,11 +72,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             setProfile(null);
           }
+          
+          // Clear timeout since we're done loading
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+          }
           setLoading(false);
         }
       } catch (error) {
         console.error('❌ Auth initialization error:', error);
         if (mounted) {
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+          }
           setLoading(false);
         }
       }
@@ -99,6 +116,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false;
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
       subscription.unsubscribe();
     };
   }, []);
@@ -135,25 +155,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // For other users, try to fetch from database with a timeout
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      // Add a timeout to prevent infinite loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
-      );
+      // For other users, try to fetch from database with a shorter timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
 
       try {
-        const { data: profileData, error } = await Promise.race([
-          profilePromise,
-          timeoutPromise
-        ]) as any;
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
 
-        if (error && !error.message?.includes('timeout')) {
+        clearTimeout(timeoutId);
+
+        if (error) {
           console.error('❌ Error fetching profile:', error);
           await createDefaultProfile(user);
           return;
@@ -172,8 +187,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('📝 No profile found, creating default...');
           await createDefaultProfile(user);
         }
-      } catch (timeoutError) {
-        console.log('⏰ Profile fetch timed out, using fallback');
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.log('⏰ Profile fetch aborted due to timeout, using fallback');
+        } else {
+          console.error('❌ Profile fetch error:', fetchError);
+        }
         await createDefaultProfile(user);
       }
     } catch (error) {
@@ -197,17 +217,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { error } = await supabase
           .from('profiles')
-          .insert({
+          .upsert({
             id: user.id,
             email: user.email,
             role: 'agent',
             company_name: null
+          }, { 
+            onConflict: 'id',
+            ignoreDuplicates: false 
           });
 
         if (error) {
-          console.error('❌ Error creating profile in DB:', error);
+          console.error('❌ Error upserting profile in DB:', error);
         } else {
-          console.log('✅ Default profile created in DB successfully');
+          console.log('✅ Default profile upserted in DB successfully');
         }
       } catch (dbError) {
         console.error('❌ Database error creating profile:', dbError);

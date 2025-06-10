@@ -12,8 +12,20 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, user, profile } = useAuth();
+  const { signIn, user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Show loading spinner while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   // If user is authenticated and has profile, redirect to dashboard
   if (user && profile) {
@@ -97,6 +109,7 @@ const Auth = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -111,6 +124,7 @@ const Auth = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -120,13 +134,20 @@ const Auth = () => {
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                 disabled={loading}
               >
-                {loading ? 'Chargement...' : 'Se connecter'}
+                {loading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Connexion...</span>
+                  </div>
+                ) : (
+                  'Se connecter'
+                )}
               </Button>
             </form>
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
-                Contactez votre administrateur
+                Contactez votre administrateur pour obtenir un compte
               </p>
             </div>
           </CardContent>
