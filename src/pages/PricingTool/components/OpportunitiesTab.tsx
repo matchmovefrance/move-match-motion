@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -494,7 +493,6 @@ const OpportunitiesTab = () => {
           open={showBestPrices}
           onOpenChange={setShowBestPrices}
           opportunity={selectedOpportunity}
-          suppliers={suppliers || []}
         />
 
         <CreateOpportunityDialog

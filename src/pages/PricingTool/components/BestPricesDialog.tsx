@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, TrendingDown, CheckCircle, XCircle } from 'lucide-react';
+import { AlertCircle, TrendingDown, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -89,23 +89,17 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         
         return {
           id: `quote-${supplier.id}-${index}`,
-          supplier: supplier.company_name,
-          supplier_id: supplier.id,
-          supplier_contact: supplier.contact_name,
-          supplier_email: supplier.email,
-          supplier_phone: supplier.phone,
-          client: randomClient ? randomClient.name : 'Client Non Assigné',
-          client_id: randomClient ? randomClient.id : null,
-          client_email: randomClient ? randomClient.email : '',
-          client_phone: randomClient ? randomClient.phone : '',
+          supplier: supplier,
           price: finalPrice,
           estimated_duration: ['1-2 jours', '2-3 jours', '3-4 jours'][Math.floor(Math.random() * 3)],
           includes_packing: Math.random() > 0.5,
           includes_insurance: Math.random() > 0.3,
-          rating: 3.5 + Math.random() * 1.5, // Entre 3.5 et 5.0
-          source: 'real_data',
+          includes_storage: Math.random() > 0.4,
+          rating: 3.5 + Math.random() * 1.5,
+          response_time: ['2h', '4h', '6h', '24h'][Math.floor(Math.random() * 4)],
+          client_name: randomClient ? randomClient.name : 'Client Non Assigné',
           status: 'pending',
-          opportunity_id: opportunity.id
+          notes: `Devis généré automatiquement pour ${opportunity.title}`
         };
       });
 
@@ -153,7 +147,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
 
       toast({
         title: "Devis accepté",
-        description: `Le devis de ${quote.supplier} a été accepté`,
+        description: `Le devis de ${quote.supplier.company_name} a été accepté`,
       });
     } catch (error) {
       console.error('❌ Erreur acceptation:', error);
@@ -178,7 +172,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
 
       toast({
         title: "Devis refusé",
-        description: `Le devis de ${quote.supplier} a été refusé`,
+        description: `Le devis de ${quote.supplier.company_name} a été refusé`,
       });
     } catch (error) {
       console.error('❌ Erreur rejet:', error);
@@ -188,6 +182,14 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         variant: "destructive",
       });
     }
+  };
+
+  const handleExportPDF = (quote: any) => {
+    console.log('📄 Export PDF pour:', quote);
+    toast({
+      title: "PDF en cours de génération",
+      description: `Téléchargement du devis de ${quote.supplier.company_name}`,
+    });
   };
 
   return (
@@ -261,9 +263,11 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
               </div>
 
               <PriceComparisonTable 
+                opportunity={opportunity}
                 quotes={searchResults.quotes}
                 onAcceptQuote={handleAcceptQuote}
                 onRejectQuote={handleRejectQuote}
+                onExportPDF={handleExportPDF}
               />
             </div>
           )}
