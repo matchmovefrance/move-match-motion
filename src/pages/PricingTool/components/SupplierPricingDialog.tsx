@@ -33,7 +33,7 @@ interface PricingModel {
   parkingFeeAmount: number;
   timeMultiplier: number;
   minimumPrice: number;
-  matchMoveMargin: number; // Nouvelle marge MatchMove
+  matchMoveMargin: number;
 }
 
 interface SupplierPricingDialogProps {
@@ -71,7 +71,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
       parkingFeeAmount: supplier?.pricing_model?.parkingFeeAmount || 0,
       timeMultiplier: supplier?.pricing_model?.timeMultiplier || 1,
       minimumPrice: supplier?.pricing_model?.minimumPrice || 200,
-      matchMoveMargin: supplier?.pricing_model?.matchMoveMargin || 40, // 40% par défaut
+      matchMoveMargin: supplier?.pricing_model?.matchMoveMargin || 40,
     },
   });
 
@@ -80,7 +80,6 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
     try {
       console.log('💰 Mise à jour modèle de tarification pour:', supplier?.company_name);
 
-      // Si c'est un prestataire depuis les trajets, on simule la sauvegarde
       if (supplier?.id?.startsWith('move-supplier-')) {
         console.log('📝 Tarification simulée pour prestataire des trajets');
         
@@ -92,8 +91,6 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
         onUpdate();
         onOpenChange(false);
       } else {
-        // Pour les prestataires classiques, on met à jour la table suppliers
-        // Convertir en objet JSON simple pour éviter l'erreur TypeScript
         const pricingModelData = {
           basePrice: data.basePrice,
           volumeRate: data.volumeRate,
@@ -670,7 +667,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                   <>
                     <Save className="h-4 w-4 mr-2" />
                     Sauvegarder
-                  </Button>
+                  </>
                 )}
               </Button>
             </div>
