@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -110,7 +109,6 @@ const OpportunitiesTab = () => {
   };
 
   const getClientInfo = (opportunity: any) => {
-    // Si l'opportunité est liée à une demande client
     if (opportunity.client_requests) {
       const clientRequest = opportunity.client_requests;
       const client = clientRequest.clients;
@@ -122,7 +120,6 @@ const OpportunitiesTab = () => {
       };
     }
     
-    // Sinon, utiliser les informations saisies manuellement (si disponibles)
     return {
       name: opportunity.client_name || 'Client non spécifié',
       email: opportunity.client_email || '',
@@ -298,100 +295,103 @@ const OpportunitiesTab = () => {
                     )}
 
                     {/* BOUTON PRINCIPAL - TROUVER LES PRIX */}
-                    <div className="pt-2">
+                    <div className="pt-3 border-t border-gray-100">
                       <Button 
                         onClick={() => handleFindBestPrices(opportunity)}
-                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
                         size="lg"
                       >
                         <Calculator className="h-5 w-5 mr-2" />
-                        <span className="text-base">TROUVER LES MEILLEURS PRIX</span>
+                        <span className="text-base font-extrabold">TROUVER LES MEILLEURS PRIX</span>
                         <TrendingUp className="h-5 w-5 ml-2" />
                       </Button>
                     </div>
 
-                    {/* Boutons secondaires */}
-                    <div className="flex gap-2 pt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleEditOpportunity(opportunity)}
-                        className="flex-1 hover:bg-blue-50"
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Modifier
-                      </Button>
-                      
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1"
-                            disabled
-                          >
-                            <BarChart3 className="h-4 w-4 mr-1" />
-                            Analyse
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Analyse des prix (à venir)</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
+                    {/* Actions secondaires */}
+                    <div className="space-y-3">
+                      {/* Ligne 1 - Actions principales */}
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEditOpportunity(opportunity)}
+                          className="flex-1 hover:bg-blue-50 border-blue-200"
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Modifier
+                        </Button>
+                        
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 hover:bg-orange-50 border-orange-200"
+                              disabled
+                            >
+                              <BarChart3 className="h-4 w-4 mr-1" />
+                              Analyse
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Analyse des prix comparés (à venir)</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
 
-                    {/* Fonctionnalités à venir - Ligne 2 */}
-                    <div className="flex gap-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1"
-                            disabled
-                          >
-                            <Clock className="h-4 w-4 mr-1" />
-                            <span className="text-xs">Planning</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Gestion du planning (à venir)</p>
-                        </TooltipContent>
-                      </Tooltip>
+                      {/* Ligne 2 - Fonctionnalités avancées */}
+                      <div className="flex gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 hover:bg-green-50 border-green-200"
+                              disabled
+                            >
+                              <Clock className="h-4 w-4 mr-1" />
+                              <span className="text-xs">Planning</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Gestion du planning automatisé (à venir)</p>
+                          </TooltipContent>
+                        </Tooltip>
 
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1"
-                            disabled
-                          >
-                            <FileText className="h-4 w-4 mr-1" />
-                            <span className="text-xs">Rapport</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Rapports détaillés (à venir)</p>
-                        </TooltipContent>
-                      </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 hover:bg-purple-50 border-purple-200"
+                              disabled
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              <span className="text-xs">Rapport</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Rapports détaillés PDF/Excel (à venir)</p>
+                          </TooltipContent>
+                        </Tooltip>
 
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1"
-                            disabled
-                          >
-                            <Mail className="h-4 w-4 mr-1" />
-                            <span className="text-xs">Email</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Envoi automatique (à venir)</p>
-                        </TooltipContent>
-                      </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 hover:bg-red-50 border-red-200"
+                              disabled
+                            >
+                              <Mail className="h-4 w-4 mr-1" />
+                              <span className="text-xs">Email</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Envoi automatique aux clients (à venir)</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -451,3 +451,5 @@ const OpportunitiesTab = () => {
 };
 
 export default OpportunitiesTab;
+
+</edits_to_apply>
