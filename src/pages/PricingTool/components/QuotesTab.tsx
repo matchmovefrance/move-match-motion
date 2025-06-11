@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,9 +56,21 @@ const QuotesTab = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as QuoteWithDetails[];
+      
+      // Filtrer les devis avec des prestataires demo ou invalides
+      const filteredData = (data as QuoteWithDetails[])?.filter(quote => {
+        const supplierName = quote.supplier?.company_name?.toLowerCase() || '';
+        const isDemo = supplierName.includes('demo') || 
+                      supplierName.includes('test') || 
+                      supplierName.includes('exemple') ||
+                      supplierName.includes('sample');
+        return !isDemo && quote.supplier && quote.opportunity;
+      }) || [];
+
+      console.log('📋 Devis filtrés (sans demo):', filteredData.length);
+      return filteredData;
     },
-    refetchInterval: 5000, // Refresh every 5 seconds for quotes
+    refetchInterval: 5000,
   });
 
   const updateQuoteStatus = async (quoteId: string, status: string) => {

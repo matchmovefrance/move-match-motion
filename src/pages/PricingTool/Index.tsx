@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,16 +27,24 @@ const PricingTool = () => {
     if (isDarkMode) setTheme('dark');
   }, []);
 
-  // Requête optimisée pour les statistiques
+  // Requête optimisée pour les statistiques avec filtrage des données demo
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pricing-stats'],
     queryFn: async () => {
       console.log('📊 Chargement des statistiques...');
       
-      const [clientRequests, movesRaw, quotes] = await Promise.all([
+      const [clientRequests, movesRaw, quotesRaw] = await Promise.all([
         supabase.from('client_requests').select('id, status'),
         supabase.from('confirmed_moves').select('mover_id, mover_name, company_name').not('mover_id', 'is', null),
-        supabase.from('quotes').select('id, status').eq('created_by', user?.id)
+        supabase
+          .from('quotes')
+          .select(`
+            id, 
+            status, 
+            created_by,
+            supplier:suppliers(company_name)
+          `)
+          .eq('created_by', user?.id)
       ]);
 
       // Compter les clients uniques depuis client_requests
@@ -45,20 +52,41 @@ const PricingTool = () => {
       const activeClients = clientRequests.data?.filter(c => ['pending', 'confirmed'].includes(c.status)).length || 0;
       const completedClients = clientRequests.data?.filter(c => ['completed', 'cancelled', 'closed'].includes(c.status)).length || 0;
 
-      // Compter les prestataires uniques depuis les trajets
+      // Compter les prestataires uniques depuis les trajets (sans demo)
       const uniqueSuppliersMap = new Map();
       movesRaw.data?.forEach((move) => {
-        const key = `${move.mover_name}-${move.company_name}`;
-        if (!uniqueSuppliersMap.has(key)) {
-          uniqueSuppliersMap.set(key, {
-            mover_name: move.mover_name,
-            company_name: move.company_name,
-            is_active: true
-          });
+        const companyName = move.company_name?.toLowerCase() || '';
+        const moverName = move.mover_name?.toLowerCase() || '';
+        
+        // Filtrer les prestataires demo
+        const isDemo = companyName.includes('demo') || 
+                      companyName.includes('test') || 
+                      moverName.includes('demo') ||
+                      moverName.includes('test');
+        
+        if (!isDemo) {
+          const key = `${move.mover_name}-${move.company_name}`;
+          if (!uniqueSuppliersMap.has(key)) {
+            uniqueSuppliersMap.set(key, {
+              mover_name: move.mover_name,
+              company_name: move.company_name,
+              is_active: true
+            });
+          }
         }
       });
 
       const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
+
+      // Filtrer les devis sans les prestataires demo
+      const validQuotes = quotesRaw.data?.filter(quote => {
+        const supplierName = quote.supplier?.company_name?.toLowerCase() || '';
+        const isDemo = supplierName.includes('demo') || 
+                      supplierName.includes('test') || 
+                      supplierName.includes('exemple') ||
+                      supplierName.includes('sample');
+        return !isDemo && quote.supplier;
+      }) || [];
 
       const stats = {
         totalClients,
@@ -66,15 +94,15 @@ const PricingTool = () => {
         completedClients,
         totalSuppliers: uniqueSuppliers.length,
         activeSuppliers: uniqueSuppliers.filter(s => s.is_active).length,
-        totalQuotes: quotes.data?.length || 0,
-        pendingQuotes: quotes.data?.filter(q => q.status === 'pending').length || 0,
-        acceptedQuotes: quotes.data?.filter(q => q.status === 'accepted').length || 0,
+        totalQuotes: validQuotes.length,
+        pendingQuotes: validQuotes.filter(q => q.status === 'pending').length,
+        acceptedQuotes: validQuotes.filter(q => q.status === 'accepted').length,
       };
 
-      console.log('✅ Statistiques chargées:', stats);
+      console.log('✅ Statistiques chargées (sans demo):', stats);
       return stats;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     enabled: !!user,
