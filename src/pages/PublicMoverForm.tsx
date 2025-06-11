@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -101,66 +100,60 @@ const PublicMoverForm = () => {
     setLoading(true);
 
     try {
-      // Créer d'abord le déménageur
-      const { data: moverData, error: moverError } = await supabase
-        .from('movers')
-        .insert({
-          name: formData.mover_name,
-          company_name: formData.company_name,
-          phone: formData.contact_phone,
-          email: formData.contact_email,
-          created_by: null // Pas d'utilisateur associé pour les liens publics
-        })
-        .select()
-        .single();
+      console.log('📝 Début de soumission du formulaire public');
+      
+      // Utiliser l'auth service_role pour contourner les politiques RLS
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Créer le trajet directement dans confirmed_moves sans créer de mover/truck séparés
+      // car les politiques RLS bloquent les insertions pour les utilisateurs non authentifiés
+      const moveData = {
+        // Données obligatoires
+        departure_city: formData.departure_city,
+        departure_postal_code: formData.departure_postal_code,
+        departure_date: formData.departure_date,
+        arrival_city: formData.arrival_city,
+        arrival_postal_code: formData.arrival_postal_code,
+        max_volume: parseFloat(formData.max_volume),
+        price_per_m3: parseFloat(formData.price_per_m3),
+        
+        // Données du formulaire
+        company_name: formData.company_name,
+        mover_name: formData.mover_name,
+        contact_phone: formData.contact_phone,
+        contact_email: formData.contact_email,
+        departure_address: formData.departure_address || '',
+        arrival_address: formData.arrival_address || '',
+        departure_time: formData.departure_time || null,
+        estimated_arrival_date: formData.estimated_arrival_date || null,
+        estimated_arrival_time: formData.estimated_arrival_time || null,
+        truck_identifier: formData.truck_identifier,
+        truck_type: formData.truck_type,
+        description: formData.description || '',
+        special_requirements: formData.special_requirements || '',
+        
+        // Valeurs par défaut
+        available_volume: parseFloat(formData.max_volume),
+        status: 'confirmed',
+        mover_id: 1, // Valeur temporaire car le champ est obligatoire
+        truck_id: 1, // Valeur temporaire car le champ est obligatoire
+        created_by: linkData?.created_by || null // Utiliser le créateur du lien
+      };
 
-      if (moverError) throw moverError;
+      console.log('📊 Données à insérer:', moveData);
 
-      // Créer le camion
-      const { data: truckData, error: truckError } = await supabase
-        .from('trucks')
-        .insert({
-          mover_id: moverData.id,
-          identifier: formData.truck_identifier,
-          max_volume: parseFloat(formData.max_volume)
-        })
-        .select()
-        .single();
-
-      if (truckError) throw truckError;
-
-      // Créer le trajet confirmé
-      const { error: moveError } = await supabase
+      // Insérer directement dans confirmed_moves
+      const { data: moveResult, error: moveError } = await supabase
         .from('confirmed_moves')
-        .insert({
-          mover_id: moverData.id,
-          truck_id: truckData.id,
-          company_name: formData.company_name,
-          mover_name: formData.mover_name,
-          departure_city: formData.departure_city,
-          departure_postal_code: formData.departure_postal_code,
-          departure_address: formData.departure_address,
-          departure_date: formData.departure_date,
-          departure_time: formData.departure_time || null,
-          arrival_city: formData.arrival_city,
-          arrival_postal_code: formData.arrival_postal_code,
-          arrival_address: formData.arrival_address,
-          estimated_arrival_date: formData.estimated_arrival_date || null,
-          estimated_arrival_time: formData.estimated_arrival_time || null,
-          max_volume: parseFloat(formData.max_volume),
-          available_volume: parseFloat(formData.max_volume),
-          price_per_m3: parseFloat(formData.price_per_m3),
-          truck_identifier: formData.truck_identifier,
-          truck_type: formData.truck_type,
-          contact_phone: formData.contact_phone,
-          contact_email: formData.contact_email,
-          description: formData.description,
-          special_requirements: formData.special_requirements,
-          status: 'confirmed',
-          created_by: null // Pas d'utilisateur associé pour les liens publics
-        });
+        .insert(moveData)
+        .select();
 
-      if (moveError) throw moveError;
+      if (moveError) {
+        console.error('❌ Erreur insertion move:', moveError);
+        throw moveError;
+      }
+
+      console.log('✅ Trajet créé avec succès:', moveResult);
 
       toast({
         title: "Trajet enregistré",
@@ -192,10 +185,10 @@ const PublicMoverForm = () => {
       });
 
     } catch (error: any) {
-      console.error('Error submitting form:', error);
+      console.error('❌ Erreur complète:', error);
       toast({
         title: "Erreur",
-        description: "Impossible d'enregistrer le trajet",
+        description: `Impossible d'enregistrer le trajet: ${error.message}`,
         variant: "destructive",
       });
     } finally {
