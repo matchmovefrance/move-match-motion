@@ -25,7 +25,7 @@ const getGoogleMapsApiKey = (): string => {
 
 export const GOOGLE_MAPS_CONFIG = {
   apiKey: getGoogleMapsApiKey(),
-  libraries: ['places', 'geometry', 'directions'] as const, // Ajout de 'directions'
+  libraries: ['places', 'geometry', 'directions'] as const,
   region: 'FR',
   language: 'fr'
 };
@@ -71,7 +71,56 @@ export const loadGoogleMapsScript = (): Promise<void> => {
   });
 };
 
-// Fonction utilitaire pour calculer la distance entre deux points avec Google Directions API
+// Fonction pour calculer la distance entre deux codes postaux avec Google Directions API
+export const calculateDistanceByPostalCode = async (
+  departurePostalCode: string,
+  arrivalPostalCode: string,
+  departureCity?: string,
+  arrivalCity?: string
+): Promise<{ distance: number; duration: number } | null> => {
+  return new Promise((resolve) => {
+    if (!window.google?.maps) {
+      console.warn('Google Maps API not loaded');
+      resolve(null);
+      return;
+    }
+
+    const directionsService = new google.maps.DirectionsService();
+    
+    // Construire les adresses avec code postal et ville si disponible
+    const origin = departureCity ? `${departurePostalCode} ${departureCity}, France` : `${departurePostalCode}, France`;
+    const destination = arrivalCity ? `${arrivalPostalCode} ${arrivalCity}, France` : `${arrivalPostalCode}, France`;
+    
+    console.log(`Calcul distance Google Maps: ${origin} -> ${destination}`);
+    
+    directionsService.route({
+      origin: origin,
+      destination: destination,
+      travelMode: google.maps.TravelMode.DRIVING,
+      region: 'FR',
+      language: 'fr'
+    }, (result, status) => {
+      if (status === 'OK' && result?.routes[0]) {
+        const leg = result.routes[0].legs[0];
+        const distanceKm = Math.round(leg.distance!.value / 1000);
+        const durationMin = Math.round(leg.duration!.value / 60);
+        
+        console.log(`Distance calculée Google Maps: ${distanceKm}km, Durée: ${durationMin}min`);
+        console.log(`Trajet: ${origin} -> ${destination}`);
+        
+        resolve({
+          distance: distanceKm,
+          duration: durationMin
+        });
+      } else {
+        console.warn('Erreur calcul distance Google Maps:', status);
+        resolve(null);
+      }
+    });
+  });
+};
+
+// Fonction utilitaire pour calculer la distance entre deux points avec Google Directions API (compatibilité)
 export const calculateGoogleMapsDistance = async (
   origin: string,
   destination: string

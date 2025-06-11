@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tables } from '@/integrations/supabase/types';
 import { jsPDF } from 'jspdf';
 import { useToast } from '@/hooks/use-toast';
-import { DownloadIcon, Mail, CheckCircle, FileText, BarChart3 } from 'lucide-react';
+import { DownloadIcon, Mail, CheckCircle, FileText, BarChart3, MapPin } from 'lucide-react';
+import { loadGoogleMapsScript, calculateDistanceByPostalCode } from '@/lib/google-maps-config';
 
 type PricingOpportunity = Tables<'pricing_opportunities'>;
 type Supplier = Tables<'suppliers'>;
@@ -23,87 +24,125 @@ interface CalculatedOffer {
   supplier: Supplier;
   price: number;
   formula: string;
+  distance?: number;
 }
-
-// Fonction pour calculer la distance approximative à partir du volume estimé
-const calculateDistanceFromVolume = (volume: number): number => {
-  // Estimation basée sur une formule simple: volume plus important = distance potentielle plus grande
-  return Math.max(10, volume * 2); // Minimum 10km, sinon volume * 2
-};
-
-const calculateBestOffers = (opportunity: PricingOpportunity | null, suppliers: Supplier[]): CalculatedOffer[] => {
-  if (!opportunity) return [];
-  
-  return suppliers
-    .filter(supplier => supplier.is_active && supplier.pricing_model)
-    .map(supplier => {
-      const pricingModel = supplier.pricing_model as any;
-      let price = 0;
-      let formula = '';
-      
-      if (pricingModel) {
-        const basePrice = pricingModel.basePrice || 0;
-        const volumeRate = pricingModel.volumeRate || 0;
-        const volume = opportunity.estimated_volume || 0;
-        const estimatedDistance = calculateDistanceFromVolume(volume);
-        const distanceRate = volume > 20 && pricingModel.distanceRateHighVolume ? 
-          pricingModel.distanceRateHighVolume : (pricingModel.distanceRate || 0);
-        
-        // Calcul de base
-        price = basePrice + (volume * volumeRate) + (estimatedDistance * distanceRate);
-        formula = `Base (${basePrice}€) + Volume (${volume} × ${volumeRate}€) + Distance (${estimatedDistance} × ${distanceRate}€)`;
-        
-        // Supplément volume
-        if (volume > (pricingModel.volumeSupplementThreshold1 || 20)) {
-          price += pricingModel.volumeSupplementFee1 || 0;
-          formula += ` + Supp. vol 1 (${pricingModel.volumeSupplementFee1 || 0}€)`;
-        }
-        
-        if (volume > (pricingModel.volumeSupplementThreshold2 || 29)) {
-          price += pricingModel.volumeSupplementFee2 || 0;
-          formula += ` + Supp. vol 2 (${pricingModel.volumeSupplementFee2 || 0}€)`;
-        }
-        
-        // Multiplicateur de temps
-        if (pricingModel.timeMultiplier && pricingModel.timeMultiplier !== 1) {
-          price = price * pricingModel.timeMultiplier;
-          formula += ` × Multiplicateur (${pricingModel.timeMultiplier})`;
-        }
-        
-        // Prix minimum
-        if (pricingModel.minimumPrice && price < pricingModel.minimumPrice) {
-          formula += ` → Prix minimum: ${pricingModel.minimumPrice}€`;
-          price = pricingModel.minimumPrice;
-        }
-      }
-      
-      return {
-        supplier,
-        price,
-        formula
-      };
-    })
-    .sort((a, b) => a.price - b.price);
-};
 
 const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPricesDialogProps) => {
   const { toast } = useToast();
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
-  
-  const calculatedOffers = useMemo(() => {
-    return calculateBestOffers(opportunity, suppliers);
-  }, [opportunity, suppliers]);
+  const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
+  const [isLoadingDistance, setIsLoadingDistance] = useState(false);
+  const [calculatedOffers, setCalculatedOffers] = useState<CalculatedOffer[]>([]);
+
+  // Charger Google Maps et calculer la distance réelle
+  useEffect(() => {
+    const calculateRealDistance = async () => {
+      if (!opportunity || !open) return;
+
+      setIsLoadingDistance(true);
+      try {
+        await loadGoogleMapsScript();
+        
+        const distanceResult = await calculateDistanceByPostalCode(
+          opportunity.departure_postal_code,
+          opportunity.arrival_postal_code,
+          opportunity.departure_city,
+          opportunity.arrival_city
+        );
+
+        if (distanceResult) {
+          setCalculatedDistance(distanceResult.distance);
+          console.log(`Distance réelle calculée: ${distanceResult.distance}km entre ${opportunity.departure_postal_code} et ${opportunity.arrival_postal_code}`);
+        } else {
+          // Fallback sur l'estimation basée sur le volume en cas d'échec
+          const fallbackDistance = Math.max(10, (opportunity.estimated_volume || 0) * 2);
+          setCalculatedDistance(fallbackDistance);
+          console.warn('Utilisation de la distance de fallback:', fallbackDistance);
+        }
+      } catch (error) {
+        console.error('Erreur lors du calcul de distance:', error);
+        // Fallback sur l'estimation basée sur le volume
+        const fallbackDistance = Math.max(10, (opportunity.estimated_volume || 0) * 2);
+        setCalculatedDistance(fallbackDistance);
+      } finally {
+        setIsLoadingDistance(false);
+      }
+    };
+
+    calculateRealDistance();
+  }, [opportunity, open]);
+
+  // Calculer les offres quand la distance est disponible
+  useEffect(() => {
+    if (!opportunity || calculatedDistance === null) {
+      setCalculatedOffers([]);
+      return;
+    }
+
+    const offers = suppliers
+      .filter(supplier => supplier.is_active && supplier.pricing_model)
+      .map(supplier => {
+        const pricingModel = supplier.pricing_model as any;
+        let price = 0;
+        let formula = '';
+        
+        if (pricingModel) {
+          const basePrice = pricingModel.basePrice || 0;
+          const volumeRate = pricingModel.volumeRate || 0;
+          const volume = opportunity.estimated_volume || 0;
+          const distance = calculatedDistance;
+          const distanceRate = volume > 20 && pricingModel.distanceRateHighVolume ? 
+            pricingModel.distanceRateHighVolume : (pricingModel.distanceRate || 0);
+          
+          // Calcul de base
+          price = basePrice + (volume * volumeRate) + (distance * distanceRate);
+          formula = `Base (${basePrice}€) + Volume (${volume} × ${volumeRate}€) + Distance (${distance}km × ${distanceRate}€)`;
+          
+          // Supplément volume
+          if (volume > (pricingModel.volumeSupplementThreshold1 || 20)) {
+            price += pricingModel.volumeSupplementFee1 || 0;
+            formula += ` + Supp. vol 1 (${pricingModel.volumeSupplementFee1 || 0}€)`;
+          }
+          
+          if (volume > (pricingModel.volumeSupplementThreshold2 || 29)) {
+            price += pricingModel.volumeSupplementFee2 || 0;
+            formula += ` + Supp. vol 2 (${pricingModel.volumeSupplementFee2 || 0}€)`;
+          }
+          
+          // Multiplicateur de temps
+          if (pricingModel.timeMultiplier && pricingModel.timeMultiplier !== 1) {
+            price = price * pricingModel.timeMultiplier;
+            formula += ` × Multiplicateur (${pricingModel.timeMultiplier})`;
+          }
+          
+          // Prix minimum
+          if (pricingModel.minimumPrice && price < pricingModel.minimumPrice) {
+            formula += ` → Prix minimum: ${pricingModel.minimumPrice}€`;
+            price = pricingModel.minimumPrice;
+          }
+        }
+        
+        return {
+          supplier,
+          price,
+          formula,
+          distance: calculatedDistance
+        };
+      })
+      .sort((a, b) => a.price - b.price);
+
+    setCalculatedOffers(offers);
+  }, [opportunity, suppliers, calculatedDistance]);
   
   // Prendre les 4 meilleures offres
   const bestOffers = calculatedOffers.slice(0, 4);
   
   const handleDownloadPdf = () => {
-    if (!opportunity) return;
+    if (!opportunity || !calculatedDistance) return;
     
     try {
       setIsPdfGenerating(true);
       
-      // Créer un nouveau document PDF
       const doc = new jsPDF();
       
       // Entête
@@ -113,11 +152,10 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
       // Informations sur l'opportunité
       doc.setFontSize(12);
       doc.text(`Opportunité: ${opportunity.title}`, 20, 40);
-      doc.text(`De: ${opportunity.departure_city}`, 20, 50);
-      doc.text(`À: ${opportunity.arrival_city}`, 20, 60);
+      doc.text(`De: ${opportunity.departure_city} (${opportunity.departure_postal_code})`, 20, 50);
+      doc.text(`À: ${opportunity.arrival_city} (${opportunity.arrival_postal_code})`, 20, 60);
       doc.text(`Volume estimé: ${opportunity.estimated_volume} m³`, 20, 70);
-      const estimatedDistance = calculateDistanceFromVolume(opportunity.estimated_volume || 0);
-      doc.text(`Distance estimée: ${estimatedDistance} km`, 20, 80);
+      doc.text(`Distance calculée: ${calculatedDistance} km (Google Maps)`, 20, 80);
       
       // Tableau des meilleures offres
       doc.text("Les meilleures offres:", 20, 100);
@@ -141,7 +179,6 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
       const currentDate = new Date().toLocaleDateString('fr-FR');
       doc.text(`Document généré le ${currentDate}`, 105, 280, { align: "center" });
       
-      // Sauvegarder le PDF
       doc.save(`comparatif-prix-${opportunity.title.replace(/\s+/g, '-')}.pdf`);
       
       toast({
@@ -162,8 +199,6 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
   
   if (!opportunity) return null;
   
-  const estimatedDistance = calculateDistanceFromVolume(opportunity.estimated_volume || 0);
-  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
@@ -180,10 +215,20 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="space-y-2">
             <h3 className="font-semibold">Détails de l'opportunité</h3>
-            <p className="text-sm text-muted-foreground">Départ: {opportunity.departure_city}</p>
-            <p className="text-sm text-muted-foreground">Arrivée: {opportunity.arrival_city}</p>
+            <p className="text-sm text-muted-foreground">
+              Départ: {opportunity.departure_city} ({opportunity.departure_postal_code})
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Arrivée: {opportunity.arrival_city} ({opportunity.arrival_postal_code})
+            </p>
             <p className="text-sm text-muted-foreground">Volume: {opportunity.estimated_volume} m³</p>
-            <p className="text-sm text-muted-foreground">Distance: {estimatedDistance} km</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4" />
+              <span>
+                Distance: {isLoadingDistance ? 'Calcul en cours...' : 
+                  calculatedDistance ? `${calculatedDistance} km (Google Maps)` : 'Non calculée'}
+              </span>
+            </div>
             {opportunity.budget_range_min && opportunity.budget_range_max && (
               <p className="text-sm text-muted-foreground">
                 Budget client: {opportunity.budget_range_min} - {opportunity.budget_range_max}€
@@ -200,7 +245,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
               <Button 
                 size="sm" 
                 onClick={handleDownloadPdf} 
-                disabled={isPdfGenerating || bestOffers.length === 0}
+                disabled={isPdfGenerating || bestOffers.length === 0 || !calculatedDistance}
                 className="flex items-center gap-2"
               >
                 <DownloadIcon className="h-4 w-4" />
@@ -219,7 +264,14 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
           </div>
         </div>
         
-        {bestOffers.length > 0 ? (
+        {isLoadingDistance && (
+          <div className="text-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Calcul de la distance via Google Maps...</p>
+          </div>
+        )}
+        
+        {!isLoadingDistance && bestOffers.length > 0 ? (
           <div className="space-y-4">
             {bestOffers.map((offer, index) => (
               <Card key={index} className={`p-4 ${index === 0 ? 'bg-blue-50 border-blue-200' : ''}`}>
@@ -260,13 +312,16 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
               </Card>
             ))}
           </div>
-        ) : (
+        ) : !isLoadingDistance ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">
-              Aucune offre disponible. Vérifiez que vos fournisseurs ont des modèles de prix configurés.
+              {calculatedDistance === null ? 
+                'Impossible de calculer la distance. Vérifiez les codes postaux.' :
+                'Aucune offre disponible. Vérifiez que vos fournisseurs ont des modèles de prix configurés.'
+              }
             </p>
           </div>
-        )}
+        ) : null}
 
       </DialogContent>
     </Dialog>

@@ -3,7 +3,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Calendar, Clock, Package } from 'lucide-react';
+import { Calendar, Clock, Package, MapPin } from 'lucide-react';
+import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 
 interface MovingDetailsSectionProps {
   formData: {
@@ -16,11 +17,24 @@ interface MovingDetailsSectionProps {
     flexible_dates?: boolean;
     date_range_start?: string;
     date_range_end?: string;
+    departure_postal_code?: string;
+    arrival_postal_code?: string;
+    departure_city?: string;
+    arrival_city?: string;
   };
   onInputChange: (field: string, value: string | boolean) => void;
 }
 
 const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionProps) => {
+  // Calculer la distance en temps réel
+  const { distance, duration, isLoading: isCalculatingDistance } = useGoogleMapsDistance({
+    departurePostalCode: formData.departure_postal_code,
+    arrivalPostalCode: formData.arrival_postal_code,
+    departureCity: formData.departure_city,
+    arrivalCity: formData.arrival_city,
+    enabled: !!(formData.departure_postal_code && formData.arrival_postal_code)
+  });
+
   // Calculer automatiquement les dates min/max quand flexible_dates est activé
   const handleFlexibleDatesChange = (checked: boolean) => {
     onInputChange('flexible_dates', checked);
@@ -48,6 +62,31 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
         <Calendar className="h-5 w-5 text-purple-600" />
         <h3 className="text-lg font-semibold">Détails du déménagement</h3>
       </div>
+
+      {/* Affichage de la distance calculée */}
+      {(formData.departure_postal_code && formData.arrival_postal_code) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-sm">
+            <MapPin className="h-4 w-4 text-blue-600" />
+            <span className="font-medium">Distance calculée:</span>
+            {isCalculatingDistance ? (
+              <span className="text-blue-600">Calcul en cours...</span>
+            ) : distance ? (
+              <span className="text-blue-600 font-semibold">
+                {distance} km {duration && `(${Math.round(duration / 60)}h${duration % 60}min)`}
+              </span>
+            ) : (
+              <span className="text-orange-600">Non calculée</span>
+            )}
+          </div>
+          {distance && (
+            <p className="text-xs text-blue-600 mt-1">
+              Distance calculée via Google Maps entre {formData.departure_postal_code} et {formData.arrival_postal_code}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="desired_date">Date souhaitée *</Label>
