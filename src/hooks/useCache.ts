@@ -1,9 +1,10 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 interface CacheOptions {
   ttl?: number; // Time to live in milliseconds
   key: string;
+  staleWhileRevalidate?: boolean; // Return stale data while fetching new
 }
 
 export function useCache<T>(
@@ -13,59 +14,75 @@ export function useCache<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const cacheRef = useRef<Map<string, { data: T; timestamp: number }>>(new Map());
+  const cacheRef = useRef<Map<string, { data: T; timestamp: number; isStale: boolean }>>(new Map());
+  const fetchingRef = useRef<Set<string>>(new Set());
 
-  const { ttl = 5 * 60 * 1000, key } = options; // Default 5 minutes TTL
+  const { ttl = 15 * 60 * 1000, key, staleWhileRevalidate = true } = options; // Default 15 minutes TTL
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const cached = cacheRef.current.get(key);
-      const now = Date.now();
+  const fetchData = useMemo(() => async (forceRefresh = false) => {
+    // Prevent duplicate fetches
+    if (fetchingRef.current.has(key) && !forceRefresh) {
+      return;
+    }
 
-      // Check if we have valid cached data
-      if (cached && (now - cached.timestamp) < ttl) {
+    const cached = cacheRef.current.get(key);
+    const now = Date.now();
+
+    // Return stale data immediately if available and staleWhileRevalidate is enabled
+    if (cached && !forceRefresh && staleWhileRevalidate) {
+      if ((now - cached.timestamp) < ttl) {
+        // Fresh data
         setData(cached.data);
         setLoading(false);
         return;
-      }
-
-      try {
-        setLoading(true);
-        const result = await fetcher();
-        
-        // Cache the result
-        cacheRef.current.set(key, { data: result, timestamp: now });
-        setData(result);
-        setError(null);
-      } catch (err) {
-        setError(err as Error);
-        setData(null);
-      } finally {
+      } else if (!cached.isStale) {
+        // Stale data - return it but fetch fresh data in background
+        setData(cached.data);
         setLoading(false);
+        cached.isStale = true;
       }
-    };
+    }
 
+    // Check if we have valid cached data and don't need background refresh
+    if (cached && (now - cached.timestamp) < ttl && !forceRefresh) {
+      setData(cached.data);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      fetchingRef.current.add(key);
+      if (!cached || forceRefresh) {
+        setLoading(true);
+      }
+      
+      const result = await fetcher();
+      
+      // Cache the result
+      cacheRef.current.set(key, { data: result, timestamp: now, isStale: false });
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(err as Error);
+      if (!cached) {
+        setData(null);
+      }
+    } finally {
+      fetchingRef.current.delete(key);
+      setLoading(false);
+    }
+  }, [fetcher, key, ttl, staleWhileRevalidate]);
+
+  useEffect(() => {
     fetchData();
-  }, [key, ttl]);
+  }, [fetchData]);
 
   const invalidateCache = () => {
     cacheRef.current.delete(key);
   };
 
   const refetch = async () => {
-    invalidateCache();
-    setLoading(true);
-    try {
-      const result = await fetcher();
-      const now = Date.now();
-      cacheRef.current.set(key, { data: result, timestamp: now });
-      setData(result);
-      setError(null);
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setLoading(false);
-    }
+    await fetchData(true);
   };
 
   return { data, loading, error, refetch, invalidateCache };

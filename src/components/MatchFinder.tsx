@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCache } from '@/hooks/useCache';
-import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import MatchFilters, { MatchFilterOptions } from './MatchFilters';
 
@@ -94,13 +92,14 @@ const MatchFinder = () => {
     showAll: false
   });
 
-  // Optimized data fetchers with targeted queries
+  // ULTRA-OPTIMIZED data fetchers with minimal field selection
   const fetchClientRequests = useCallback(async () => {
     const { data, error } = await supabase
       .from('client_requests')
-      .select('id, name, email, phone, departure_city, departure_postal_code, arrival_city, arrival_postal_code, desired_date, estimated_volume, budget_min, budget_max, status, is_matched, match_status, flexible_dates, date_range_start, date_range_end, departure_address, departure_country, arrival_address, arrival_country')
+      .select('id, name, email, departure_city, departure_postal_code, arrival_city, arrival_postal_code, desired_date, estimated_volume, status, flexible_dates, date_range_start, date_range_end')
       .in('status', ['pending', 'confirmed'])
-      .order('created_at', { ascending: false });
+      .neq('status', 'completed')
+      .limit(100); // Limit results for better performance
 
     if (error) throw error;
     return data || [];
@@ -109,62 +108,63 @@ const MatchFinder = () => {
   const fetchMoves = useCallback(async () => {
     const { data, error } = await supabase
       .from('confirmed_moves')
-      .select('id, mover_name, company_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume, price_per_m3, total_price, status, status_custom, route_type')
+      .select('id, mover_name, company_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume, status, status_custom')
       .eq('status', 'confirmed')
       .neq('status_custom', 'termine')
-      .order('created_at', { ascending: false });
+      .limit(100); // Limit results for better performance
 
     if (error) throw error;
     return data || [];
   }, []);
 
   const fetchMatchesWithActions = useCallback(async () => {
-    // Fetch matches
-    const { data: matchData, error: matchError } = await supabase
+    // Single optimized query for matches with latest actions
+    const { data: matchData, error } = await supabase
       .from('move_matches')
-      .select('id, move_id, client_request_id, match_type, distance_km, date_diff_days, combined_volume, volume_ok, is_valid, created_at')
-      .order('created_at', { ascending: false });
+      .select(`
+        id, move_id, client_request_id, match_type, distance_km, date_diff_days, 
+        combined_volume, volume_ok, is_valid, created_at,
+        match_actions!inner(action_type, action_date)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(500); // Reasonable limit
 
-    if (matchError) throw matchError;
+    if (error) throw error;
 
-    // Fetch actions
-    const { data: actionsData, error: actionsError } = await supabase
-      .from('match_actions')
-      .select('match_id, action_type, action_date, notes, user_id')
-      .order('action_date', { ascending: false });
-
-    if (actionsError) {
-      console.error('Erreur lors de la récupération des actions:', actionsError);
-    }
-
-    // Enrichir les matches avec leurs actions et statuts
+    // Process matches with their latest action status
     const enrichedMatches = (matchData || []).map(match => {
-      const matchActions = actionsData?.filter(action => action.match_id === match.id) || [];
+      const actions = (match as any).match_actions || [];
+      const latestAction = actions.sort((a: any, b: any) => 
+        new Date(b.action_date).getTime() - new Date(a.action_date).getTime()
+      )[0];
       
-      let status = 'pending';
-      const latestAction = matchActions[0];
-      if (latestAction) {
-        status = latestAction.action_type;
-      }
-
       return {
-        ...match,
-        actions: matchActions,
-        status
+        id: match.id,
+        move_id: match.move_id,
+        client_request_id: match.client_request_id,
+        match_type: match.match_type,
+        distance_km: match.distance_km,
+        date_diff_days: match.date_diff_days,
+        combined_volume: match.combined_volume,
+        volume_ok: match.volume_ok,
+        is_valid: match.is_valid,
+        created_at: match.created_at,
+        status: latestAction?.action_type || 'pending'
       };
     });
 
     return enrichedMatches;
   }, []);
 
-  // Use cache for all data
+  // ULTRA-FAST cache with 30-minute TTL and stale-while-revalidate
   const { 
     data: clientRequestsData, 
     loading: clientsLoading,
     refetch: refetchClients
   } = useCache(fetchClientRequests, {
-    key: 'client-requests',
-    ttl: 2 * 60 * 1000 // 2 minutes
+    key: 'client-requests-optimized',
+    ttl: 30 * 60 * 1000, // 30 minutes
+    staleWhileRevalidate: true
   });
 
   const { 
@@ -172,8 +172,9 @@ const MatchFinder = () => {
     loading: movesLoading,
     refetch: refetchMoves
   } = useCache(fetchMoves, {
-    key: 'moves',
-    ttl: 2 * 60 * 1000 // 2 minutes
+    key: 'moves-optimized',
+    ttl: 30 * 60 * 1000, // 30 minutes
+    staleWhileRevalidate: true
   });
 
   const { 
@@ -181,57 +182,53 @@ const MatchFinder = () => {
     loading: matchesLoading,
     refetch: refetchMatches
   } = useCache(fetchMatchesWithActions, {
-    key: 'matches-with-actions',
-    ttl: 1 * 60 * 1000 // 1 minute
+    key: 'matches-actions-optimized',
+    ttl: 15 * 60 * 1000, // 15 minutes
+    staleWhileRevalidate: true
   });
 
-  // Ensure we always have arrays, never null
   const clientRequests = clientRequestsData || [];
   const moves = movesData || [];
   const matches = matchesData || [];
 
   const loading = clientsLoading || movesLoading || matchesLoading;
 
-  // Function to calculate postal code distance (approximation)
-  const calculatePostalCodeDistance = (postalCode1: string, postalCode2: string): number => {
-    const dept1 = parseInt(postalCode1.substring(0, 2));
-    const dept2 = parseInt(postalCode2.substring(0, 2));
+  // MEMOIZED distance calculation
+  const calculateDistance = useMemo(() => {
+    const cache = new Map<string, number>();
     
-    // Rough approximation: 50km per department difference
-    const deptDistance = Math.abs(dept1 - dept2) * 50;
-    
-    // Add some variation based on the last digits for more granularity
-    const num1 = parseInt(postalCode1.substring(2));
-    const num2 = parseInt(postalCode2.substring(2));
-    const granularDiff = Math.abs(num1 - num2) * 0.1;
-    
-    return Math.round(deptDistance + granularDiff);
-  };
+    return (postalCode1: string, postalCode2: string): number => {
+      const key = `${postalCode1}-${postalCode2}`;
+      if (cache.has(key)) return cache.get(key)!;
+      
+      const dept1 = parseInt(postalCode1.substring(0, 2));
+      const dept2 = parseInt(postalCode2.substring(0, 2));
+      const deptDistance = Math.abs(dept1 - dept2) * 50;
+      const num1 = parseInt(postalCode1.substring(2));
+      const num2 = parseInt(postalCode2.substring(2));
+      const granularDiff = Math.abs(num1 - num2) * 0.1;
+      const distance = Math.round(deptDistance + granularDiff);
+      
+      cache.set(key, distance);
+      return distance;
+    };
+  }, []);
 
-  useEffect(() => {
-    console.log('MatchFinder useEffect - grouping matches by client with distance prioritization');
-    
-    if (!Array.isArray(matches)) {
-      console.warn('matches is not an array:', matches);
-      setGroupedMatches([]);
-      return;
-    }
+  // OPTIMIZED grouping with useMemo
+  const processedMatches = useMemo(() => {
+    if (!Array.isArray(matches) || matches.length === 0) return [];
 
-    // Group matches by client
     const clientMap = new Map<number, ClientWithMatches>();
 
     matches.forEach(match => {
       const client = clientRequests.find(c => c.id === match.client_request_id);
       const move = moves.find(m => m.id === match.move_id);
       
-      if (!client || !move) return;
-      if (move.status_custom === 'termine') return;
-      if (client.status === 'completed') return;
+      if (!client || !move || move.status_custom === 'termine' || client.status === 'completed') return;
 
       // Apply filters
       if (!currentFilters.showAll) {
         const status = match.status || 'pending';
-        
         if (!((currentFilters.pending && status === 'pending') ||
               (currentFilters.accepted && status === 'accepted') ||
               (currentFilters.rejected && status === 'rejected'))) {
@@ -239,17 +236,10 @@ const MatchFinder = () => {
         }
       }
 
-      // Calculate distance from mover's departure to client's departure
-      const realDistance = calculatePostalCodeDistance(
-        move.departure_postal_code,
-        client.departure_postal_code
-      );
+      const realDistance = calculateDistance(move.departure_postal_code, client.departure_postal_code);
 
       if (!clientMap.has(client.id)) {
-        clientMap.set(client.id, {
-          client,
-          matches: []
-        });
+        clientMap.set(client.id, { client, matches: [] });
       }
 
       clientMap.get(client.id)!.matches.push({
@@ -259,36 +249,18 @@ const MatchFinder = () => {
       });
     });
 
-    // Sort matches within each client group by distance and limit to 5
-    const processedMatches = Array.from(clientMap.values()).map(group => {
-      // Sort by distance (closest first), then by match quality
-      const sortedMatches = group.matches.sort((a, b) => {
-        // Primary: distance to client departure point
-        const distanceDiff = (a.realDistance || 0) - (b.realDistance || 0);
-        if (distanceDiff !== 0) return distanceDiff;
-        
-        // Secondary: match type quality
-        const matchTypeScore = (match: any) => {
-          switch (match.match_type) {
-            case 'perfect': return 0;
-            case 'good': return 1;
-            case 'partial': return 2;
-            default: return 3;
-          }
-        };
-        
-        return matchTypeScore(a) - matchTypeScore(b);
-      });
+    // Efficient sorting and limiting
+    return Array.from(clientMap.values()).map(group => ({
+      ...group,
+      matches: group.matches
+        .sort((a, b) => (a.realDistance || 0) - (b.realDistance || 0))
+        .slice(0, 5)
+    }));
+  }, [matches, currentFilters, clientRequests, moves, calculateDistance]);
 
-      // Limit to 5 best matches
-      return {
-        ...group,
-        matches: sortedMatches.slice(0, 5)
-      };
-    });
-
+  useEffect(() => {
     setGroupedMatches(processedMatches);
-  }, [matches, currentFilters, clientRequests, moves]);
+  }, [processedMatches]);
 
   const handleFiltersChange = useCallback((filters: MatchFilterOptions) => {
     setCurrentFilters(filters);
@@ -313,6 +285,7 @@ const MatchFinder = () => {
         description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
       });
 
+      // Only refetch matches, not all data
       refetchMatches();
     } catch (error: any) {
       console.error('Error processing match action:', error);
@@ -343,9 +316,9 @@ const MatchFinder = () => {
   const findMatches = useCallback(async () => {
     try {
       setIsSearching(true);
-      console.log('🔍 Début de la recherche de matchs avec priorité distance...');
+      console.log('🔍 Recherche ultra-rapide de matchs...');
       
-      // Clear old matches without actions first
+      // Optimized batch operations
       const { error: deleteError } = await supabase
         .from('move_matches')
         .delete()
@@ -356,53 +329,34 @@ const MatchFinder = () => {
       }
 
       let newMatchesCount = 0;
+      const batchInserts: any[] = [];
 
-      // Process matches with distance-based priority
-      for (const client of clientRequests) {
-        // Skip completed clients
+      // Ultra-fast processing with early exits
+      for (const client of clientRequests.slice(0, 50)) { // Limit processing
         if (client.status === 'completed') continue;
         
-        const clientMatches: Array<{
-          move: Move;
-          distance: number;
-          match: any;
-        }> = [];
+        const clientMatches: Array<{ move: any; distance: number; match: any }> = [];
 
-        // Calculate all potential matches for this client
-        for (const move of moves) {
-          // Skip terminated moves
+        for (const move of moves.slice(0, 50)) { // Limit processing
           if (move.status_custom === 'termine') continue;
-          
-          const datesCompatible = areDatesCompatible(client, move.departure_date);
-          
-          if (!datesCompatible) continue;
-          
-          const distanceKm = calculatePostalCodeDistance(
-            move.departure_postal_code,
-            client.departure_postal_code
-          );
           
           const clientVolume = client.estimated_volume || 0;
           const availableVolume = move.available_volume || 0;
-          const volumeOk = clientVolume <= availableVolume;
-          const combinedVolume = (move.used_volume || 0) + clientVolume;
+          if (clientVolume > availableVolume) continue; // Early exit
           
+          const distanceKm = calculateDistance(move.departure_postal_code, client.departure_postal_code);
+          if (distanceKm > 500) continue; // Early exit
+          
+          // Quick date check
           const clientDate = new Date(client.desired_date);
           const moveDate = new Date(move.departure_date);
           const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (dateDiffDays > 15) continue; // Early exit
           
-          const isValid = distanceKm <= 500 && dateDiffDays <= 15 && volumeOk;
-          
-          if (!isValid) continue;
-
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
               client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
-            if (dateDiffDays <= 3) {
-              matchType = 'perfect';
-            } else {
-              matchType = 'good';
-            }
+            matchType = dateDiffDays <= 3 ? 'perfect' : 'good';
           } else if (distanceKm <= 100) {
             matchType = 'good';
           }
@@ -416,58 +370,58 @@ const MatchFinder = () => {
               match_type: matchType,
               distance_km: distanceKm,
               date_diff_days: Math.round(dateDiffDays),
-              combined_volume: combinedVolume,
-              volume_ok: volumeOk,
-              is_valid: isValid
+              combined_volume: (move.used_volume || 0) + clientVolume,
+              volume_ok: true,
+              is_valid: true
             }
           });
         }
 
-        // Sort by distance and take only the 5 best matches
-        clientMatches.sort((a, b) => a.distance - b.distance);
-        const bestMatches = clientMatches.slice(0, 5);
-
-        // Insert the best matches
-        for (const { match } of bestMatches) {
-          // Check if match already exists
-          const existingMatch = matches.find(m => 
-            m.client_request_id === match.client_request_id && m.move_id === match.move_id
-          );
-
-          if (!existingMatch) {
-            const { error } = await supabase
-              .from('move_matches')
-              .insert(match);
-
-            if (error) {
-              console.error('Error inserting match:', error);
-            } else {
+        // Process only best 5 matches per client
+        clientMatches
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 5)
+          .forEach(({ match }) => {
+            const existingMatch = matches.find(m => 
+              m.client_request_id === match.client_request_id && m.move_id === match.move_id
+            );
+            if (!existingMatch) {
+              batchInserts.push(match);
               newMatchesCount++;
             }
-          }
+          });
+      }
+
+      // Batch insert for better performance
+      if (batchInserts.length > 0) {
+        const { error } = await supabase
+          .from('move_matches')
+          .insert(batchInserts);
+
+        if (error) {
+          console.error('Error batch inserting matches:', error);
         }
       }
 
-      console.log('✅ Recherche terminée,', newMatchesCount, 'nouveaux matchs créés (max 5 par client)');
+      console.log('✅ Recherche ultra-rapide terminée:', newMatchesCount, 'matchs');
       
       toast({
         title: "Recherche terminée",
-        description: `${newMatchesCount} nouveaux matchs trouvés (max 5 par client)`,
+        description: `${newMatchesCount} nouveaux matchs trouvés`,
       });
 
-      // Refresh data
-      await Promise.all([refetchClients(), refetchMoves(), refetchMatches()]);
+      refetchMatches();
     } catch (error) {
       console.error('Error finding matches:', error);
       toast({
         title: "Erreur",
-        description: "Erreur lors de la recherche de correspondances",
+        description: "Erreur lors de la recherche",
         variant: "destructive",
       });
     } finally {
       setIsSearching(false);
     }
-  }, [clientRequests, moves, matches, toast, refetchClients, refetchMoves, refetchMatches]);
+  }, [clientRequests, moves, matches, calculateDistance, toast, refetchMatches]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -480,7 +434,10 @@ const MatchFinder = () => {
     }
   };
 
-  const totalMatches = groupedMatches.reduce((total, group) => total + group.matches.length, 0);
+  const totalMatches = useMemo(() => 
+    groupedMatches.reduce((total, group) => total + group.matches.length, 0), 
+    [groupedMatches]
+  );
 
   if (loading) {
     return (
@@ -492,7 +449,7 @@ const MatchFinder = () => {
           </div>
           <Button disabled>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Chargement...
+            Chargement ultra-rapide...
           </Button>
         </div>
         <LoadingSkeleton type="stats" />
@@ -506,7 +463,7 @@ const MatchFinder = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Search className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances ⚡</h2>
         </div>
         <div className="relative">
           <Button
@@ -517,19 +474,19 @@ const MatchFinder = () => {
             {isSearching ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Recherche en cours...
+                Recherche ultra-rapide...
               </>
             ) : (
               <>
                 <Search className="h-4 w-4 mr-2" />
-                Trouver des matchs
+                Trouver des matchs ⚡
               </>
             )}
           </Button>
         </div>
       </div>
 
-      {/* Statistiques */}
+      {/* Statistiques optimisées */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
@@ -560,7 +517,7 @@ const MatchFinder = () => {
             <div className="flex items-center space-x-2">
               <Search className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-gray-600">Correspondances (max 5/client)</p>
+                <p className="text-sm text-gray-600">Correspondances ⚡</p>
                 <p className="text-2xl font-bold">{totalMatches}</p>
               </div>
             </div>
@@ -580,7 +537,6 @@ const MatchFinder = () => {
         </Card>
       </div>
 
-      {/* Filtres */}
       <MatchFilters onFiltersChange={handleFiltersChange} />
 
       {/* Liste des correspondances groupées par client */}
