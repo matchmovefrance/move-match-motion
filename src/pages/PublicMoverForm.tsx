@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Truck, MapPin, Calendar, Package, Lock } from 'lucide-react';
+import { Truck, MapPin, Calendar, Package, Lock, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +35,7 @@ const PublicMoverForm = () => {
     estimated_arrival_date: '',
     estimated_arrival_time: '',
     max_volume: '',
+    used_volume: '',
     truck_type: 'Semi-remorque',
     description: '',
     special_requirements: ''
@@ -93,6 +94,16 @@ const PublicMoverForm = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const calculateAvailableVolume = () => {
+    const maxVol = parseFloat(formData.max_volume) || 0;
+    const usedVol = parseFloat(formData.used_volume) || 0;
+    return Math.max(0, maxVol - usedVol);
+  };
+
+  const handleVolumeChange = (field: 'max_volume' | 'used_volume', value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -100,6 +111,10 @@ const PublicMoverForm = () => {
     try {
       console.log('📝 Début de soumission du formulaire public');
       
+      const maxVolume = parseFloat(formData.max_volume);
+      const usedVolume = parseFloat(formData.used_volume) || 0;
+      const availableVolume = Math.max(0, maxVolume - usedVolume);
+
       const moveData = {
         // Données obligatoires
         departure_city: formData.departure_city,
@@ -107,8 +122,10 @@ const PublicMoverForm = () => {
         departure_date: formData.departure_date,
         arrival_city: formData.arrival_city,
         arrival_postal_code: formData.arrival_postal_code,
-        max_volume: parseFloat(formData.max_volume),
-        price_per_m3: 0, // Valeur par défaut puisque supprimé du formulaire
+        max_volume: maxVolume,
+        used_volume: usedVolume,
+        available_volume: availableVolume,
+        price_per_m3: 0, // Valeur par défaut
         
         // Données du formulaire
         company_name: formData.company_name,
@@ -120,22 +137,20 @@ const PublicMoverForm = () => {
         departure_time: formData.departure_time || null,
         estimated_arrival_date: formData.estimated_arrival_date || null,
         estimated_arrival_time: formData.estimated_arrival_time || null,
-        truck_identifier: 'AUTO-GENERATED', // Valeur automatique puisque supprimé du formulaire
+        truck_identifier: 'AUTO-GENERATED',
         truck_type: formData.truck_type,
         description: formData.description || '',
         special_requirements: formData.special_requirements || '',
         
         // Valeurs par défaut
-        available_volume: parseFloat(formData.max_volume),
         status: 'confirmed',
-        mover_id: 1, // Valeur temporaire car le champ est obligatoire
-        truck_id: 1, // Valeur temporaire car le champ est obligatoire
-        created_by: linkData?.created_by || null // Utiliser le créateur du lien
+        mover_id: 1,
+        truck_id: 1,
+        created_by: linkData?.created_by || null
       };
 
       console.log('📊 Données à insérer:', moveData);
 
-      // Insérer directement dans confirmed_moves
       const { data: moveResult, error: moveError } = await supabase
         .from('confirmed_moves')
         .insert(moveData)
@@ -150,7 +165,7 @@ const PublicMoverForm = () => {
 
       toast({
         title: "Trajet enregistré",
-        description: "Votre trajet a été enregistré avec succès",
+        description: `Trajet enregistré avec ${availableVolume.toFixed(1)}m³ disponible`,
       });
 
       // Réinitialiser le formulaire
@@ -170,6 +185,7 @@ const PublicMoverForm = () => {
         estimated_arrival_date: '',
         estimated_arrival_time: '',
         max_volume: '',
+        used_volume: '',
         truck_type: 'Semi-remorque',
         description: '',
         special_requirements: ''
@@ -417,11 +433,11 @@ const PublicMoverForm = () => {
                 </div>
               </div>
 
-              {/* Informations du camion */}
+              {/* Informations du camion et volumes */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center space-x-2">
                   <Truck className="h-5 w-5 text-purple-600" />
-                  <span>Camion</span>
+                  <span>Camion et capacité</span>
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -444,10 +460,71 @@ const PublicMoverForm = () => {
                       type="number"
                       step="0.1"
                       value={formData.max_volume}
-                      onChange={(e) => handleInputChange('max_volume', e.target.value)}
+                      onChange={(e) => handleVolumeChange('max_volume', e.target.value)}
                       required
                     />
                   </div>
+                </div>
+
+                {/* Section volumes avec calcul automatique */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
+                  <h4 className="font-medium flex items-center gap-2 text-blue-800">
+                    <Volume2 className="h-4 w-4" />
+                    Gestion des volumes
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="used_volume">Volume utilisé (m³)</Label>
+                      <Input
+                        id="used_volume"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={formData.used_volume}
+                        onChange={(e) => handleVolumeChange('used_volume', e.target.value)}
+                        placeholder="0.0"
+                      />
+                      <p className="text-xs text-blue-600 mt-1">
+                        Volume déjà occupé dans le camion
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <Label>Volume disponible (m³)</Label>
+                      <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-md">
+                        <span className="font-bold text-green-700">
+                          {calculateAvailableVolume().toFixed(1)} m³
+                        </span>
+                      </div>
+                      <p className="text-xs text-green-600 mt-1">
+                        Calculé automatiquement
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label>Taux d'occupation</Label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        <span className="font-bold text-gray-700">
+                          {formData.max_volume && parseFloat(formData.max_volume) > 0 
+                            ? ((parseFloat(formData.used_volume) || 0) / parseFloat(formData.max_volume) * 100).toFixed(1)
+                            : 0}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Pourcentage utilisé
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Alerte si volume utilisé > volume max */}
+                  {parseFloat(formData.used_volume) > parseFloat(formData.max_volume) && formData.max_volume && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <p className="text-red-700 text-sm font-medium">
+                        ⚠️ Le volume utilisé ne peut pas dépasser le volume maximum du camion
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

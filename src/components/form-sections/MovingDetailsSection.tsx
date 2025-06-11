@@ -1,9 +1,8 @@
-
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Calendar, Clock, Package, MapPin } from 'lucide-react';
+import { Calendar, Clock, Package, MapPin, Volume2 } from 'lucide-react';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 
 interface MovingDetailsSectionProps {
@@ -13,6 +12,7 @@ interface MovingDetailsSectionProps {
     estimated_arrival_date: string;
     estimated_arrival_time: string;
     estimated_volume: string;
+    used_volume?: string;
     description: string;
     flexible_dates?: boolean;
     date_range_start?: string;
@@ -56,6 +56,13 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
     }
   };
 
+  // Calculer le volume disponible
+  const calculateAvailableVolume = () => {
+    const estimatedVol = parseFloat(formData.estimated_volume) || 0;
+    const usedVol = parseFloat(formData.used_volume || '0') || 0;
+    return Math.max(0, estimatedVol - usedVol);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center space-x-2">
@@ -86,6 +93,79 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
           )}
         </div>
       )}
+
+      {/* Section volumes */}
+      <div className="space-y-4">
+        <h4 className="font-medium flex items-center gap-2">
+          <Volume2 className="h-4 w-4 text-blue-600" />
+          Gestion des volumes
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="estimated_volume">Volume estimé total (m³) *</Label>
+            <Input
+              id="estimated_volume"
+              type="number"
+              step="0.1"
+              value={formData.estimated_volume}
+              onChange={(e) => onInputChange('estimated_volume', e.target.value)}
+              placeholder=""
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="used_volume">Volume déjà utilisé (m³)</Label>
+            <Input
+              id="used_volume"
+              type="number"
+              step="0.1"
+              min="0"
+              value={formData.used_volume || ''}
+              onChange={(e) => onInputChange('used_volume', e.target.value)}
+              placeholder="0.0"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Volume déjà occupé dans le véhicule de transport
+            </p>
+          </div>
+        </div>
+
+        {/* Affichage des calculs de volume */}
+        {formData.estimated_volume && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-lg font-bold text-green-600">
+                  {calculateAvailableVolume().toFixed(1)} m³
+                </div>
+                <div className="text-sm text-green-700">Volume disponible</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-blue-600">
+                  {parseFloat(formData.estimated_volume) > 0 
+                    ? ((parseFloat(formData.used_volume || '0') / parseFloat(formData.estimated_volume)) * 100).toFixed(1)
+                    : 0}%
+                </div>
+                <div className="text-sm text-blue-700">Taux d'occupation</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-purple-600">
+                  {parseFloat(formData.used_volume || '0').toFixed(1)} m³
+                </div>
+                <div className="text-sm text-purple-700">Volume utilisé</div>
+              </div>
+            </div>
+
+            {/* Alerte si volume utilisé > volume estimé */}
+            {parseFloat(formData.used_volume || '0') > parseFloat(formData.estimated_volume) && formData.estimated_volume && (
+              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                ⚠️ Le volume utilisé ne peut pas dépasser le volume estimé total
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>

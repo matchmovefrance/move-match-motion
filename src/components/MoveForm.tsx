@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +25,7 @@ interface MoveFormData {
   departure_time: string;
   arrival_time: string;
   max_volume: number;
+  used_volume: number;
   price_per_m3: number;
   contact_phone: string;
   contact_email: string;
@@ -56,6 +56,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
     departure_time: initialData?.departure_time || '',
     arrival_time: initialData?.arrival_time || '',
     max_volume: initialData?.max_volume ? parseFloat(initialData.max_volume) : 0,
+    used_volume: initialData?.used_volume ? parseFloat(initialData.used_volume) : 0,
     price_per_m3: initialData?.price_per_m3 ? parseFloat(initialData.price_per_m3) : 0,
     contact_phone: initialData?.contact_phone || '',
     contact_email: initialData?.contact_email || '',
@@ -70,6 +71,11 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
       ...prev,
       [field]: value
     }));
+  };
+
+  // Calculer automatiquement le volume disponible
+  const calculateAvailableVolume = () => {
+    return Math.max(0, formData.max_volume - formData.used_volume);
   };
 
   const handleAddressChange = (type: 'departure' | 'arrival', value: string) => {
@@ -121,12 +127,11 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
         return;
       }
 
-      // Calculer le volume disponible (initialement égal au volume max)
-      const available_volume = formData.max_volume;
+      // Calculer le volume disponible
+      const available_volume = calculateAvailableVolume();
 
       const moveData = {
         ...formData,
-        used_volume: 0,
         available_volume,
         total_price: 0,
         status: 'confirmed',
@@ -149,7 +154,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
 
       toast({
         title: "Succès",
-        description: "Déménagement ajouté avec succès",
+        description: `Déménagement ajouté avec ${available_volume.toFixed(1)}m³ disponible`,
       });
 
       // Reset form
@@ -166,6 +171,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
         departure_time: '',
         arrival_time: '',
         max_volume: 0,
+        used_volume: 0,
         price_per_m3: 0,
         contact_phone: '',
         contact_email: '',
@@ -375,7 +381,7 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
           <div className="space-y-4">
             <h3 className="text-lg font-semibold flex items-center space-x-2">
               <Volume2 className="h-5 w-5" />
-              <span>Capacité et Tarification</span>
+              <span>Capacité et Volumes</span>
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -393,17 +399,61 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
                 />
               </div>
               <div>
-                <Label htmlFor="price_per_m3">Prix par m³ (€)</Label>
+                <Label htmlFor="used_volume">Volume utilisé (m³)</Label>
                 <Input
-                  id="price_per_m3"
+                  id="used_volume"
                   type="number"
-                  step="0.01"
+                  step="0.1"
                   min="0"
-                  value={formData.price_per_m3}
-                  onChange={(e) => handleInputChange('price_per_m3', parseFloat(e.target.value) || 0)}
+                  value={formData.used_volume}
+                  onChange={(e) => handleInputChange('used_volume', parseFloat(e.target.value) || 0)}
                   placeholder=""
                 />
               </div>
+            </div>
+
+            {/* Affichage du volume disponible */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-lg font-bold text-green-600">
+                    {calculateAvailableVolume().toFixed(1)} m³
+                  </div>
+                  <div className="text-sm text-green-700">Volume disponible</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-blue-600">
+                    {formData.max_volume > 0 ? ((formData.used_volume / formData.max_volume) * 100).toFixed(1) : 0}%
+                  </div>
+                  <div className="text-sm text-blue-700">Taux d'occupation</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-purple-600">
+                    {formData.used_volume.toFixed(1)} m³
+                  </div>
+                  <div className="text-sm text-purple-700">Volume utilisé</div>
+                </div>
+              </div>
+
+              {/* Alerte si volume utilisé > volume max */}
+              {formData.used_volume > formData.max_volume && formData.max_volume > 0 && (
+                <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                  ⚠️ Le volume utilisé ne peut pas dépasser le volume maximum
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="price_per_m3">Prix par m³ (€)</Label>
+              <Input
+                id="price_per_m3"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.price_per_m3}
+                onChange={(e) => handleInputChange('price_per_m3', parseFloat(e.target.value) || 0)}
+                placeholder=""
+              />
             </div>
           </div>
 
