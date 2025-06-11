@@ -3,20 +3,13 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp, CheckCircle, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp, CheckCircle, X, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
-interface PricingModel {
-  basePrice?: number;
-  volumeRate?: number;
-  distanceRate?: number;
-  minimumPrice?: number;
-  matchMoveMargin?: number;
-}
+import { pricingEngine } from './PricingEngine';
 
 interface GeneratedQuote {
   id: string;
@@ -31,7 +24,10 @@ interface GeneratedQuote {
   supplier_name: string;
   supplier_company: string;
   calculated_price: number;
-  original_quote_amount?: number; // Prix original du client
+  supplier_price: number;
+  matchmove_margin: number;
+  original_quote_amount?: number;
+  pricing_breakdown?: any;
   rank: number;
 }
 
@@ -56,134 +52,36 @@ const QuotesTab = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Charger les prestataires depuis les trajets confirmés
-  const { data: suppliers, refetch: refetchSuppliers } = useQuery({
-    queryKey: ['suppliers-for-quotes'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('confirmed_moves')
-        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
-        .not('mover_id', 'is', null);
-      
-      if (error) return [];
-      
-      // Créer des prestataires uniques avec modèles de tarification
-      const uniqueSuppliersMap = new Map();
-      
-      data?.forEach((move) => {
-        const key = `${move.mover_name}-${move.company_name}`;
-        if (!uniqueSuppliersMap.has(key)) {
-          uniqueSuppliersMap.set(key, {
-            id: `supplier-${move.mover_id}`,
-            mover_name: move.mover_name,
-            company_name: move.company_name,
-            contact_email: move.contact_email,
-            contact_phone: move.contact_phone,
-            pricing_model: {
-              basePrice: 120 + Math.random() * 80,
-              volumeRate: 8 + Math.random() * 6,
-              distanceRate: 0.8 + Math.random() * 0.4,
-              minimumPrice: 180 + Math.random() * 40,
-              matchMoveMargin: 35 + Math.random() * 15, // Marge variable par prestataire
-            }
-          });
-        }
-      });
-      
-      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
-      console.log('✅ Prestataires chargés:', uniqueSuppliers.length);
-      return uniqueSuppliers;
-    },
-    staleTime: 10 * 60 * 1000,
-  });
-
   // Générer automatiquement les devis au chargement
   useEffect(() => {
-    if (activeClients?.length && suppliers?.length && generatedQuotes.length === 0) {
+    if (activeClients?.length && generatedQuotes.length === 0) {
       generateAllQuotes();
     }
-  }, [activeClients, suppliers]);
-
-  // 🎯 CORRECTION: Utiliser la MÊME logique que dans OpportunitiesTab
-  const calculatePriceForClient = (client: any, supplier: any) => {
-    const pricingModel = supplier.pricing_model as PricingModel;
-    
-    // Calculer le prix de base du prestataire (SANS marge MatchMove)
-    let basePrice = pricingModel.basePrice || 150;
-    basePrice += (client.estimated_volume || 0) * (pricingModel.volumeRate || 10);
-    basePrice += 50 * (pricingModel.distanceRate || 1); // Distance estimée
-    basePrice = Math.max(basePrice, pricingModel.minimumPrice || 200);
-    
-    // 🎯 IMPORTANT: Appliquer la marge MatchMove spécifique du prestataire
-    const matchMoveMargin = pricingModel.matchMoveMargin || 40; // Marge du prestataire
-    const finalPrice = basePrice * (1 + matchMoveMargin / 100);
-    
-    console.log(`💰 Calcul ${supplier.company_name} pour ${client.name || `Client #${client.id}`}:`);
-    console.log(`   📊 Prix base: ${basePrice}€`);
-    console.log(`   💎 Marge MatchMove: ${matchMoveMargin}%`);
-    console.log(`   🎯 Prix final: ${Math.round(finalPrice)}€`);
-    console.log(`   🔍 Prix original client: ${client.quote_amount || 'Non défini'}€`);
-    
-    return Math.round(finalPrice);
-  };
+  }, [activeClients]);
 
   const generateAllQuotes = async () => {
-    if (!activeClients?.length || !suppliers?.length) return;
+    if (!activeClients?.length) return;
     
     setIsGenerating(true);
-    console.log('🔄 Génération/Régénération des devis...');
+    console.log('🔄 Génération des devis avec le nouveau moteur...');
     
-    // 🎯 CORRECTION: Vider d'abord la liste pour une vraie régénération
     setGeneratedQuotes([]);
     
     try {
-      // 🎯 CORRECTION: Refetch les données pour avoir les dernières variables
-      await Promise.all([refetchClients(), refetchSuppliers()]);
-      
       const allQuotes: GeneratedQuote[] = [];
       
-      // Pour chaque client, calculer les prix avec tous les prestataires
-      activeClients.forEach((client) => {
-        const clientQuotes: Array<GeneratedQuote & { price: number }> = [];
-        
-        suppliers.forEach((supplier) => {
-          const price = calculatePriceForClient(client, supplier);
-          
-          clientQuotes.push({
-            id: `quote-${client.id}-${supplier.id}-${Date.now()}`,
-            client_id: client.id,
-            client_name: client.name || `Client #${client.id}`,
-            client_email: client.email || '',
-            departure_city: client.departure_city,
-            arrival_city: client.arrival_city,
-            estimated_volume: client.estimated_volume,
-            desired_date: client.desired_date,
-            supplier_id: supplier.id,
-            supplier_name: supplier.mover_name,
-            supplier_company: supplier.company_name,
-            calculated_price: price,
-            original_quote_amount: client.quote_amount, // 🎯 AJOUT: Prix original du client
-            price: price,
-            rank: 0
-          });
-        });
-        
-        // Trier par prix et prendre les 3 meilleurs
-        clientQuotes.sort((a, b) => a.price - b.price);
-        const top3 = clientQuotes.slice(0, 3).map((quote, index) => ({
-          ...quote,
-          rank: index + 1
-        }));
-        
-        allQuotes.push(...top3);
-      });
+      // Utiliser le nouveau moteur de pricing pour chaque client
+      for (const client of activeClients) {
+        const clientQuotes = await pricingEngine.generateQuotesForClient(client);
+        allQuotes.push(...clientQuotes);
+      }
       
       setGeneratedQuotes(allQuotes);
-      console.log('✅ Devis générés/régénérés:', allQuotes.length);
+      console.log('✅ Devis générés avec le nouveau moteur:', allQuotes.length);
       
       toast({
-        title: "Devis régénérés",
-        description: `${allQuotes.length} devis recalculés avec les dernières variables de prix`,
+        title: "Devis générés",
+        description: `${allQuotes.length} devis calculés avec le moteur de pricing cohérent`,
       });
       
     } catch (error) {
@@ -202,21 +100,20 @@ const QuotesTab = () => {
     try {
       console.log('✅ Acceptation devis:', quote.id);
       
-      // Créer le devis accepté dans la base - CORRECTION: utiliser client_id comme string
       const { error } = await supabase
         .from('quotes')
         .insert({
-          opportunity_id: quote.client_id.toString(), // Convertir en string
+          opportunity_id: quote.client_id.toString(),
           supplier_id: quote.supplier_id,
           bid_amount: quote.calculated_price,
           status: 'accepted',
           notes: `Devis généré automatiquement - Rang #${quote.rank} pour ${quote.client_name}`,
+          cost_breakdown: quote.pricing_breakdown,
           created_by: (await supabase.auth.getUser()).data.user?.id
         });
 
       if (error) throw error;
 
-      // Retirer le devis de la liste
       setGeneratedQuotes(prev => prev.filter(q => q.id !== quote.id));
       
       toast({
@@ -238,21 +135,20 @@ const QuotesTab = () => {
     try {
       console.log('❌ Rejet devis:', quote.id);
       
-      // Créer le devis rejeté dans la base - CORRECTION: utiliser client_id comme string
       const { error } = await supabase
         .from('quotes')
         .insert({
-          opportunity_id: quote.client_id.toString(), // Convertir en string
+          opportunity_id: quote.client_id.toString(),
           supplier_id: quote.supplier_id,
           bid_amount: quote.calculated_price,
           status: 'rejected',
           notes: `Devis rejeté - Rang #${quote.rank} pour ${quote.client_name}`,
+          cost_breakdown: quote.pricing_breakdown,
           created_by: (await supabase.auth.getUser()).data.user?.id
         });
 
       if (error) throw error;
 
-      // Retirer le devis de la liste
       setGeneratedQuotes(prev => prev.filter(q => q.id !== quote.id));
       
       toast({
@@ -299,13 +195,14 @@ const QuotesTab = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
-            Moteur de devis automatique - 3 meilleurs prix par client
+            Moteur de devis intelligent - Prix cohérents et reproductibles
           </CardTitle>
           <CardDescription>
-            Génération automatique des 3 meilleurs devis pour chaque client actif avec tous les prestataires disponibles.
-            <strong className="text-orange-600 ml-2">✨ Marge MatchMove variable par prestataire (35-50%)</strong>
+            <strong className="text-green-600">✅ NOUVEAU MOTEUR</strong> - Calculs cohérents basés sur les critères exacts de chaque prestataire.
             <br />
-            <strong className="text-red-600">⚠️ Les prix sont recalculés avec les paramètres actuels - peuvent différer des prix originaux</strong>
+            <strong className="text-blue-600">🎯 PRIX IDENTIQUES</strong> - Les prix sont maintenant calculés de manière reproductible et cohérente.
+            <br />
+            <strong className="text-purple-600">📊 DÉTAIL COMPLET</strong> - Décomposition complète : prix prestataire + marge MatchMove = prix final.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -316,7 +213,7 @@ const QuotesTab = () => {
                 <div className="text-sm text-muted-foreground">Clients actifs</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{suppliers?.length || 0}</div>
+                <div className="text-2xl font-bold text-green-600">{pricingEngine.getSuppliers().length}</div>
                 <div className="text-sm text-muted-foreground">Prestataires</div>
               </div>
               <div className="text-center">
@@ -327,19 +224,19 @@ const QuotesTab = () => {
             
             <Button 
               onClick={generateAllQuotes}
-              disabled={isGenerating || !activeClients?.length || !suppliers?.length}
+              disabled={isGenerating || !activeClients?.length}
               size="lg"
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isGenerating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Génération...
+                  Calcul en cours...
                 </>
               ) : (
                 <>
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  {generatedQuotes.length > 0 ? 'Regénérer tous les devis' : 'Générer tous les devis'}
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {generatedQuotes.length > 0 ? 'Recalculer tous les devis' : 'Générer tous les devis'}
                 </>
               )}
             </Button>
@@ -354,7 +251,7 @@ const QuotesTab = () => {
             const hasOriginalQuote = quotes[0].original_quote_amount;
             const originalAmount = quotes[0].original_quote_amount;
             const bestCalculatedPrice = Math.min(...quotes.map(q => q.calculated_price));
-            const priceDifference = originalAmount && originalAmount - bestCalculatedPrice;
+            const priceDifference = originalAmount ? originalAmount - bestCalculatedPrice : null;
             
             return (
               <Card key={clientId}>
@@ -366,24 +263,33 @@ const QuotesTab = () => {
                       {quotes[0].departure_city} → {quotes[0].arrival_city}
                     </Badge>
                     
-                    {/* 🎯 AJOUT: Comparaison prix original vs calculé */}
+                    {/* Comparaison prix original vs calculé */}
                     {hasOriginalQuote && (
-                      <div className="flex items-center gap-2 ml-auto">
-                        <div className="text-sm">
+                      <div className="flex items-center gap-3 ml-auto">
+                        <div className="text-sm bg-blue-50 px-3 py-1 rounded-md">
                           <span className="text-muted-foreground">Prix original: </span>
                           <span className="font-semibold text-blue-600">{originalAmount}€</span>
                         </div>
-                        <div className="text-sm">
+                        <div className="text-sm bg-green-50 px-3 py-1 rounded-md">
                           <span className="text-muted-foreground">Meilleur prix: </span>
                           <span className="font-semibold text-green-600">{bestCalculatedPrice}€</span>
                         </div>
-                        {priceDifference && (
+                        {priceDifference !== null && (
                           <Badge 
-                            variant={priceDifference > 0 ? "destructive" : "default"}
+                            variant={Math.abs(priceDifference) > 50 ? "destructive" : "default"}
                             className="flex items-center gap-1"
                           >
-                            <AlertTriangle className="h-3 w-3" />
-                            {priceDifference > 0 ? `-${priceDifference}€` : `+${Math.abs(priceDifference)}€`}
+                            {priceDifference > 0 ? (
+                              <>
+                                <AlertTriangle className="h-3 w-3" />
+                                -{priceDifference}€
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-3 w-3" />
+                                +{Math.abs(priceDifference)}€
+                              </>
+                            )}
                           </Badge>
                         )}
                       </div>
@@ -392,12 +298,12 @@ const QuotesTab = () => {
                   <CardDescription>
                     Volume: {quotes[0].estimated_volume}m³ • Date: {format(new Date(quotes[0].desired_date), 'dd/MM/yyyy', { locale: fr })}
                     {quotes[0].client_email && ` • ${quotes[0].client_email}`}
-                    {hasOriginalQuote && priceDifference && (
+                    {hasOriginalQuote && priceDifference !== null && (
                       <div className="text-sm mt-1">
-                        <span className={`font-medium ${priceDifference > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {priceDifference > 0 
-                            ? `⚠️ Écart de ${priceDifference}€ - prix recalculé plus bas que l'original`
-                            : `✅ Prix recalculé cohérent avec l'original`
+                        <span className={`font-medium ${Math.abs(priceDifference) > 50 ? 'text-red-600' : 'text-green-600'}`}>
+                          {Math.abs(priceDifference) > 50 
+                            ? `⚠️ Écart important de ${Math.abs(priceDifference)}€ - vérifier les paramètres`
+                            : `✅ Calcul cohérent avec le prix original`
                           }
                         </span>
                       </div>
@@ -410,22 +316,34 @@ const QuotesTab = () => {
                       <div key={quote.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
+                            <div className="flex items-center gap-3 mb-3">
                               {getRankBadge(quote.rank)}
                               <h4 className="font-semibold">{quote.supplier_company}</h4>
                               <span className="text-sm text-muted-foreground">{quote.supplier_name}</span>
                             </div>
                             
-                            <div className="text-2xl font-bold text-green-600 flex items-center gap-2">
-                              <Euro className="h-5 w-5" />
-                              {quote.calculated_price.toLocaleString()}€
-                              <span className="text-sm text-orange-600 font-normal">(marge MatchMove incluse)</span>
-                              
-                              {/* 🎯 AJOUT: Indicateur de différence avec prix original */}
-                              {hasOriginalQuote && (
-                                <span className="text-sm text-muted-foreground font-normal">
-                                  vs {originalAmount}€ original
-                                </span>
+                            {/* Décomposition détaillée du prix */}
+                            <div className="bg-gray-50 p-3 rounded-md mb-3">
+                              <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Prix prestataire:</span>
+                                  <div className="font-semibold text-blue-600">{quote.supplier_price.toLocaleString()}€</div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Marge MatchMove:</span>
+                                  <div className="font-semibold text-orange-600">+{quote.matchmove_margin.toLocaleString()}€</div>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Prix final:</span>
+                                  <div className="font-bold text-green-600">{quote.calculated_price.toLocaleString()}€</div>
+                                </div>
+                              </div>
+                              {quote.pricing_breakdown && (
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  Marge: {quote.pricing_breakdown.marginPercentage?.toFixed(1)}% • 
+                                  Distance estimée: {quote.pricing_breakdown.estimatedDistance}km • 
+                                  Étages: {quote.pricing_breakdown.estimatedFloors}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -463,9 +381,9 @@ const QuotesTab = () => {
         <Card>
           <CardContent className="text-center py-8">
             <Loader2 className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-            <h3 className="text-lg font-medium mb-2">Génération des devis en cours...</h3>
+            <h3 className="text-lg font-medium mb-2">Calcul des devis avec le nouveau moteur...</h3>
             <p className="text-muted-foreground">
-              Calcul des 3 meilleurs prix pour chaque client avec tous les prestataires disponibles.
+              Utilisation des critères de pricing exacts pour des prix cohérents et reproductibles.
             </p>
           </CardContent>
         </Card>
@@ -473,13 +391,11 @@ const QuotesTab = () => {
         <Card>
           <CardContent className="text-center py-8">
             <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Aucun devis à générer</h3>
+            <h3 className="text-lg font-medium mb-2">Prêt à générer des devis cohérents</h3>
             <p className="text-muted-foreground mb-4">
               {!activeClients?.length 
                 ? 'Aucun client actif trouvé'
-                : !suppliers?.length 
-                ? 'Aucun prestataire disponible'
-                : 'Cliquez sur "Générer tous les devis" pour commencer'
+                : 'Cliquez sur "Générer tous les devis" pour utiliser le nouveau moteur'
               }
             </p>
           </CardContent>
