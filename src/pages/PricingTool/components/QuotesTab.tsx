@@ -20,6 +20,14 @@ interface PricingResult {
   client_price: number;
 }
 
+interface PricingModel {
+  basePrice?: number;
+  volumeRate?: number;
+  distanceRate?: number;
+  minimumPrice?: number;
+  matchMoveMargin?: number;
+}
+
 const QuotesTab = () => {
   const { toast } = useToast();
   const [isSearching, setIsSearching] = useState(false);
@@ -86,8 +94,8 @@ const QuotesTab = () => {
         let bestMargin = 0;
 
         validSuppliers.forEach(supplier => {
-          if (supplier.pricing_model) {
-            const model = supplier.pricing_model;
+          if (supplier.pricing_model && typeof supplier.pricing_model === 'object') {
+            const model = supplier.pricing_model as PricingModel;
             
             // Calcul simplifié du prix
             const basePrice = model.basePrice || 150;

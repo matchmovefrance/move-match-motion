@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -133,7 +132,7 @@ const HistoryTab = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const handleDeleteHistoryItem = async (itemId: number, itemType: 'client_request' | 'quote') => {
+  const handleDeleteHistoryItem = async (itemId: string | number, itemType: 'client_request' | 'quote') => {
     try {
       if (itemType === 'client_request') {
         const { error } = await supabase
