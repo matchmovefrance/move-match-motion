@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X, Loader2 } from 'lucide-react';
@@ -747,5 +748,3 @@ const MatchFinder = () => {
 };
 
 export default MatchFinder;
-
-}
