@@ -93,10 +93,37 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
         onOpenChange(false);
       } else {
         // Pour les prestataires classiques, on met à jour la table suppliers
+        // Convertir en objet JSON simple pour éviter l'erreur TypeScript
+        const pricingModelData = {
+          basePrice: data.basePrice,
+          volumeRate: data.volumeRate,
+          distanceRate: data.distanceRate,
+          distanceRateHighVolume: data.distanceRateHighVolume,
+          floorRate: data.floorRate,
+          packingRate: data.packingRate,
+          unpackingRate: data.unpackingRate,
+          dismantleRate: data.dismantleRate,
+          reassembleRate: data.reassembleRate,
+          carryingDistanceFee: data.carryingDistanceFee,
+          carryingDistanceThreshold: data.carryingDistanceThreshold,
+          heavyItemsFee: data.heavyItemsFee,
+          volumeSupplementThreshold1: data.volumeSupplementThreshold1,
+          volumeSupplementFee1: data.volumeSupplementFee1,
+          volumeSupplementThreshold2: data.volumeSupplementThreshold2,
+          volumeSupplementFee2: data.volumeSupplementFee2,
+          furnitureLiftFee: data.furnitureLiftFee,
+          furnitureLiftThreshold: data.furnitureLiftThreshold,
+          parkingFeeEnabled: data.parkingFeeEnabled,
+          parkingFeeAmount: data.parkingFeeAmount,
+          timeMultiplier: data.timeMultiplier,
+          minimumPrice: data.minimumPrice,
+          matchMoveMargin: data.matchMoveMargin,
+        };
+
         const { error } = await supabase
           .from('suppliers')
           .update({ 
-            pricing_model: data,
+            pricing_model: pricingModelData,
             updated_at: new Date().toISOString()
           })
           .eq('id', supplier.id);
@@ -330,6 +357,25 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
 
                 <FormField
                   control={form.control}
+                  name="unpackingRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tarif déballage par carton (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="dismantleRate"
                   render={({ field }) => (
                     <FormItem>
@@ -349,10 +395,243 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
 
                 <FormField
                   control={form.control}
+                  name="reassembleRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tarif remontage par meuble (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="heavyItemsFee"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Frais objets lourds (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Distance de portage */}
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <h3 className="font-semibold text-yellow-800 mb-3">Distance de portage</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="carryingDistanceThreshold"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Seuil distance gratuite (m)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="1"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="carryingDistanceFee"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frais distance supplémentaire (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Suppléments volume */}
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <h3 className="font-semibold text-red-800 mb-3">Suppléments volume</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="volumeSupplementThreshold1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Seuil volume 1 (m³)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.1"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="volumeSupplementFee1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplément volume 1 (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="volumeSupplementThreshold2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Seuil volume 2 (m³)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.1"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="volumeSupplementFee2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplément volume 2 (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Monte-meubles */}
+            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+              <h3 className="font-semibold text-indigo-800 mb-3">Monte-meubles</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="furnitureLiftThreshold"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Seuil étages pour monte-meubles</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="1"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="furnitureLiftFee"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frais monte-meubles (€)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Stationnement */}
+            <div className="bg-teal-50 p-4 rounded-lg border border-teal-200">
+              <h3 className="font-semibold text-teal-800 mb-3">Stationnement</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="parkingFeeEnabled"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center space-x-2">
+                      <FormControl>
+                        <input 
+                          type="checkbox" 
+                          checked={field.value}
+                          onChange={field.onChange}
+                          className="rounded"
+                        />
+                      </FormControl>
+                      <FormLabel>Frais de stationnement activés</FormLabel>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="parkingFeeAmount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Montant frais stationnement (€)</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
@@ -391,7 +670,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                   <>
                     <Save className="h-4 w-4 mr-2" />
                     Sauvegarder
-                  </>
+                  </Button>
                 )}
               </Button>
             </div>
