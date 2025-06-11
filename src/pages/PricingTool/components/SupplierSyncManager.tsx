@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RefreshCw, CheckCircle, AlertCircle, Building, Sync } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Building } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -183,7 +183,7 @@ const SupplierSyncManager = () => {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sync className="h-5 w-5 text-blue-500" />
+          <RefreshCw className="h-5 w-5 text-blue-500" />
           Synchronisation des fournisseurs
         </CardTitle>
         <CardDescription>

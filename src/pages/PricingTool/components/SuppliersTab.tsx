@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Star, Search, Filter, Plus, Edit, Building, Phone, Mail, MapPin, BarChart3, Link2, Sync } from 'lucide-react';
+import { Star, Search, Filter, Plus, Edit, Building, Phone, Mail, MapPin, BarChart3, Link2, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -140,7 +139,7 @@ const SuppliersTab = () => {
                 onClick={() => setShowSyncManager(!showSyncManager)}
                 className="flex items-center gap-2"
               >
-                <Sync className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4" />
                 {showSyncManager ? 'Masquer' : 'Synchronisation'}
               </Button>
               <Button className="flex items-center gap-2 bg-primary hover:bg-primary/90">
@@ -192,7 +191,7 @@ const SuppliersTab = () => {
                         {supplier.company_name}
                         {isFromServiceProvider && (
                           <Badge variant="outline" className="text-xs">
-                            <Sync className="h-3 w-3 mr-1" />
+                            <RefreshCw className="h-3 w-3 mr-1" />
                             Synchronisé
                           </Badge>
                         )}
@@ -318,7 +317,7 @@ const SuppliersTab = () => {
                 onClick={() => setShowSyncManager(true)}
                 className="flex items-center gap-2"
               >
-                <Sync className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4" />
                 Synchroniser les prestataires
               </Button>
               <Button className="bg-primary hover:bg-primary/90" size="lg">
