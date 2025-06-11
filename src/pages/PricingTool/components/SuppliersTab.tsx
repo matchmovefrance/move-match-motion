@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Plus, Edit, Link, BarChart3, Phone, Mail, MapPin, Users2, Sync } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Link, BarChart3, Phone, Mail, MapPin, Users2, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -226,7 +225,7 @@ const SuppliersTab = () => {
                 disabled={isSyncing}
                 className="flex items-center gap-2"
               >
-                <Sync className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
                 Synchroniser prestataires
               </Button>
               <Button 
@@ -429,7 +428,7 @@ const SuppliersTab = () => {
                 Ajouter un fournisseur
               </Button>
               <Button variant="outline" onClick={syncServiceProvidersToSuppliers}>
-                <Sync className="h-4 w-4 mr-2" />
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Synchroniser prestataires
               </Button>
             </div>
