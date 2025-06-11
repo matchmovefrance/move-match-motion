@@ -2,7 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 // Configuration pour la MAIN APP
-const MAIN_APP_URL = process.env.REACT_APP_MAIN_API_URL || 'https://your-main-app.com';
+const MAIN_APP_URL = import.meta.env.VITE_MAIN_API_URL || 'https://your-main-app.com';
 
 interface AuthToken {
   token: string;
@@ -249,10 +249,16 @@ class MainAppApiService {
    */
   async testConnection(): Promise<boolean> {
     try {
+      // Créer un AbortController pour gérer le timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
       const response = await fetch(`${MAIN_APP_URL}/api/v1/health`, {
         method: 'GET',
-        timeout: 5000
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       const isHealthy = response.ok;
       console.log(`🔗 Test connexion MAIN APP: ${isHealthy ? 'OK' : 'FAILED'}`);
