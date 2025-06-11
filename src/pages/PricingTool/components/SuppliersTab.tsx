@@ -11,17 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import CreateSupplierDialog from './CreateSupplierDialog';
 import SupplierPricingDialog from './SupplierPricingDialog';
 import SupplierBankDetailsDialog from './SupplierBankDetailsDialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 type SupplierFromMoves = {
   id: string;
@@ -50,7 +40,9 @@ const SuppliersTab = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPricingDialog, setShowPricingDialog] = useState(false);
   const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierFromMoves | null>(null);
+  const [supplierToDelete, setSupplierToDelete] = useState<SupplierFromMoves | null>(null);
 
   const { data: suppliers, isLoading } = useQuery({
     queryKey: ['suppliers-from-moves'],
@@ -108,6 +100,7 @@ const SuppliersTab = () => {
               parkingFeeAmount: 0,
               timeMultiplier: 1,
               minimumPrice: 200,
+              matchMoveMargin: 40, // Ajouter la marge par défaut
             },
             performance_metrics: {
               total_bids: 0,
@@ -129,12 +122,22 @@ const SuppliersTab = () => {
     enabled: !!user,
   });
 
-  const handleDelete = async (supplier: SupplierFromMoves) => {
+  const handleDeleteClick = (supplier: SupplierFromMoves) => {
+    setSupplierToDelete(supplier);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!supplierToDelete) return;
+
     // Pour les prestataires issus des trajets, on ne peut pas les supprimer
     toast({
       title: "Information",
       description: "Ce prestataire provient des trajets confirmés et ne peut pas être supprimé",
     });
+    
+    setShowDeleteDialog(false);
+    setSupplierToDelete(null);
   };
 
   const handleEditPricing = (supplier: SupplierFromMoves) => {
@@ -236,6 +239,9 @@ const SuppliersTab = () => {
               <div className="pt-2 border-t">
                 <div className="text-xs text-muted-foreground mb-2">
                   Modèle de tarification: {supplier.pricing_model && Object.keys(supplier.pricing_model as any).length > 0 ? 'Configuré' : 'Non configuré'}
+                  {supplier.pricing_model?.matchMoveMargin && (
+                    <span className="text-green-600 font-medium"> (Marge: {supplier.pricing_model.matchMoveMargin}%)</span>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2">
@@ -261,25 +267,15 @@ const SuppliersTab = () => {
                 </div>
                 
                 <div className="flex justify-center mt-2">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 text-xs">
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Supprimer
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Ce prestataire provient des trajets confirmés et ne peut pas être supprimé.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Fermer</AlertDialogCancel>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleDeleteClick(supplier)}
+                    className="text-red-600 hover:text-red-700 text-xs"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Supprimer
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -321,6 +317,17 @@ const SuppliersTab = () => {
         onOpenChange={setShowBankDetailsDialog}
         supplier={selectedSupplier}
         onUpdate={handleBankDetailsUpdate}
+      />
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Supprimer le prestataire"
+        description={`Êtes-vous sûr de vouloir supprimer ${supplierToDelete?.company_name} ? Cette action ne peut pas être annulée.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
       />
     </div>
   );

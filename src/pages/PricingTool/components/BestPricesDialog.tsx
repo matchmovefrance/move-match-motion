@@ -78,6 +78,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
               parkingFeeAmount: Math.random() > 0.7 ? 50 + Math.random() * 50 : 0,
               timeMultiplier: 0.9 + Math.random() * 0.3, // 0.9-1.2
               minimumPrice: 180 + Math.random() * 40, // 180-220€
+              matchMoveMargin: matchMoveMargin, // Utiliser la marge définie
             }
           });
         }
@@ -151,8 +152,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
     // Prix minimum
     supplierPrice = Math.max(supplierPrice, pricingModel.minimumPrice || 200);
     
-    // Ajouter la marge MatchMove
-    const matchMoveMarginAmount = (supplierPrice * matchMoveMargin) / 100;
+    // Ajouter la marge MatchMove configurée
+    const currentMargin = pricingModel.matchMoveMargin || matchMoveMargin;
+    const matchMoveMarginAmount = (supplierPrice * currentMargin) / 100;
     const totalWithMargin = supplierPrice + matchMoveMarginAmount;
     
     return {
@@ -166,7 +168,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         heavyItems,
         carryingDistance,
         furnitureItems,
-        config: pricingModel
+        config: pricingModel,
+        marginPercentage: currentMargin
       }
     };
   };
@@ -187,8 +190,13 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
       console.log('🔍 DÉBUT recherche prix pour:', opportunity.title);
       console.log(`📊 Marge MatchMove: ${matchMoveMargin}%`);
 
-      // Générer des devis pour chaque prestataire
+      // Générer des devis pour chaque prestataire avec leur marge configurée
       const quotes = suppliers.map((supplier) => {
+        // Mettre à jour la marge dans le modèle du prestataire
+        if (supplier.pricing_model) {
+          supplier.pricing_model.matchMoveMargin = matchMoveMargin;
+        }
+        
         const pricing = calculatePriceForSupplier(supplier, opportunity);
         
         return {
@@ -215,7 +223,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
           response_time: ['2h', '4h', '6h', '24h'][Math.floor(Math.random() * 4)],
           client_name: 'Client Principal',
           status: 'pending',
-          notes: `Devis calculé avec marge MatchMove ${matchMoveMargin}%`,
+          notes: `Devis calculé avec marge MatchMove ${pricing.details.marginPercentage}%`,
           pricing_details: pricing.details
         };
       });

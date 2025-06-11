@@ -1,28 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Settings, MapPin, Phone, Mail, Edit, Trash2, Building, RefreshCw } from 'lucide-react';
+import { Plus, Settings, MapPin, Phone, Mail, Edit, Trash2, Building, RefreshCw, Calculator, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ListView } from '@/components/ui/list-view';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import SyncStatusDialog from './SyncStatusDialog';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import SupplierPricingDialog from '@/pages/PricingTool/components/SupplierPricingDialog';
+import SupplierBankDetailsDialog from '@/pages/PricingTool/components/SupplierBankDetailsDialog';
 
 interface ServiceProvider {
   id: number;
@@ -37,6 +29,8 @@ interface ServiceProvider {
   created_at: string;
   created_by: string | null;
   source?: string;
+  pricing_model?: any;
+  bank_details?: any;
 }
 
 const ServiceProviders = () => {
@@ -46,6 +40,11 @@ const ServiceProviders = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ServiceProvider | null>(null);
   const [showSyncDialog, setShowSyncDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false);
+  const [providerToDelete, setProviderToDelete] = useState<ServiceProvider | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -98,7 +97,14 @@ const ServiceProviders = () => {
             coordinates: null,
             created_at: new Date().toISOString(),
             created_by: null,
-            source: 'moves'
+            source: 'moves',
+            pricing_model: {
+              basePrice: 150,
+              volumeRate: 10,
+              distanceRate: 1,
+              matchMoveMargin: 40
+            },
+            bank_details: null
           });
         }
       });
@@ -336,16 +342,21 @@ const ServiceProviders = () => {
     }
   };
 
-  const deleteProvider = async (id: number) => {
-    if (!user) return;
+  const handleDeleteClick = (provider: ServiceProvider) => {
+    setProviderToDelete(provider);
+    setShowDeleteDialog(true);
+  };
+
+  const deleteProvider = async () => {
+    if (!user || !providerToDelete) return;
     
     try {
-      console.log('🗑️ Deleting provider:', id);
+      console.log('🗑️ Deleting provider:', providerToDelete.id);
       
       const { error } = await supabase
         .from('service_providers')
         .delete()
-        .eq('id', id)
+        .eq('id', providerToDelete.id)
         .eq('created_by', user.id);
 
       if (error) {
@@ -356,12 +367,15 @@ const ServiceProviders = () => {
       console.log('✅ Provider deleted successfully');
       
       // Mettre à jour l'état local immédiatement
-      setProviders(prevProviders => prevProviders.filter(p => p.id !== id));
+      setProviders(prevProviders => prevProviders.filter(p => p.id !== providerToDelete.id));
       
       toast({
         title: "Succès",
         description: "Prestataire supprimé avec succès",
       });
+      
+      setShowDeleteDialog(false);
+      setProviderToDelete(null);
     } catch (error: any) {
       console.error('❌ Error deleting provider:', error);
       toast({
@@ -383,6 +397,16 @@ const ServiceProviders = () => {
       title: "Succès",
       description: "Synchronisation terminée avec succès",
     });
+  };
+
+  const handleEditPricing = (provider: ServiceProvider) => {
+    setSelectedProvider(provider);
+    setShowPricingDialog(true);
+  };
+
+  const handleEditBankDetails = (provider: ServiceProvider) => {
+    setSelectedProvider(provider);
+    setShowBankDetailsDialog(true);
   };
 
   // Combiner les prestataires de la DB avec ceux des trajets
@@ -575,11 +599,6 @@ const ServiceProviders = () => {
                   <h3 className="font-semibold text-gray-800">
                     {provider.company_name}
                   </h3>
-                  {provider.source === 'moves' && (
-                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                      Trajet
-                    </Badge>
-                  )}
                 </div>
                 
                 <div className="space-y-2 text-sm text-gray-600">
@@ -617,6 +636,30 @@ const ServiceProviders = () => {
                       </a>
                     </div>
                   )}
+                  
+                  {/* Boutons pour tarification et RIB */}
+                  <div className="flex space-x-2 mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditPricing(provider)}
+                      className="text-xs"
+                    >
+                      <Calculator className="h-3 w-3 mr-1" />
+                      Tarification
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditBankDetails(provider)}
+                      className="text-xs text-green-600 hover:text-green-700"
+                    >
+                      <CreditCard className="h-3 w-3 mr-1" />
+                      RIB
+                    </Button>
+                  </div>
+                  
                   <div className="text-xs text-gray-400 mt-3">
                     {provider.source === 'moves' 
                       ? 'Depuis les trajets confirmés'
@@ -626,47 +669,24 @@ const ServiceProviders = () => {
                 </div>
               </div>
               
-              {/* Actions uniquement pour les prestataires de la DB */}
-              {provider.source !== 'moves' && (
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditingProvider(provider)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
-                          Cette action est irréversible.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Annuler</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => deleteProvider(provider.id)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Supprimer
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              )}
+              {/* Actions */}
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingProvider(provider)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDeleteClick(provider)}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -677,11 +697,6 @@ const ServiceProviders = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="font-medium text-gray-800">{provider.company_name}</h4>
-                    {provider.source === 'moves' && (
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                        Trajet
-                      </Badge>
-                    )}
                   </div>
                   <p className="text-sm text-gray-600">{provider.name}</p>
                 </div>
@@ -714,47 +729,42 @@ const ServiceProviders = () => {
                 )}
               </div>
             </div>
-            {/* Actions uniquement pour les prestataires de la DB */}
-            {provider.source !== 'moves' && (
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingProvider(provider)}
-                >
-                  <Edit className="h-3 w-3" />
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
-                        Cette action est irréversible.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Annuler</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteProvider(provider.id)}
-                        className="bg-red-600 hover:bg-red-700"
-                      >
-                        Supprimer
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
+            {/* Actions */}
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEditPricing(provider)}
+                className="text-xs"
+              >
+                <Calculator className="h-3 w-3" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEditBankDetails(provider)}
+                className="text-xs text-green-600 hover:text-green-700"
+              >
+                <CreditCard className="h-3 w-3" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingProvider(provider)}
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeleteClick(provider)}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         )}
         searchPlaceholder="Rechercher par nom, entreprise, email ou ville..."
@@ -767,6 +777,39 @@ const ServiceProviders = () => {
         isOpen={showSyncDialog}
         onClose={() => setShowSyncDialog(false)}
         onSyncComplete={handleSyncComplete}
+      />
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Supprimer le prestataire"
+        description={`Êtes-vous sûr de vouloir supprimer ${providerToDelete?.company_name} ? Cette action ne peut pas être annulée.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        onConfirm={deleteProvider}
+        variant="destructive"
+      />
+
+      <SupplierPricingDialog
+        open={showPricingDialog}
+        onOpenChange={setShowPricingDialog}
+        supplier={selectedProvider}
+        onUpdate={() => {
+          setShowPricingDialog(false);
+          setSelectedProvider(null);
+          fetchProviders();
+        }}
+      />
+
+      <SupplierBankDetailsDialog
+        open={showBankDetailsDialog}
+        onOpenChange={setShowBankDetailsDialog}
+        supplier={selectedProvider}
+        onUpdate={() => {
+          setShowBankDetailsDialog(false);
+          setSelectedProvider(null);
+          fetchProviders();
+        }}
       />
     </div>
   );
