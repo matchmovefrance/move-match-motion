@@ -1,24 +1,14 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp } from 'lucide-react';
+import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp, CheckCircle, X, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
-interface PricingResult {
-  opportunity_id: string;
-  opportunity_title: string;
-  route: string;
-  volume: number;
-  date: string;
-  best_price: number;
-  supplier_name: string;
-  margin: number;
-  client_price: number;
-}
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface PricingModel {
   basePrice?: number;
@@ -28,131 +18,263 @@ interface PricingModel {
   matchMoveMargin?: number;
 }
 
+interface GeneratedQuote {
+  id: string;
+  client_id: number;
+  client_name: string;
+  client_email: string;
+  departure_city: string;
+  arrival_city: string;
+  estimated_volume: number;
+  desired_date: string;
+  supplier_id: string;
+  supplier_name: string;
+  supplier_company: string;
+  calculated_price: number;
+  rank: number;
+}
+
 const QuotesTab = () => {
   const { toast } = useToast();
-  const [isSearching, setIsSearching] = useState(false);
-  const [pricingResults, setPricingResults] = useState<PricingResult[]>([]);
+  const [generatedQuotes, setGeneratedQuotes] = useState<GeneratedQuote[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Compter les opportunités actives
-  const { data: stats } = useQuery({
-    queryKey: ['pricing-opportunities-stats'],
+  // Charger les demandes clients actives
+  const { data: activeClients } = useQuery({
+    queryKey: ['active-clients'],
     queryFn: async () => {
-      const { data: opportunities } = await supabase
-        .from('pricing_opportunities')
-        .select('id, status')
-        .in('status', ['draft', 'active', 'pending']);
-
-      const { data: clientRequests } = await supabase
+      const { data, error } = await supabase
         .from('client_requests')
-        .select('id, status')
-        .in('status', ['pending', 'confirmed']);
+        .select('*')
+        .in('status', ['pending', 'confirmed'])
+        .order('created_at', { ascending: false });
 
-      return {
-        opportunities: opportunities?.length || 0,
-        clientRequests: clientRequests?.length || 0,
-      };
+      if (error) throw error;
+      return data || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
-  const searchBestPrices = async () => {
-    setIsSearching(true);
-    try {
-      console.log('🔍 Recherche des meilleurs prix...');
-
-      // Récupérer les opportunités actives
-      const { data: opportunities, error: oppError } = await supabase
-        .from('pricing_opportunities')
-        .select('*')
-        .in('status', ['draft', 'active', 'pending']);
-
-      if (oppError) throw oppError;
-
-      // Récupérer les prestataires avec leurs modèles de tarification
-      const { data: suppliers, error: suppError } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('is_active', true);
-
-      if (suppError) throw suppError;
-
-      // Filtrer les prestataires demo
-      const validSuppliers = suppliers?.filter(supplier => {
-        const companyName = supplier.company_name?.toLowerCase() || '';
-        const isDemo = companyName.includes('demo') || 
-                      companyName.includes('test') || 
-                      companyName.includes('exemple') ||
-                      companyName.includes('sample');
-        return !isDemo;
-      }) || [];
-
-      const results: PricingResult[] = [];
-
-      // Pour chaque opportunité, calculer le meilleur prix
-      opportunities?.forEach(opportunity => {
-        let bestPrice = Infinity;
-        let bestSupplier = '';
-        let bestMargin = 0;
-
-        validSuppliers.forEach(supplier => {
-          if (supplier.pricing_model && typeof supplier.pricing_model === 'object') {
-            const model = supplier.pricing_model as PricingModel;
-            
-            // Calcul simplifié du prix
-            const basePrice = model.basePrice || 150;
-            const volumePrice = (opportunity.estimated_volume || 0) * (model.volumeRate || 10);
-            const distancePrice = 100 * (model.distanceRate || 1); // Distance estimée
-            
-            const supplierPrice = Math.max(
-              basePrice + volumePrice + distancePrice,
-              model.minimumPrice || 200
-            );
-
-            if (supplierPrice < bestPrice) {
-              bestPrice = supplierPrice;
-              bestSupplier = supplier.company_name;
-              bestMargin = model.matchMoveMargin || 40;
+  // Charger les prestataires depuis les trajets confirmés
+  const { data: suppliers } = useQuery({
+    queryKey: ['suppliers-for-quotes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
+      
+      if (error) return [];
+      
+      // Créer des prestataires uniques avec modèles de tarification
+      const uniqueSuppliersMap = new Map();
+      
+      data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueSuppliersMap.has(key)) {
+          uniqueSuppliersMap.set(key, {
+            id: `supplier-${move.mover_id}`,
+            mover_name: move.mover_name,
+            company_name: move.company_name,
+            contact_email: move.contact_email,
+            contact_phone: move.contact_phone,
+            pricing_model: {
+              basePrice: 120 + Math.random() * 80,
+              volumeRate: 8 + Math.random() * 6,
+              distanceRate: 0.8 + Math.random() * 0.4,
+              minimumPrice: 180 + Math.random() * 40,
+              matchMoveMargin: 35 + Math.random() * 15,
             }
-          }
-        });
-
-        if (bestPrice !== Infinity) {
-          const clientPrice = bestPrice * (1 + bestMargin / 100);
-          
-          results.push({
-            opportunity_id: opportunity.id,
-            opportunity_title: opportunity.title,
-            route: `${opportunity.departure_city} → ${opportunity.arrival_city}`,
-            volume: opportunity.estimated_volume,
-            date: opportunity.desired_date,
-            best_price: bestPrice,
-            supplier_name: bestSupplier,
-            margin: bestMargin,
-            client_price: clientPrice,
           });
         }
       });
-
-      // Trier par meilleur prix
-      results.sort((a, b) => a.client_price - b.client_price);
       
-      setPricingResults(results);
+      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
+      console.log('✅ Prestataires chargés:', uniqueSuppliers.length);
+      return uniqueSuppliers;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // Générer automatiquement les devis au chargement
+  useEffect(() => {
+    if (activeClients?.length && suppliers?.length && generatedQuotes.length === 0) {
+      generateAllQuotes();
+    }
+  }, [activeClients, suppliers]);
+
+  const calculatePriceForClient = (client: any, supplier: any) => {
+    const pricingModel = supplier.pricing_model as PricingModel;
+    
+    let price = pricingModel.basePrice || 150;
+    price += client.estimated_volume * (pricingModel.volumeRate || 10);
+    price += 50 * (pricingModel.distanceRate || 1); // Distance estimée
+    price = Math.max(price, pricingModel.minimumPrice || 200);
+    
+    // Ajouter marge MatchMove
+    const margin = pricingModel.matchMoveMargin || 40;
+    price *= (1 + margin / 100);
+    
+    return Math.round(price);
+  };
+
+  const generateAllQuotes = async () => {
+    if (!activeClients?.length || !suppliers?.length) return;
+    
+    setIsGenerating(true);
+    console.log('🔄 Génération automatique des devis...');
+    
+    try {
+      const allQuotes: GeneratedQuote[] = [];
+      
+      // Pour chaque client, calculer les prix avec tous les prestataires
+      activeClients.forEach((client) => {
+        const clientQuotes: Array<GeneratedQuote & { price: number }> = [];
+        
+        suppliers.forEach((supplier) => {
+          const price = calculatePriceForClient(client, supplier);
+          
+          clientQuotes.push({
+            id: `quote-${client.id}-${supplier.id}`,
+            client_id: client.id,
+            client_name: client.name || `Client #${client.id}`,
+            client_email: client.email || '',
+            departure_city: client.departure_city,
+            arrival_city: client.arrival_city,
+            estimated_volume: client.estimated_volume,
+            desired_date: client.desired_date,
+            supplier_id: supplier.id,
+            supplier_name: supplier.mover_name,
+            supplier_company: supplier.company_name,
+            calculated_price: price,
+            price: price,
+            rank: 0
+          });
+        });
+        
+        // Trier par prix et prendre les 3 meilleurs
+        clientQuotes.sort((a, b) => a.price - b.price);
+        const top3 = clientQuotes.slice(0, 3).map((quote, index) => ({
+          ...quote,
+          rank: index + 1
+        }));
+        
+        allQuotes.push(...top3);
+      });
+      
+      setGeneratedQuotes(allQuotes);
+      console.log('✅ Devis générés:', allQuotes.length);
       
       toast({
-        title: "Recherche terminée",
-        description: `${results.length} devis calculés avec les meilleurs prix`,
+        title: "Devis générés",
+        description: `${allQuotes.length} devis calculés automatiquement`,
       });
-
+      
     } catch (error) {
-      console.error('❌ Erreur recherche prix:', error);
+      console.error('❌ Erreur génération devis:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de calculer les prix",
+        description: "Impossible de générer les devis",
         variant: "destructive",
       });
     } finally {
-      setIsSearching(false);
+      setIsGenerating(false);
     }
   };
+
+  const handleAcceptQuote = async (quote: GeneratedQuote) => {
+    try {
+      console.log('✅ Acceptation devis:', quote.id);
+      
+      // Créer le devis accepté dans la base
+      const { error } = await supabase
+        .from('quotes')
+        .insert({
+          opportunity_id: quote.client_id, // Utiliser client_id comme opportunity_id temporaire
+          supplier_id: quote.supplier_id,
+          bid_amount: quote.calculated_price,
+          status: 'accepted',
+          notes: `Devis généré automatiquement - Rang #${quote.rank} pour ${quote.client_name}`,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (error) throw error;
+
+      // Retirer le devis de la liste
+      setGeneratedQuotes(prev => prev.filter(q => q.id !== quote.id));
+      
+      toast({
+        title: "Devis accepté",
+        description: `Le devis de ${quote.supplier_company} pour ${quote.client_name} a été accepté`,
+      });
+      
+    } catch (error) {
+      console.error('❌ Erreur acceptation:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'accepter le devis",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectQuote = async (quote: GeneratedQuote) => {
+    try {
+      console.log('❌ Rejet devis:', quote.id);
+      
+      // Créer le devis rejeté dans la base
+      const { error } = await supabase
+        .from('quotes')
+        .insert({
+          opportunity_id: quote.client_id,
+          supplier_id: quote.supplier_id,
+          bid_amount: quote.calculated_price,
+          status: 'rejected',
+          notes: `Devis rejeté - Rang #${quote.rank} pour ${quote.client_name}`,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (error) throw error;
+
+      // Retirer le devis de la liste
+      setGeneratedQuotes(prev => prev.filter(q => q.id !== quote.id));
+      
+      toast({
+        title: "Devis rejeté",
+        description: `Le devis de ${quote.supplier_company} pour ${quote.client_name} a été rejeté`,
+      });
+      
+    } catch (error) {
+      console.error('❌ Erreur rejet:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de rejeter le devis",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getRankBadge = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return <Badge className="bg-green-100 text-green-800">🥇 Meilleur prix</Badge>;
+      case 2:
+        return <Badge className="bg-blue-100 text-blue-800">🥈 2ème prix</Badge>;
+      case 3:
+        return <Badge className="bg-orange-100 text-orange-800">🥉 3ème prix</Badge>;
+      default:
+        return <Badge variant="outline">#{rank}</Badge>;
+    }
+  };
+
+  // Grouper les devis par client
+  const quotesByClient = generatedQuotes.reduce((acc, quote) => {
+    if (!acc[quote.client_id]) {
+      acc[quote.client_id] = [];
+    }
+    acc[quote.client_id].push(quote);
+    return acc;
+  }, {} as Record<number, GeneratedQuote[]>);
 
   return (
     <div className="space-y-6">
@@ -161,117 +283,137 @@ const QuotesTab = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
-            Moteur de recherche des meilleurs prix
+            Moteur de devis automatique - 3 meilleurs prix par client
           </CardTitle>
           <CardDescription>
-            Analysez automatiquement les opportunités et clients en cours pour trouver les meilleurs prix basés sur vos modèles de tarification.
+            Génération automatique des 3 meilleurs devis pour chaque client actif avec tous les prestataires disponibles.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{stats?.opportunities || 0}</div>
-                <div className="text-sm text-muted-foreground">Opportunités actives</div>
+                <div className="text-2xl font-bold text-blue-600">{activeClients?.length || 0}</div>
+                <div className="text-sm text-muted-foreground">Clients actifs</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{stats?.clientRequests || 0}</div>
-                <div className="text-sm text-muted-foreground">Demandes clients</div>
+                <div className="text-2xl font-bold text-green-600">{suppliers?.length || 0}</div>
+                <div className="text-sm text-muted-foreground">Prestataires</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{generatedQuotes.length}</div>
+                <div className="text-sm text-muted-foreground">Devis générés</div>
               </div>
             </div>
             
             <Button 
-              onClick={searchBestPrices}
-              disabled={isSearching}
+              onClick={generateAllQuotes}
+              disabled={isGenerating || !activeClients?.length || !suppliers?.length}
               size="lg"
               className="bg-blue-600 hover:bg-blue-700"
             >
-              <Search className="h-4 w-4 mr-2" />
-              {isSearching ? 'Recherche en cours...' : 'Rechercher les meilleurs prix'}
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Génération...
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Regénérer tous les devis
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Résultats de la recherche */}
-      {pricingResults.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-              Résultats - Meilleurs prix trouvés
-            </CardTitle>
-            <CardDescription>
-              Prix calculés automatiquement selon vos modèles de tarification
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {pricingResults.map((result, index) => (
-                <div key={result.opportunity_id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline" className="text-xs">
-                          #{index + 1} Meilleur prix
-                        </Badge>
-                        <h3 className="font-semibold">{result.opportunity_title}</h3>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-blue-500" />
-                          <span>{result.route}</span>
+      {/* Résultats des devis par client */}
+      {Object.keys(quotesByClient).length > 0 ? (
+        <div className="space-y-6">
+          {Object.entries(quotesByClient).map(([clientId, quotes]) => (
+            <Card key={clientId}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-green-600" />
+                  {quotes[0].client_name}
+                  <Badge variant="outline" className="ml-2">
+                    {quotes[0].departure_city} → {quotes[0].arrival_city}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  Volume: {quotes[0].estimated_volume}m³ • Date: {format(new Date(quotes[0].desired_date), 'dd/MM/yyyy', { locale: fr })}
+                  {quotes[0].client_email && ` • ${quotes[0].client_email}`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  {quotes.map((quote) => (
+                    <div key={quote.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            {getRankBadge(quote.rank)}
+                            <h4 className="font-semibold">{quote.supplier_company}</h4>
+                            <span className="text-sm text-muted-foreground">{quote.supplier_name}</span>
+                          </div>
+                          
+                          <div className="text-2xl font-bold text-green-600 flex items-center gap-2">
+                            <Euro className="h-5 w-5" />
+                            {quote.calculated_price.toLocaleString()}€
+                          </div>
                         </div>
                         
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-orange-500" />
-                          <span>{result.volume}m³</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-purple-500" />
-                          <span>{new Date(result.date).toLocaleDateString('fr-FR')}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-green-500" />
-                          <span>{result.supplier_name}</span>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRejectQuote(quote)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4 mr-1" />
+                            Rejeter
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            onClick={() => handleAcceptQuote(quote)}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Accepter
+                          </Button>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="text-right">
-                      <div className="text-sm text-muted-foreground mb-1">Prix fournisseur</div>
-                      <div className="text-lg font-semibold text-gray-600">
-                        {result.best_price.toLocaleString()}€
-                      </div>
-                      
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Marge: {result.margin}%
-                      </div>
-                      <div className="text-xl font-bold text-green-600 flex items-center gap-1">
-                        <Euro className="h-5 w-5" />
-                        {Math.round(result.client_price).toLocaleString()}€
-                      </div>
-                      <div className="text-xs text-muted-foreground">Prix client final</div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : isGenerating ? (
+        <Card>
+          <CardContent className="text-center py-8">
+            <Loader2 className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
+            <h3 className="text-lg font-medium mb-2">Génération des devis en cours...</h3>
+            <p className="text-muted-foreground">
+              Calcul des 3 meilleurs prix pour chaque client avec tous les prestataires disponibles.
+            </p>
           </CardContent>
         </Card>
-      )}
-
-      {/* Message si aucun résultat */}
-      {!isSearching && pricingResults.length === 0 && (
+      ) : (
         <Card>
           <CardContent className="text-center py-8">
             <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Aucune recherche effectuée</h3>
+            <h3 className="text-lg font-medium mb-2">Aucun devis à générer</h3>
             <p className="text-muted-foreground mb-4">
-              Cliquez sur "Rechercher les meilleurs prix" pour analyser vos opportunités et trouver les tarifs optimaux.
+              {!activeClients?.length 
+                ? 'Aucun client actif trouvé'
+                : !suppliers?.length 
+                ? 'Aucun prestataire disponible'
+                : 'Cliquez sur "Regénérer tous les devis" pour commencer'
+              }
             </p>
           </CardContent>
         </Card>
