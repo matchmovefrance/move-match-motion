@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X, Loader2 } from 'lucide-react';
@@ -96,7 +97,7 @@ const MatchFinder = () => {
   const fetchClientRequests = useCallback(async () => {
     const { data, error } = await supabase
       .from('client_requests')
-      .select('id, name, email, departure_city, departure_postal_code, arrival_city, arrival_postal_code, desired_date, estimated_volume, status, flexible_dates, date_range_start, date_range_end')
+      .select('id, name, email, phone, departure_city, departure_postal_code, arrival_city, arrival_postal_code, desired_date, estimated_volume, budget_min, budget_max, status, is_matched, match_status, flexible_dates, date_range_start, date_range_end')
       .in('status', ['pending', 'confirmed'])
       .neq('status', 'completed')
       .limit(100); // Limit results for better performance
@@ -108,7 +109,7 @@ const MatchFinder = () => {
   const fetchMoves = useCallback(async () => {
     const { data, error } = await supabase
       .from('confirmed_moves')
-      .select('id, mover_name, company_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume, status, status_custom')
+      .select('id, mover_name, company_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume, price_per_m3, total_price, status, status_custom, route_type')
       .eq('status', 'confirmed')
       .neq('status_custom', 'termine')
       .limit(100); // Limit results for better performance
