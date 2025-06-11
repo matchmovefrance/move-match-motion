@@ -172,7 +172,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
       const { error } = await supabase
         .from('suppliers')
         .update({
-          pricing_model: pricing
+          pricing_model: pricing as any
         })
         .eq('id', supplier.id);
 
@@ -253,7 +253,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="distanceRate">Prix par km (volume {'<='} 20m³)</Label>
+                  <Label htmlFor="distanceRate">Prix par km (volume ≤ 20m³)</Label>
                   <Input
                     id="distanceRate"
                     type="number"
@@ -263,7 +263,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="distanceRateHighVolume">Prix par km (volume {'>'} 20m³)</Label>
+                  <Label htmlFor="distanceRateHighVolume">Prix par km (volume > 20m³)</Label>
                   <Input
                     id="distanceRateHighVolume"
                     type="number"
@@ -318,7 +318,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                     onChange={(e) => updatePricing('volumeSupplementThreshold1', Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si le volume est {'>'} à cette valeur, ajouter les frais
+                    Si le volume est > à cette valeur, ajouter les frais
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -339,7 +339,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                     onChange={(e) => updatePricing('volumeSupplementThreshold2', Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si le volume est {'>'} à cette valeur, ajouter les frais
+                    Si le volume est > à cette valeur, ajouter les frais
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -416,7 +416,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                     onChange={(e) => updatePricing('carryingDistanceThreshold', Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si la distance est {'>'} à cette valeur, ajouter les frais
+                    Si la distance est > à cette valeur, ajouter les frais
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -437,7 +437,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                     onChange={(e) => updatePricing('heavyItemsFee', Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Supplément pour objets {'>'} 85kg
+                    Supplément pour objets > 85kg
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -473,7 +473,7 @@ const SupplierPricingDialog = ({ open, onOpenChange, supplier, onUpdate }: Suppl
                     onChange={(e) => updatePricing('furnitureLiftThreshold', Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Monte-meuble requis si étage {'>'} à cette valeur
+                    Monte-meuble requis si étage > à cette valeur
                   </p>
                 </div>
                 <div className="space-y-2">

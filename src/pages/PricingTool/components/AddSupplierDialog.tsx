@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,7 +23,7 @@ const supplierFormSchema = z.object({
   contact_name: z.string().min(2, { message: "Le nom du contact est requis" }),
   email: z.string().email({ message: "Format d'email invalide" }),
   phone: z.string().min(5, { message: "Le numéro de téléphone est requis" }),
-  address: z.string().optional(),
+  address: z.string().min(1, { message: "L'adresse est requise" }),
   city: z.string().min(2, { message: "La ville est requise" }),
   postal_code: z.string().min(2, { message: "Le code postal est requis" }),
   is_active: z.boolean().default(true),
@@ -87,7 +86,7 @@ const AddSupplierDialog = ({ open, onOpenChange, supplier, onSuccess }: AddSuppl
         priority_level: 5,
       });
     }
-  }, [supplier, open]);
+  }, [supplier, open, form]);
 
   const onSubmit = async (data: SupplierFormValues) => {
     if (!user) {
@@ -108,7 +107,15 @@ const AddSupplierDialog = ({ open, onOpenChange, supplier, onSuccess }: AddSuppl
         const { error } = await supabase
           .from('suppliers')
           .update({
-            ...data,
+            company_name: data.company_name,
+            contact_name: data.contact_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            postal_code: data.postal_code,
+            is_active: data.is_active,
+            priority_level: data.priority_level,
             updated_at: new Date().toISOString(),
           })
           .eq('id', supplier.id);
@@ -124,7 +131,15 @@ const AddSupplierDialog = ({ open, onOpenChange, supplier, onSuccess }: AddSuppl
         const { error } = await supabase
           .from('suppliers')
           .insert({
-            ...data,
+            company_name: data.company_name,
+            contact_name: data.contact_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            postal_code: data.postal_code,
+            is_active: data.is_active,
+            priority_level: data.priority_level,
             created_by: user.id,
           });
 
@@ -141,7 +156,7 @@ const AddSupplierDialog = ({ open, onOpenChange, supplier, onSuccess }: AddSuppl
           company_name: data.company_name,
           email: data.email,
           phone: data.phone,
-          address: data.address || '',
+          address: data.address,
           city: data.city,
           postal_code: data.postal_code,
           created_by: user.id,

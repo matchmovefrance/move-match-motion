@@ -25,6 +25,12 @@ interface CalculatedOffer {
   formula: string;
 }
 
+// Fonction pour calculer la distance approximative à partir du volume estimé
+const calculateDistanceFromVolume = (volume: number): number => {
+  // Estimation basée sur une formule simple: volume plus important = distance potentielle plus grande
+  return Math.max(10, volume * 2); // Minimum 10km, sinon volume * 2
+};
+
 const calculateBestOffers = (opportunity: PricingOpportunity | null, suppliers: Supplier[]): CalculatedOffer[] => {
   if (!opportunity) return [];
   
@@ -39,7 +45,7 @@ const calculateBestOffers = (opportunity: PricingOpportunity | null, suppliers: 
         const basePrice = pricingModel.basePrice || 0;
         const volumeRate = pricingModel.volumeRate || 0;
         const volume = opportunity.estimated_volume || 0;
-        const estimatedDistance = opportunity.estimated_distance || 0;
+        const estimatedDistance = calculateDistanceFromVolume(volume);
         const distanceRate = volume > 20 && pricingModel.distanceRateHighVolume ? 
           pricingModel.distanceRateHighVolume : (pricingModel.distanceRate || 0);
         
@@ -110,7 +116,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
       doc.text(`De: ${opportunity.departure_city}`, 20, 50);
       doc.text(`À: ${opportunity.arrival_city}`, 20, 60);
       doc.text(`Volume estimé: ${opportunity.estimated_volume} m³`, 20, 70);
-      doc.text(`Distance estimée: ${opportunity.estimated_distance} km`, 20, 80);
+      const estimatedDistance = calculateDistanceFromVolume(opportunity.estimated_volume || 0);
+      doc.text(`Distance estimée: ${estimatedDistance} km`, 20, 80);
       
       // Tableau des meilleures offres
       doc.text("Les meilleures offres:", 20, 100);
@@ -155,6 +162,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
   
   if (!opportunity) return null;
   
+  const estimatedDistance = calculateDistanceFromVolume(opportunity.estimated_volume || 0);
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
@@ -174,7 +183,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
             <p className="text-sm text-muted-foreground">Départ: {opportunity.departure_city}</p>
             <p className="text-sm text-muted-foreground">Arrivée: {opportunity.arrival_city}</p>
             <p className="text-sm text-muted-foreground">Volume: {opportunity.estimated_volume} m³</p>
-            <p className="text-sm text-muted-foreground">Distance: {opportunity.estimated_distance} km</p>
+            <p className="text-sm text-muted-foreground">Distance: {estimatedDistance} km</p>
             {opportunity.budget_range_min && opportunity.budget_range_max && (
               <p className="text-sm text-muted-foreground">
                 Budget client: {opportunity.budget_range_min} - {opportunity.budget_range_max}€
