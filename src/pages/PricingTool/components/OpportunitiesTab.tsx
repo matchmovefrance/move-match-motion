@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail, Clock, FileText } from 'lucide-react';
+import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail, Clock, FileText, Calculator } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -78,6 +79,7 @@ const OpportunitiesTab = () => {
   });
 
   const handleFindBestPrices = (opportunity: PricingOpportunity) => {
+    console.log('🔍 Recherche des meilleurs prix pour:', opportunity.title);
     setSelectedOpportunity(opportunity);
     setShowBestPrices(true);
   };
@@ -209,21 +211,19 @@ const OpportunitiesTab = () => {
 
         {/* Opportunities Grid */}
         {opportunities && opportunities.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {opportunities.map((opportunity) => {
               const clientInfo = getClientInfo(opportunity);
               
               return (
-                <Card key={opportunity.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
+                <Card key={opportunity.id} className="hover:shadow-lg transition-all duration-200 border-2 hover:border-blue-200">
+                  <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
-                        <CardTitle className="text-lg">{opportunity.title}</CardTitle>
-                        <CardDescription className="flex items-center gap-4">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {opportunity.departure_city} → {opportunity.arrival_city}
-                          </span>
+                        <CardTitle className="text-lg font-bold text-gray-900">{opportunity.title}</CardTitle>
+                        <CardDescription className="flex items-center gap-2 text-gray-600">
+                          <MapPin className="h-4 w-4" />
+                          <span className="font-medium">{opportunity.departure_city} → {opportunity.arrival_city}</span>
                         </CardDescription>
                       </div>
                       <Badge className={getStatusColor(opportunity.status)}>
@@ -231,26 +231,27 @@ const OpportunitiesTab = () => {
                       </Badge>
                     </div>
                   </CardHeader>
+                  
                   <CardContent className="space-y-4">
                     {/* Informations client */}
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <h4 className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                      <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        Informations client
+                        Client
                       </h4>
                       <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-2 text-blue-800">
+                        <div className="flex items-center gap-2 text-blue-900 font-medium">
                           <User className="h-3 w-3" />
-                          <span className="font-medium">{clientInfo.name}</span>
+                          <span>{clientInfo.name}</span>
                         </div>
                         {clientInfo.email && (
-                          <div className="flex items-center gap-2 text-blue-600">
+                          <div className="flex items-center gap-2 text-blue-700">
                             <Mail className="h-3 w-3" />
                             <span className="truncate">{clientInfo.email}</span>
                           </div>
                         )}
                         {clientInfo.phone && (
-                          <div className="flex items-center gap-2 text-blue-600">
+                          <div className="flex items-center gap-2 text-blue-700">
                             <Phone className="h-3 w-3" />
                             <span>{clientInfo.phone}</span>
                           </div>
@@ -258,25 +259,27 @@ const OpportunitiesTab = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <div className="text-lg font-bold text-blue-600">{opportunity.estimated_volume}</div>
-                        <div className="text-xs text-gray-600">m³ estimés</div>
+                    {/* Métriques */}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="text-center p-3 bg-green-50 rounded-lg border border-green-100">
+                        <div className="text-lg font-bold text-green-700">{opportunity.estimated_volume}</div>
+                        <div className="text-xs text-green-600 font-medium">m³ estimés</div>
                       </div>
-                      <div className="text-center p-3 bg-green-50 rounded-lg">
-                        <div className="text-sm font-bold text-green-600 flex items-center justify-center gap-1">
+                      <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-100">
+                        <div className="text-sm font-bold text-orange-700 flex items-center justify-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
                         </div>
-                        <div className="text-xs text-gray-600">Date souhaitée</div>
+                        <div className="text-xs text-orange-600 font-medium">Date souhaitée</div>
                       </div>
                     </div>
 
+                    {/* Budget */}
                     {opportunity.budget_range_min && opportunity.budget_range_max && (
-                      <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600">Budget client :</span>
-                          <span className="font-medium flex items-center gap-1">
+                          <span className="text-purple-700 font-medium">Budget client :</span>
+                          <span className="font-bold text-purple-900 flex items-center gap-1">
                             <Euro className="h-3 w-3" />
                             {opportunity.budget_range_min.toLocaleString()} - {opportunity.budget_range_max.toLocaleString()}€
                           </span>
@@ -284,47 +287,41 @@ const OpportunitiesTab = () => {
                       </div>
                     )}
 
+                    {/* Exigences spéciales */}
                     {opportunity.special_requirements && (
-                      <div className="bg-yellow-50 rounded-lg p-3">
-                        <h4 className="text-xs font-medium text-yellow-700 uppercase tracking-wide mb-1">
+                      <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                        <h4 className="text-xs font-bold text-yellow-700 uppercase tracking-wide mb-1">
                           Exigences particulières
                         </h4>
                         <p className="text-xs text-yellow-800">{opportunity.special_requirements}</p>
                       </div>
                     )}
 
-                    {/* Boutons d'action */}
-                    <div className="flex flex-wrap gap-2">
-                      {/* Bouton principal - Trouver les prix */}
+                    {/* BOUTON PRINCIPAL - TROUVER LES PRIX */}
+                    <div className="pt-2">
                       <Button 
-                        variant="default" 
-                        size="sm" 
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => handleFindBestPrices(opportunity)}
+                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                        size="lg"
                       >
-                        <TrendingUp className="h-4 w-4 mr-2" />
-                        Trouver les prix
+                        <Calculator className="h-5 w-5 mr-2" />
+                        <span className="text-base">TROUVER LES MEILLEURS PRIX</span>
+                        <TrendingUp className="h-5 w-5 ml-2" />
                       </Button>
-                      
-                      {/* Bouton modifier */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleEditOpportunity(opportunity)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Modifier l'opportunité</p>
-                        </TooltipContent>
-                      </Tooltip>
                     </div>
 
-                    {/* Fonctionnalités à venir */}
-                    <div className="flex gap-2">
+                    {/* Boutons secondaires */}
+                    <div className="flex gap-2 pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleEditOpportunity(opportunity)}
+                        className="flex-1 hover:bg-blue-50"
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Modifier
+                      </Button>
+                      
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button 
@@ -334,14 +331,17 @@ const OpportunitiesTab = () => {
                             disabled
                           >
                             <BarChart3 className="h-4 w-4 mr-1" />
-                            <span className="text-xs">Analytiques</span>
+                            Analyse
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Analytiques avancées (à venir)</p>
+                          <p>Analyse des prix (à venir)</p>
                         </TooltipContent>
                       </Tooltip>
+                    </div>
 
+                    {/* Fonctionnalités à venir - Ligne 2 */}
+                    <div className="flex gap-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button 
@@ -368,11 +368,28 @@ const OpportunitiesTab = () => {
                             disabled
                           >
                             <FileText className="h-4 w-4 mr-1" />
-                            <span className="text-xs">Rapports</span>
+                            <span className="text-xs">Rapport</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Rapports détaillés (à venir)</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            disabled
+                          >
+                            <Mail className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Email</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Envoi automatique (à venir)</p>
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -383,19 +400,23 @@ const OpportunitiesTab = () => {
           </div>
         ) : (
           <Card>
-            <CardContent className="text-center py-8">
+            <CardContent className="text-center py-12">
               <div className="text-gray-500 mb-4">
-                <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-medium mb-2">Aucune opportunité trouvée</h3>
-                <p className="text-sm">
+                <Calculator className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <h3 className="text-xl font-bold mb-2">Aucune opportunité trouvée</h3>
+                <p className="text-sm text-gray-600 mb-6">
                   {searchTerm || statusFilter !== 'all' 
                     ? 'Aucune opportunité ne correspond à vos critères.'
-                    : 'Commencez par créer votre première opportunité.'}
+                    : 'Commencez par créer votre première opportunité pour comparer les prix.'}
                 </p>
               </div>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Créer une opportunité
+              <Button 
+                onClick={() => setShowCreateDialog(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+                size="lg"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Créer votre première opportunité
               </Button>
             </CardContent>
           </Card>
