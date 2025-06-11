@@ -5,14 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Plus, Edit, Link, BarChart3, Phone, Mail, MapPin } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Link, BarChart3, Phone, Mail, MapPin, Users2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 type Supplier = Tables<'suppliers'>;
 
 const SuppliersTab = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_at');
@@ -44,24 +48,42 @@ const SuppliersTab = () => {
   });
 
   const generateSupplierLink = async (supplierId: string) => {
+    const linkToken = crypto.randomUUID();
+    const password = Math.random().toString(36).substring(2, 10);
+
     const { data, error } = await supabase
       .from('supplier_links')
       .insert({
         supplier_id: supplierId,
-        link_token: crypto.randomUUID(),
-        password: Math.random().toString(36).substring(2, 10),
+        link_token: linkToken,
+        password: password,
+        created_by: user?.id || ''
       })
       .select()
       .single();
 
     if (error) {
       console.error('Error generating link:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le lien",
+        variant: "destructive",
+      });
       return;
     }
 
     const link = `${window.location.origin}/supplier-portal/${data.link_token}`;
     navigator.clipboard.writeText(link);
-    // Toast notification would go here
+    toast({
+      title: "Lien copié !",
+      description: `Le lien a été copié dans le presse-papier. Mot de passe: ${password}`,
+    });
+  };
+
+  // Fonction pour configurer le modèle de prix d'un fournisseur
+  const configurePricingModel = (supplier: Supplier) => {
+    // Cette fonction sera implémentée plus tard avec un modal
+    console.log("Configuration du modèle de prix pour:", supplier.company_name);
   };
 
   if (isLoading) {
@@ -175,6 +197,29 @@ const SuppliersTab = () => {
                   </div>
                 </div>
 
+                {/* Pricing Model */}
+                <div className="bg-blue-50 rounded-lg p-3 space-y-1">
+                  <h4 className="text-xs font-medium text-blue-700 uppercase tracking-wide">
+                    Modèle de prix
+                  </h4>
+                  <div className="text-xs text-blue-800">
+                    {supplier.pricing_model && Object.keys(supplier.pricing_model as object).length > 0 ? (
+                      <div>
+                        {(supplier.pricing_model as any).basePrice && (
+                          <div>Prix de base: {(supplier.pricing_model as any).basePrice}€</div>
+                        )}
+                        {(supplier.pricing_model as any).distanceCost && (
+                          <div className="truncate">
+                            Formule distance: {JSON.stringify((supplier.pricing_model as any).distanceCost).substring(0, 30)}...
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="italic">Aucun modèle de prix défini</div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Performance Metrics */}
                 {supplier.performance_metrics && (
                   <div className="bg-gray-50 rounded-lg p-3 space-y-2">
@@ -199,9 +244,14 @@ const SuppliersTab = () => {
                 )}
 
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Edit className="h-3 w-3 mr-1" />
-                    Modifier
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 text-blue-600 hover:text-blue-700"
+                    onClick={() => configurePricingModel(supplier)}
+                  >
+                    <BarChart3 className="h-3 w-3 mr-1" />
+                    Tarifs
                   </Button>
                   <Button 
                     variant="outline" 
@@ -213,7 +263,7 @@ const SuppliersTab = () => {
                     Lien
                   </Button>
                   <Button variant="outline" size="sm">
-                    <BarChart3 className="h-3 w-3" />
+                    <Edit className="h-3 w-3" />
                   </Button>
                 </div>
               </CardContent>
@@ -224,7 +274,7 @@ const SuppliersTab = () => {
         <Card>
           <CardContent className="text-center py-8">
             <div className="text-gray-500 mb-4">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <Users2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2">Aucun fournisseur trouvé</h3>
               <p className="text-sm">
                 {searchTerm || activeFilter !== 'all' 
