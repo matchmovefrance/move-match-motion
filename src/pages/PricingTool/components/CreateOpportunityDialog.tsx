@@ -135,13 +135,18 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
     enabled: open,
   });
 
-  // Récupérer les clients pour la recherche
+  // Récupérer les clients pour la recherche avec tous leurs détails
   const { data: clients } = useQuery({
     queryKey: ['clients-search', clientSearchTerm],
     queryFn: async () => {
       let query = supabase
         .from('clients')
-        .select('*');
+        .select(`
+          *,
+          client_requests (
+            *
+          )
+        `);
       
       if (clientSearchTerm) {
         query = query.or(`name.ilike.%${clientSearchTerm}%,email.ilike.%${clientSearchTerm}%`);
@@ -189,13 +194,41 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
   const handleClientSelect = (clientId: string) => {
     const selected = clients?.find(client => client.id.toString() === clientId);
     if (selected) {
+      // Remplir toutes les informations du client
+      const clientRequests = selected.client_requests as any[];
+      const latestRequest = clientRequests?.length > 0 ? clientRequests[clientRequests.length - 1] : null;
+
       setFormData(prev => ({
         ...prev,
         client_name: selected.name,
         client_email: selected.email,
         client_phone: selected.phone,
+        // Si le client a des demandes précédentes, remplir avec les dernières données
+        title: latestRequest ? `Déménagement ${latestRequest.departure_city} → ${latestRequest.arrival_city}` : `Déménagement pour ${selected.name}`,
+        description: latestRequest?.description || '',
+        estimated_volume: latestRequest?.estimated_volume?.toString() || '',
+        budget_range_min: latestRequest?.budget_min?.toString() || '',
+        budget_range_max: latestRequest?.budget_max?.toString() || '',
+        departure_address: latestRequest?.departure_address || '',
+        departure_city: latestRequest?.departure_city || '',
+        departure_postal_code: latestRequest?.departure_postal_code || '',
+        arrival_address: latestRequest?.arrival_address || '',
+        arrival_city: latestRequest?.arrival_city || '',
+        arrival_postal_code: latestRequest?.arrival_postal_code || '',
+        special_requirements: latestRequest?.special_requirements || '',
       }));
+
+      // Si il y a une date souhaitée dans la dernière demande
+      if (latestRequest?.desired_date) {
+        setSelectedDate(new Date(latestRequest.desired_date));
+      }
+
       setSelectedClient(clientId);
+      
+      toast({
+        title: "Client sélectionné",
+        description: `Informations de ${selected.name} chargées avec succès.`,
+      });
     }
   };
 
@@ -339,7 +372,9 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
                           <SelectItem key={client.id} value={client.id.toString()}>
                             <div className="flex flex-col">
                               <span className="font-medium">{client.name}</span>
-                              <span className="text-sm text-gray-500">{client.email}</span>
+                              <span className="text-sm text-gray-500">
+                                {client.email} • {(client.client_requests as any[])?.length || 0} demande(s)
+                              </span>
                             </div>
                           </SelectItem>
                         ))}
@@ -605,3 +640,5 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
 };
 
 export default CreateOpportunityDialog;
+
+</edits_to_apply>

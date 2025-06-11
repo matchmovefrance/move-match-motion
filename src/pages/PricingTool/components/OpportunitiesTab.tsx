@@ -2,72 +2,51 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail, Clock, FileText, Calculator } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  MoreHorizontal, 
+  Calendar,
+  MapPin,
+  Package,
+  Euro,
+  RefreshCw,
+  TrendingDown,
+  AlertCircle
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Tables } from '@/integrations/supabase/types';
-import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import BestPricesDialog from './BestPricesDialog';
 import CreateOpportunityDialog from './CreateOpportunityDialog';
-import ValidationTestButton from './ValidationTestButton';
-
-type PricingOpportunity = Tables<'pricing_opportunities'>;
-type Supplier = Tables<'suppliers'>;
+import BestPricesDialog from './BestPricesDialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const OpportunitiesTab = () => {
-  const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('created_at');
-  const [selectedOpportunity, setSelectedOpportunity] = useState<PricingOpportunity | null>(null);
-  const [showBestPrices, setShowBestPrices] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showBestPricesDialog, setShowBestPricesDialog] = useState(false);
+  const [selectedOpportunity, setSelectedOpportunity] = useState<any>(null);
+  const [editingOpportunity, setEditingOpportunity] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Sample opportunity for demo when no real data exists
-  const createSampleOpportunity = (): PricingOpportunity => ({
-    id: 'sample-demo-opportunity',
-    title: 'Déménagement Paris → Lyon (DEMO)',
-    description: 'Démonstration du système de pricing',
-    departure_address: '123 Rue de Rivoli',
-    departure_city: 'Paris',
-    departure_postal_code: '75001',
-    departure_country: 'France',
-    arrival_address: '456 Avenue de la République',
-    arrival_city: 'Lyon',
-    arrival_postal_code: '69001',
-    arrival_country: 'France',
-    estimated_volume: 25,
-    desired_date: '2024-02-15',
-    status: 'active',
-    budget_range_min: 1500,
-    budget_range_max: 2500,
-    special_requirements: 'Piano droit à transporter avec précaution',
-    priority: 1,
-    flexible_dates: false,
-    date_range_start: null,
-    date_range_end: null,
-    ai_price_suggestion: null,
-    client_request_id: null,
-    created_by: user?.id || '',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  });
-
-  // Requête corrigée pour les opportunités - pas de rafraîchissement automatique
-  const { data: opportunities, isLoading, refetch } = useQuery({
-    queryKey: ['pricing-opportunities', searchTerm, statusFilter, sortBy],
+  // Charger les opportunités depuis la base de données
+  const { data: opportunities, isLoading, error, refetch } = useQuery({
+    queryKey: ['pricing-opportunities', statusFilter, searchTerm],
     queryFn: async () => {
       console.log('🔍 Chargement des opportunités...');
       
       let query = supabase
         .from('pricing_opportunities')
-        .select('*'); // Suppression de la relation problématique
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
@@ -77,70 +56,79 @@ const OpportunitiesTab = () => {
         query = query.or(`title.ilike.%${searchTerm}%,departure_city.ilike.%${searchTerm}%,arrival_city.ilike.%${searchTerm}%`);
       }
 
-      query = query.order(sortBy, { ascending: false });
-
       const { data, error } = await query;
       
       if (error) {
-        console.error('❌ Erreur lors du chargement des opportunités:', error);
-        return [createSampleOpportunity()];
+        console.error('❌ Erreur chargement opportunités:', error);
+        throw error;
       }
       
       console.log('✅ Opportunités chargées:', data?.length || 0);
-      if (data && data.length > 0) {
-        console.log('📋 Première opportunité:', data[0]);
-        return data;
-      } else {
-        console.log('⚠️ Aucune opportunité en DB, utilisation de données de démonstration');
-        return [createSampleOpportunity()];
-      }
+      return data || [];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes - pas de rafraîchissement automatique
-    refetchOnWindowFocus: false, // Pas de rafraîchissement au focus
-    refetchOnMount: true, // Charger une seule fois au montage
-  });
-
-  // Requête pour les fournisseurs - optimisée
-  const { data: suppliers } = useQuery({
-    queryKey: ['active-suppliers'],
-    queryFn: async () => {
-      console.log('🏢 Chargement des fournisseurs...');
-      
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('is_active', true);
-      
-      if (error) {
-        console.error('❌ Erreur lors du chargement des fournisseurs:', error);
-        return [];
-      }
-      
-      console.log('✅ Fournisseurs actifs chargés:', data?.length || 0);
-      return data as Supplier[];
-    },
-    staleTime: 10 * 60 * 1000, // 10 minutes - les fournisseurs changent rarement
+    staleTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
   });
 
-  const handleFindBestPrices = (opportunity: PricingOpportunity) => {
-    console.log('🔍 BOUTON CLIQUÉ - Recherche des meilleurs prix pour:', opportunity.title);
-    setSelectedOpportunity(opportunity);
-    setShowBestPrices(true);
+  const handleRefresh = async () => {
+    console.log('🔄 Actualisation manuelle des opportunités...');
+    await refetch();
+    toast({
+      title: "Données actualisées",
+      description: "Les opportunités ont été rechargées depuis la base de données",
+    });
   };
 
-  const handleEditOpportunity = (opportunity: PricingOpportunity) => {
-    setSelectedOpportunity(opportunity);
+  const handleCreateOpportunity = () => {
+    setEditingOpportunity(null);
     setShowCreateDialog(true);
+  };
+
+  const handleEditOpportunity = (opportunity: any) => {
+    setEditingOpportunity(opportunity);
+    setShowCreateDialog(true);
+  };
+
+  const handleDeleteOpportunity = async (opportunityId: string) => {
+    try {
+      console.log('🗑️ Suppression opportunité:', opportunityId);
+      
+      const { error } = await supabase
+        .from('pricing_opportunities')
+        .delete()
+        .eq('id', opportunityId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Opportunité supprimée",
+        description: "L'opportunité a été supprimée avec succès",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['pricing-opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
+    } catch (error) {
+      console.error('❌ Erreur suppression:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer l'opportunité",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSearchPrices = (opportunity: any) => {
+    setSelectedOpportunity(opportunity);
+    setShowBestPricesDialog(true);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'closed': return 'bg-red-100 text-red-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'draft': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'closed': return 'bg-red-100 text-red-800 border-red-200';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -154,343 +142,252 @@ const OpportunitiesTab = () => {
     }
   };
 
-  const getClientInfo = (opportunity: any) => {
-    // Données simplifiées puisque nous n'avons plus la relation
-    return {
-      name: 'Client démo',
-      email: 'demo@client.fr',
-      phone: '+33 1 23 45 67 89'
-    };
+  const getPriorityColor = (priority: number) => {
+    switch (priority) {
+      case 3: return 'text-red-600';
+      case 2: return 'text-orange-600';
+      default: return 'text-gray-600';
+    }
   };
 
-  if (isLoading) {
+  const getPriorityLabel = (priority: number) => {
+    switch (priority) {
+      case 3: return 'Urgente';
+      case 2: return 'Élevée';
+      default: return 'Normale';
+    }
+  };
+
+  if (error) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[...Array(6)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardHeader>
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
-                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="text-center py-8">
+        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold mb-2 text-red-700">Erreur de chargement</h3>
+        <p className="text-red-600 mb-4">Impossible de charger les opportunités</p>
+        <Button onClick={handleRefresh} variant="outline">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Réessayer
+        </Button>
       </div>
     );
   }
 
   return (
-    <TooltipProvider>
-      <div className="space-y-6">
-        {/* Validation Component */}
-        <ValidationTestButton />
+    <div className="space-y-6">
+      {/* Header avec actions */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Opportunités de devis</h2>
+          <p className="text-muted-foreground">
+            Gérez vos opportunités commerciales et générez des devis compétitifs
+          </p>
+        </div>
+        
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleRefresh}
+            variant="outline"
+            size="sm"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Actualiser
+          </Button>
+          <Button onClick={handleCreateOpportunity} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Nouvelle opportunité
+          </Button>
+        </div>
+      </div>
 
-        {/* Filters and Actions */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Opportunités de tarification
-              </CardTitle>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline"
-                  onClick={() => refetch()}
-                  className="flex items-center gap-2"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Actualiser
-                </Button>
-                <Button 
-                  className="flex items-center gap-2 bg-primary hover:bg-primary/90"
-                  onClick={() => setShowCreateDialog(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Nouvelle opportunité
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
+      {/* Filtres et recherche */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Rechercher par titre, ville de départ ou d'arrivée..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+        
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-48">
+            <Filter className="h-4 w-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            <SelectItem value="active">Actives</SelectItem>
+            <SelectItem value="draft">Brouillons</SelectItem>
+            <SelectItem value="pending">En attente</SelectItem>
+            <SelectItem value="closed">Fermées</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Liste des opportunités */}
+      {isLoading ? (
+        <div className="grid gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : opportunities?.length === 0 ? (
+        <Card className="text-center py-12">
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher par titre, ville de départ ou d'arrivée..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="active">Actives</SelectItem>
-                  <SelectItem value="draft">Brouillons</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="closed">Fermées</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Trier par" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at">Date de création</SelectItem>
-                  <SelectItem value="desired_date">Date souhaitée</SelectItem>
-                  <SelectItem value="priority">Priorité</SelectItem>
-                  <SelectItem value="estimated_volume">Volume</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Aucune opportunité</h3>
+            <p className="text-muted-foreground mb-4">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'Aucune opportunité ne correspond à vos critères de recherche'
+                : 'Commencez par créer votre première opportunité de devis'
+              }
+            </p>
+            {(!searchTerm && statusFilter === 'all') && (
+              <Button onClick={handleCreateOpportunity}>
+                <Plus className="h-4 w-4 mr-2" />
+                Créer une opportunité
+              </Button>
+            )}
           </CardContent>
         </Card>
-
-        {/* Opportunities Grid */}
-        {opportunities && opportunities.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {opportunities.map((opportunity) => {
-              const clientInfo = getClientInfo(opportunity);
-              
-              return (
-                <Card key={opportunity.id} className="hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
-                  <CardHeader className="pb-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg font-bold">{opportunity.title}</CardTitle>
-                        <CardDescription className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span className="font-medium">{opportunity.departure_city} → {opportunity.arrival_city}</span>
-                        </CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(opportunity.status)}>
+      ) : (
+        <div className="grid gap-4">
+          {opportunities?.map((opportunity) => (
+            <Card key={opportunity.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <CardTitle className="text-lg">{opportunity.title}</CardTitle>
+                      <Badge 
+                        variant="outline" 
+                        className={getStatusColor(opportunity.status)}
+                      >
                         {getStatusLabel(opportunity.status)}
                       </Badge>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent className="space-y-4">
-                    {/* Informations client */}
-                    <div className="bg-muted/50 rounded-lg p-3 border">
-                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        Client
-                      </h4>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-2 font-medium">
-                          <User className="h-3 w-3" />
-                          <span>{clientInfo.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Mail className="h-3 w-3" />
-                          <span className="truncate">{clientInfo.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          <span>{clientInfo.phone}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Métriques */}
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div className="text-lg font-bold text-green-700">{opportunity.estimated_volume}</div>
-                        <div className="text-xs text-green-600 font-medium">m³ estimés</div>
-                      </div>
-                      <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                        <div className="text-sm font-bold text-orange-700 flex items-center justify-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
-                        </div>
-                        <div className="text-xs text-orange-600 font-medium">Date souhaitée</div>
-                      </div>
-                    </div>
-
-                    {/* Budget */}
-                    {opportunity.budget_range_min && opportunity.budget_range_max && (
-                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-purple-700 font-medium">Budget client :</span>
-                          <span className="font-bold text-purple-900 flex items-center gap-1">
-                            <Euro className="h-3 w-3" />
-                            {opportunity.budget_range_min.toLocaleString()} - {opportunity.budget_range_max.toLocaleString()}€
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Exigences spéciales */}
-                    {opportunity.special_requirements && (
-                      <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-                        <h4 className="text-xs font-bold text-yellow-700 uppercase tracking-wide mb-1">
-                          Exigences particulières
-                        </h4>
-                        <p className="text-xs text-yellow-800">{opportunity.special_requirements}</p>
-                      </div>
-                    )}
-
-                    {/* BOUTON PRINCIPAL - TROUVER LES PRIX */}
-                    <div className="pt-3 border-t">
-                      <Button 
-                        id="pricing-submit"
-                        data-testid="find-prices-button"
-                        onClick={() => handleFindBestPrices(opportunity)}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
-                        size="lg"
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${getPriorityColor(opportunity.priority)}`}
                       >
-                        <Calculator className="h-5 w-5 mr-2" />
-                        <span className="text-base font-bold">TROUVER DES PRIX</span>
-                        <TrendingUp className="h-5 w-5 ml-2" />
+                        {getPriorityLabel(opportunity.priority)}
+                      </Badge>
+                    </div>
+                    {opportunity.description && (
+                      <CardDescription className="text-sm">
+                        {opportunity.description}
+                      </CardDescription>
+                    )}
+                  </div>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreHorizontal className="h-4 w-4" />
                       </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditOpportunity(opportunity)}>
+                        Modifier
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleSearchPrices(opportunity)}
+                        className="text-blue-600"
+                      >
+                        <TrendingDown className="h-4 w-4 mr-2" />
+                        Rechercher prix
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleDeleteOpportunity(opportunity.id)}
+                        className="text-red-600"
+                      >
+                        Supprimer
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-blue-500" />
+                    <span className="font-medium">Route:</span>
+                    <span>{opportunity.departure_city} → {opportunity.arrival_city}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-green-500" />
+                    <span className="font-medium">Volume:</span>
+                    <span>{opportunity.estimated_volume}m³</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-orange-500" />
+                    <span className="font-medium">Date:</span>
+                    <span>{format(new Date(opportunity.desired_date), 'dd/MM/yyyy', { locale: fr })}</span>
+                  </div>
+                  
+                  {(opportunity.budget_range_min || opportunity.budget_range_max) && (
+                    <div className="flex items-center gap-2">
+                      <Euro className="h-4 w-4 text-purple-500" />
+                      <span className="font-medium">Budget:</span>
+                      <span>
+                        {opportunity.budget_range_min && opportunity.budget_range_max 
+                          ? `${opportunity.budget_range_min}€ - ${opportunity.budget_range_max}€`
+                          : opportunity.budget_range_min 
+                            ? `À partir de ${opportunity.budget_range_min}€`
+                            : `Jusqu'à ${opportunity.budget_range_max}€`
+                        }
+                      </span>
                     </div>
+                  )}
+                </div>
+                
+                {opportunity.special_requirements && (
+                  <div className="mt-3 p-2 bg-gray-50 rounded-md">
+                    <span className="text-xs font-medium text-gray-600">Exigences spéciales:</span>
+                    <p className="text-sm text-gray-800 mt-1">{opportunity.special_requirements}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-                    {/* Actions secondaires */}
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditOpportunity(opportunity)}
-                          className="flex-1"
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Modifier
-                        </Button>
-                        
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="flex-1"
-                              disabled
-                            >
-                              <BarChart3 className="h-4 w-4 mr-1" />
-                              Analyse
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Analyse des prix comparés (à venir)</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
+      {/* Dialogs */}
+      <CreateOpportunityDialog 
+        open={showCreateDialog} 
+        onOpenChange={setShowCreateDialog}
+        opportunity={editingOpportunity}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['pricing-opportunities'] });
+          queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
+        }}
+      />
 
-                      <div className="flex gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="flex-1"
-                              disabled
-                            >
-                              <Clock className="h-4 w-4 mr-1" />
-                              <span className="text-xs">Planning</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Gestion du planning automatisé (à venir)</p>
-                          </TooltipContent>
-                        </Tooltip>
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="flex-1"
-                              disabled
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              <span className="text-xs">Rapport</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Rapports détaillés PDF/Excel (à venir)</p>
-                          </TooltipContent>
-                        </Tooltip>
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="flex-1"
-                              disabled
-                            >
-                              <Mail className="h-4 w-4 mr-1" />
-                              <span className="text-xs">Email</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Envoi automatique aux clients (à venir)</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="text-center py-12">
-              <div className="text-muted-foreground mb-4">
-                <Calculator className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <h3 className="text-xl font-bold mb-2">Aucune opportunité trouvée</h3>
-                <p className="text-sm mb-6">
-                  {searchTerm || statusFilter !== 'all' 
-                    ? 'Aucune opportunité ne correspond à vos critères.'
-                    : 'Commencez par créer votre première opportunité pour comparer les prix.'}
-                </p>
-              </div>
-              <Button 
-                onClick={() => setShowCreateDialog(true)}
-                className="bg-primary hover:bg-primary/90"
-                size="lg"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Créer votre première opportunité
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Dialogs */}
-        <BestPricesDialog
-          open={showBestPrices}
-          onOpenChange={setShowBestPrices}
-          opportunity={selectedOpportunity}
-        />
-
-        <CreateOpportunityDialog
-          open={showCreateDialog}
-          onOpenChange={(open) => {
-            setShowCreateDialog(open);
-            if (!open) {
-              setSelectedOpportunity(null);
-            }
-          }}
-          opportunity={selectedOpportunity}
-          onSuccess={() => {
-            refetch();
-            setShowCreateDialog(false);
-            setSelectedOpportunity(null);
-          }}
-        />
-      </div>
-    </TooltipProvider>
+      <BestPricesDialog
+        open={showBestPricesDialog}
+        onOpenChange={setShowBestPricesDialog}
+        opportunity={selectedOpportunity}
+      />
+    </div>
   );
 };
 
