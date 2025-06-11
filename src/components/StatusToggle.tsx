@@ -6,10 +6,38 @@ interface StatusToggleProps {
   status: string;
   onStatusChange: (newStatus: 'en_cours' | 'termine') => void;
   disabled?: boolean;
+  variant?: 'button' | 'inline';
 }
 
-const StatusToggle = ({ status, onStatusChange, disabled = false }: StatusToggleProps) => {
+const StatusToggle = ({ status, onStatusChange, disabled = false, variant = 'inline' }: StatusToggleProps) => {
   const isCompleted = status === 'termine';
+
+  if (variant === 'button') {
+    return (
+      <Button
+        variant={isCompleted ? "outline" : "default"}
+        size="sm"
+        onClick={() => onStatusChange(isCompleted ? 'en_cours' : 'termine')}
+        disabled={disabled}
+        className={isCompleted 
+          ? "text-orange-600 hover:text-orange-700 border-orange-200" 
+          : "bg-green-600 hover:bg-green-700 text-white"
+        }
+      >
+        {isCompleted ? (
+          <>
+            <Undo className="h-4 w-4 mr-1" />
+            Remettre en cours
+          </>
+        ) : (
+          <>
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Marquer terminé
+          </>
+        )}
+      </Button>
+    );
+  }
 
   return (
     <div className="flex items-center space-x-2">

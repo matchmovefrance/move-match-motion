@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X, Loader2 } from 'lucide-react';
@@ -75,10 +76,15 @@ interface Match {
   }>;
 }
 
+interface ClientWithMatches {
+  client: ClientRequest;
+  matches: Array<Match & { move: Move }>;
+}
+
 const MatchFinder = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [filteredMatches, setFilteredMatches] = useState<Match[]>([]);
+  const [groupedMatches, setGroupedMatches] = useState<ClientWithMatches[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [currentFilters, setCurrentFilters] = useState<MatchFilterOptions>({
     pending: true,
@@ -186,39 +192,51 @@ const MatchFinder = () => {
   const loading = clientsLoading || movesLoading || matchesLoading;
 
   useEffect(() => {
-    console.log('MatchFinder useEffect - matches:', matches, 'type:', typeof matches);
+    console.log('MatchFinder useEffect - grouping matches by client');
     
-    // Ensure matches is an array before filtering
+    // Ensure matches is an array before processing
     if (!Array.isArray(matches)) {
       console.warn('matches is not an array:', matches);
-      setFilteredMatches([]);
+      setGroupedMatches([]);
       return;
     }
 
-    // Appliquer les filtres
-    let filtered = matches.filter(match => {
-      const { client, move } = getMatchDetails(match);
-      
-      if (!client || !move) return false;
-      if (move.status_custom === 'termine') return false;
-      if (client.status === 'completed') return false;
-      
-      return true;
-    });
+    // Group matches by client
+    const clientMap = new Map<number, ClientWithMatches>();
 
-    if (!currentFilters.showAll) {
-      filtered = filtered.filter(match => {
+    matches.forEach(match => {
+      const client = clientRequests.find(c => c.id === match.client_request_id);
+      const move = moves.find(m => m.id === match.move_id);
+      
+      if (!client || !move) return;
+      if (move.status_custom === 'termine') return;
+      if (client.status === 'completed') return;
+
+      // Apply filters
+      if (!currentFilters.showAll) {
         const status = match.status || 'pending';
         
-        if (currentFilters.pending && status === 'pending') return true;
-        if (currentFilters.accepted && status === 'accepted') return true;
-        if (currentFilters.rejected && status === 'rejected') return true;
-        
-        return false;
-      });
-    }
+        if (!((currentFilters.pending && status === 'pending') ||
+              (currentFilters.accepted && status === 'accepted') ||
+              (currentFilters.rejected && status === 'rejected'))) {
+          return;
+        }
+      }
 
-    setFilteredMatches(filtered);
+      if (!clientMap.has(client.id)) {
+        clientMap.set(client.id, {
+          client,
+          matches: []
+        });
+      }
+
+      clientMap.get(client.id)!.matches.push({
+        ...match,
+        move
+      });
+    });
+
+    setGroupedMatches(Array.from(clientMap.values()));
   }, [matches, currentFilters, clientRequests, moves]);
 
   const handleFiltersChange = useCallback((filters: MatchFilterOptions) => {
@@ -255,176 +273,90 @@ const MatchFinder = () => {
     }
   }, [user?.id, toast, refetchMatches]);
 
-  // Fonction améliorée pour calculer si les dates sont compatibles avec gestion des dates flexibles
+  // Fonction simplifiée pour calculer si les dates sont compatibles
   const areDatesCompatible = (client: ClientRequest, moveDate: string) => {
     const move = new Date(moveDate);
     
     if (client.flexible_dates && client.date_range_start && client.date_range_end) {
-      // Si le client a des dates flexibles, vérifier si la date du trajet est dans la plage
       const rangeStart = new Date(client.date_range_start);
       const rangeEnd = new Date(client.date_range_end);
-      
       return move >= rangeStart && move <= rangeEnd;
     } else {
-      // Si pas de dates flexibles, utiliser la logique standard ±15 jours
       const clientDate = new Date(client.desired_date);
       const timeDiff = Math.abs(clientDate.getTime() - move.getTime());
       const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-      
       return daysDiff <= 15;
     }
   };
 
-  // Fonction pour calculer la différence de jours (améliorée pour dates flexibles)
-  const calculateDateDifference = (client: ClientRequest, moveDate: string) => {
-    const move = new Date(moveDate);
+  // Fonction simplifiée pour calculer la distance (utilise une formule approximative)
+  const calculateApproximateDistance = (client: ClientRequest, move: Move): number => {
+    // Approximation simple basée sur les codes postaux
+    const clientDeptCode = parseInt(client.departure_postal_code.substring(0, 2));
+    const moveDeptCode = parseInt(move.departure_postal_code.substring(0, 2));
+    const clientArrCode = parseInt(client.arrival_postal_code.substring(0, 2));
+    const moveArrCode = parseInt(move.arrival_postal_code.substring(0, 2));
     
-    if (client.flexible_dates && client.date_range_start && client.date_range_end) {
-      // Pour les dates flexibles, calculer la différence la plus petite possible
-      const rangeStart = new Date(client.date_range_start);
-      const rangeEnd = new Date(client.date_range_end);
-      
-      if (move >= rangeStart && move <= rangeEnd) {
-        return 0; // Parfaitement dans la plage
-      } else if (move < rangeStart) {
-        return Math.ceil((rangeStart.getTime() - move.getTime()) / (1000 * 60 * 60 * 24));
-      } else {
-        return Math.ceil((move.getTime() - rangeEnd.getTime()) / (1000 * 60 * 60 * 24));
-      }
-    } else {
-      // Logique standard
-      const clientDate = new Date(client.desired_date);
-      return Math.abs((clientDate.getTime() - move.getTime()) / (1000 * 60 * 60 * 24));
-    }
-  };
-
-  // Fonction corrigée pour calculer la VRAIE distance Google Maps Directions API
-  const calculateRealDistance = async (client: ClientRequest, move: Move): Promise<number> => {
-    return new Promise((resolve) => {
-      if (!window.google?.maps) {
-        console.warn('Google Maps API not loaded');
-        resolve(500);
-        return;
-      }
-
-      const directionsService = new google.maps.DirectionsService();
-      const clientDepartureAddress = `${client.departure_postal_code} ${client.departure_city}, France`;
-      const clientArrivalAddress = `${client.arrival_postal_code} ${client.arrival_city}, France`;
-      const moveDepartureAddress = `${move.departure_postal_code} ${move.departure_city}, France`;
-      const moveArrivalAddress = `${move.arrival_postal_code} ${move.arrival_city}, France`;
-
-      directionsService.route({
-        origin: clientDepartureAddress,
-        destination: clientArrivalAddress,
-        travelMode: google.maps.TravelMode.DRIVING,
-        region: 'FR',
-        language: 'fr'
-      }, (clientResult, clientStatus) => {
-        if (clientStatus === 'OK' && clientResult?.routes[0]) {
-          const clientDistanceKm = Math.round(clientResult.routes[0].legs[0].distance!.value / 1000);
-          
-          directionsService.route({
-            origin: moveDepartureAddress,
-            destination: moveArrivalAddress,
-            travelMode: google.maps.TravelMode.DRIVING,
-            region: 'FR',
-            language: 'fr'
-          }, (moveResult, moveStatus) => {
-            if (moveStatus === 'OK' && moveResult?.routes[0]) {
-              const moveDistanceKm = Math.round(moveResult.routes[0].legs[0].distance!.value / 1000);
-              
-              directionsService.route({
-                origin: clientDepartureAddress,
-                destination: moveDepartureAddress,
-                travelMode: google.maps.TravelMode.DRIVING,
-                region: 'FR',
-                language: 'fr'
-              }, (deptResult, deptStatus) => {
-                if (deptStatus === 'OK' && deptResult?.routes[0]) {
-                  const deptDistanceKm = Math.round(deptResult.routes[0].legs[0].distance!.value / 1000);
-                  
-                  directionsService.route({
-                    origin: clientArrivalAddress,
-                    destination: moveArrivalAddress,
-                    travelMode: google.maps.TravelMode.DRIVING,
-                    region: 'FR',
-                    language: 'fr'
-                  }, (arrResult, arrStatus) => {
-                    if (arrStatus === 'OK' && arrResult?.routes[0]) {
-                      const arrDistanceKm = Math.round(arrResult.routes[0].legs[0].distance!.value / 1000);
-                      const finalDistance = Math.round((deptDistanceKm + arrDistanceKm) / 2);
-                      resolve(finalDistance);
-                    } else {
-                      resolve(deptDistanceKm);
-                    }
-                  });
-                } else {
-                  resolve(500);
-                }
-              });
-            } else {
-              resolve(clientDistanceKm > 400 ? clientDistanceKm : 500);
-            }
-          });
-        } else {
-          resolve(500);
-        }
-      });
-    });
+    const deptDistance = Math.abs(clientDeptCode - moveDeptCode) * 50; // 50km par département
+    const arrDistance = Math.abs(clientArrCode - moveArrCode) * 50;
+    
+    return Math.round((deptDistance + arrDistance) / 2);
   };
 
   const findMatches = useCallback(async () => {
     try {
       setIsSearching(true);
+      console.log('🔍 Début de la recherche de matchs...');
       
-      // Clear old matches without actions
-      await supabase
+      // Clear old matches without actions first
+      const { error: deleteError } = await supabase
         .from('move_matches')
         .delete()
-        .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
+        .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions WHERE match_id IS NOT NULL)`);
 
-      // Process new matches
+      if (deleteError) {
+        console.warn('Erreur lors de la suppression des anciens matchs:', deleteError);
+      }
+
+      let newMatchesCount = 0;
+
+      // Process new matches with simplified logic
       for (const client of clientRequests) {
         for (const move of moves) {
-          const distanceKm = await calculateRealDistance(client, move);
           const datesCompatible = areDatesCompatible(client, move.departure_date);
           
           if (!datesCompatible) continue;
           
-          const dateDiffDays = calculateDateDifference(client, move.departure_date);
+          const distanceKm = calculateApproximateDistance(client, move);
           const clientVolume = client.estimated_volume || 0;
           const availableVolume = move.available_volume || 0;
           const volumeOk = clientVolume <= availableVolume;
           const combinedVolume = (move.used_volume || 0) + clientVolume;
           
-          const maxAllowedDays = client.flexible_dates ? 
-            (dateDiffDays === 0 ? 0 : 15) : 15;
+          const clientDate = new Date(client.desired_date);
+          const moveDate = new Date(move.departure_date);
+          const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
           
-          const isValid = distanceKm <= 100 && dateDiffDays <= maxAllowedDays && volumeOk;
+          const isValid = distanceKm <= 200 && dateDiffDays <= 15 && volumeOk;
           
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
               client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
-            if (client.flexible_dates && dateDiffDays === 0) {
-              matchType = 'perfect';
-            } else if (!client.flexible_dates && dateDiffDays <= 3) {
+            if (dateDiffDays <= 3) {
               matchType = 'perfect';
             } else {
               matchType = 'good';
             }
-          } else if (distanceKm <= 50) {
-            if (client.flexible_dates && dateDiffDays === 0) {
-              matchType = 'good';
-            } else if (dateDiffDays <= 7) {
-              matchType = 'good';
-            }
+          } else if (distanceKm <= 100) {
+            matchType = 'good';
           }
 
+          // Check if match already exists
           const existingMatch = matches.find(m => 
             m.client_request_id === client.id && m.move_id === move.id
           );
 
-          if (!existingMatch) {
+          if (!existingMatch && isValid) {
             const { error } = await supabase
               .from('move_matches')
               .insert({
@@ -440,14 +372,18 @@ const MatchFinder = () => {
 
             if (error) {
               console.error('Error inserting match:', error);
+            } else {
+              newMatchesCount++;
             }
           }
         }
       }
 
+      console.log('✅ Recherche terminée,', newMatchesCount, 'nouveaux matchs créés');
+      
       toast({
-        title: "Succès",
-        description: "Recherche terminée avec distances Google Maps réelles",
+        title: "Recherche terminée",
+        description: `${newMatchesCount} nouveaux matchs trouvés`,
       });
 
       // Refresh data
@@ -464,12 +400,6 @@ const MatchFinder = () => {
     }
   }, [clientRequests, moves, matches, toast, refetchClients, refetchMoves, refetchMatches]);
 
-  const getMatchDetails = (match: Match) => {
-    const client = clientRequests.find(c => c.id === match.client_request_id);
-    const move = moves.find(m => m.id === match.move_id);
-    return { client, move };
-  };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'accepted':
@@ -480,6 +410,8 @@ const MatchFinder = () => {
         return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">⏳ En attente</Badge>;
     }
   };
+
+  const totalMatches = groupedMatches.reduce((total, group) => total + group.matches.length, 0);
 
   if (loading) {
     return (
@@ -521,7 +453,7 @@ const MatchFinder = () => {
             ) : (
               <>
                 <Search className="h-4 w-4 mr-2" />
-                Trouver un match
+                Trouver des matchs
               </>
             )}
           </Button>
@@ -560,7 +492,7 @@ const MatchFinder = () => {
               <Search className="h-5 w-5 text-purple-600" />
               <div>
                 <p className="text-sm text-gray-600">Correspondances totales</p>
-                <p className="text-2xl font-bold">{matches.length}</p>
+                <p className="text-2xl font-bold">{totalMatches}</p>
               </div>
             </div>
           </CardContent>
@@ -571,8 +503,8 @@ const MatchFinder = () => {
             <div className="flex items-center space-x-2">
               <Check className="h-5 w-5 text-orange-600" />
               <div>
-                <p className="text-sm text-gray-600">Filtrées</p>
-                <p className="text-2xl font-bold">{filteredMatches.length}</p>
+                <p className="text-sm text-gray-600">Clients avec matchs</p>
+                <p className="text-2xl font-bold">{groupedMatches.length}</p>
               </div>
             </div>
           </CardContent>
@@ -582,179 +514,158 @@ const MatchFinder = () => {
       {/* Filtres */}
       <MatchFilters onFiltersChange={handleFiltersChange} />
 
-      {/* Liste des correspondances */}
+      {/* Liste des correspondances groupées par client */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">
-          Correspondances ({filteredMatches.length})
+          Correspondances par client ({groupedMatches.length})
         </h3>
         
-        {filteredMatches.length === 0 ? (
+        {groupedMatches.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">Aucune correspondance trouvée</p>
               <p className="text-sm text-gray-500 mt-2">
-                {matches.length === 0 ? 
-                  'Cliquez sur "Trouver un match" pour commencer' :
+                {totalMatches === 0 ? 
+                  'Cliquez sur "Trouver des matchs" pour commencer' :
                   'Ajustez les filtres pour voir plus de résultats'
                 }
               </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {filteredMatches.map((match) => {
-              const { client, move } = getMatchDetails(match);
-              
-              if (!client || !move) return null;
-
-              const isDistanceOk = match.distance_km <= 100;
-              const isVolumeOk = match.volume_ok;
-              const isDateOk = client.flexible_dates ? 
-                (match.date_diff_days === 0 || match.date_diff_days <= 15) : 
-                match.date_diff_days <= 15;
-              
-              const isCompatible = isDistanceOk && isVolumeOk && isDateOk;
-
-              return (
-                <motion.div
-                  key={match.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`bg-white rounded-xl p-6 shadow-lg border ${
-                    isCompatible ? 'border-green-200 bg-green-50' : 'border-gray-200'
-                  } ${match.status === 'rejected' ? 'opacity-60' : ''}`}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Client */}
-                      <div>
-                        <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
-                          <Users className="h-4 w-4 mr-2 text-blue-600" />
-                          Client: {client.name || 'Non renseigné'}
-                        </h4>
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-3 w-3" />
-                            <span>{client.departure_city} → {client.arrival_city}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="h-3 w-3" />
-                            <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
-                            {client.flexible_dates && (
-                              <Badge variant="outline" className="text-xs">
-                                Flexible
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Volume2 className="h-3 w-3" />
-                            <span>{client.estimated_volume || 0}m³</span>
-                          </div>
-                          {client.email && (
-                            <div className="text-blue-600">{client.email}</div>
+          <div className="space-y-6">
+            {groupedMatches.map((group) => (
+              <motion.div
+                key={group.client.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-xl p-6 shadow-lg border border-gray-200"
+              >
+                {/* En-tête client */}
+                <div className="mb-6 border-b pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
+                        <Users className="h-5 w-5 mr-2 text-blue-600" />
+                        {group.client.name || 'Client non renseigné'}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                        <div className="flex items-center space-x-2">
+                          <MapPin className="h-4 w-4" />
+                          <span>{group.client.departure_city} → {group.client.arrival_city}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>{new Date(group.client.desired_date).toLocaleDateString('fr-FR')}</span>
+                          {group.client.flexible_dates && (
+                            <Badge variant="outline" className="text-xs">Flexible</Badge>
                           )}
                         </div>
-                      </div>
-
-                      {/* Déménageur */}
-                      <div>
-                        <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
-                          <Truck className="h-4 w-4 mr-2 text-green-600" />
-                          Déménageur: {move.company_name || 'Non renseigné'}
-                        </h4>
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-3 w-3" />
-                            <span>{move.departure_city} → {move.arrival_city}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="h-3 w-3" />
-                            <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Volume2 className="h-3 w-3" />
-                            <span>Disponible: {move.available_volume}m³</span>
-                          </div>
-                          {move.price_per_m3 && (
-                            <div className="text-green-600">{move.price_per_m3}€/m³</div>
-                          )}
+                        <div className="flex items-center space-x-2">
+                          <Volume2 className="h-4 w-4" />
+                          <span>{group.client.estimated_volume || 0}m³</span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="flex flex-col items-end space-y-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        match.match_type === 'perfect' ? 'bg-green-100 text-green-800' :
-                        match.match_type === 'good' ? 'bg-blue-100 text-blue-800' :
-                        'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {match.match_type === 'perfect' ? '🎯 Parfait' :
-                         match.match_type === 'good' ? '👍 Bon' : '⚡ Partiel'}
-                      </span>
-                      
-                      {getStatusBadge(match.status || 'pending')}
-                      
-                      {match.status === 'pending' && (
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleMatchAction(match.id, 'accepted')}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <Check className="h-3 w-3 mr-1" />
-                            Accepter
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleMatchAction(match.id, 'rejected')}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <X className="h-3 w-3 mr-1" />
-                            Rejeter
-                          </Button>
-                        </div>
+                      {group.client.email && (
+                        <div className="text-blue-600 text-sm mt-2">{group.client.email}</div>
                       )}
                     </div>
+                    <Badge className="bg-blue-100 text-blue-800">
+                      {group.matches.length} match{group.matches.length > 1 ? 's' : ''}
+                    </Badge>
                   </div>
+                </div>
 
-                  {/* Détails du match */}
-                  <div className="border-t pt-3 mt-3">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-500">Distance:</span>
-                        <span className={`ml-2 font-medium ${
-                          isDistanceOk ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {match.distance_km}km
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Diff. dates:</span>
-                        <span className={`ml-2 font-medium ${
-                          isDateOk ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {match.date_diff_days} jours
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Volume:</span>
-                        <span className="ml-2 font-medium">{match.combined_volume}m³</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Compatible:</span>
-                        <span className={`ml-2 font-medium ${
-                          isCompatible ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {isCompatible ? '✅ Oui' : '❌ Non'}
-                        </span>
-                      </div>
-                    </div>
+                {/* Liste des déménageurs correspondants */}
+                <div className="space-y-4">
+                  <h5 className="font-semibold text-gray-700">Déménageurs disponibles :</h5>
+                  <div className="grid gap-4">
+                    {group.matches.map((match) => {
+                      const isDistanceOk = match.distance_km <= 200;
+                      const isVolumeOk = match.volume_ok;
+                      const isDateOk = match.date_diff_days <= 15;
+                      const isCompatible = isDistanceOk && isVolumeOk && isDateOk;
+
+                      return (
+                        <div
+                          key={match.id}
+                          className={`p-4 rounded-lg border ${
+                            isCompatible ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
+                          } ${match.status === 'rejected' ? 'opacity-60' : ''}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h6 className="font-semibold text-gray-800 flex items-center">
+                                  <Truck className="h-4 w-4 mr-2 text-green-600" />
+                                  {match.move.company_name || 'Déménageur non renseigné'}
+                                </h6>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  match.match_type === 'perfect' ? 'bg-green-100 text-green-800' :
+                                  match.match_type === 'good' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {match.match_type === 'perfect' ? '🎯 Parfait' :
+                                   match.match_type === 'good' ? '👍 Bon' : '⚡ Partiel'}
+                                </span>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <span className="text-gray-500">Route:</span>
+                                  <div className="font-medium">{match.move.departure_city} → {match.move.arrival_city}</div>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Date:</span>
+                                  <div className="font-medium">{new Date(match.move.departure_date).toLocaleDateString('fr-FR')}</div>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Distance:</span>
+                                  <span className={`font-medium ${isDistanceOk ? 'text-green-600' : 'text-red-600'}`}>
+                                    {match.distance_km}km
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Volume dispo:</span>
+                                  <span className="font-medium">{match.move.available_volume}m³</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end space-y-2">
+                              {getStatusBadge(match.status || 'pending')}
+                              
+                              {match.status === 'pending' && (
+                                <div className="flex space-x-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleMatchAction(match.id, 'accepted')}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <Check className="h-3 w-3 mr-1" />
+                                    Accepter
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleMatchAction(match.id, 'rejected')}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <X className="h-3 w-3 mr-1" />
+                                    Rejeter
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </motion.div>
-              );
-            })}
+                </div>
+              </motion.div>
+            ))}
           </div>
         )}
       </div>
