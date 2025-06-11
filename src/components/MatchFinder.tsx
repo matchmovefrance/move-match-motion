@@ -337,7 +337,7 @@ const MatchFinder = () => {
                     language: 'fr'
                   }, (arrResult, arrStatus) => {
                     if (arrStatus === 'OK' && arrResult?.routes[0]) {
-                      const arrDistanceKm = Math.round(arrResult.routes[0].legs[0].distance!.value / 1000);
+                      const arrDistanceKm = Math.round(arrResult.routes[0].legs[0].distance!.value / 1000);\
                       const finalDistance = Math.round((deptDistanceKm + arrDistanceKm) / 2);
                       resolve(finalDistance);
                     } else {
@@ -749,5 +749,3 @@ const MatchFinder = () => {
 };
 
 export default MatchFinder;
-
-}
