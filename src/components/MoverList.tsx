@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, Mail, Phone, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useCache } from '@/hooks/useCache';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import SyncStatusDialog from './SyncStatusDialog';
 
 interface Mover {
@@ -34,8 +36,6 @@ interface Mover {
 
 const MoverList = () => {
   const { user, profile } = useAuth();
-  const [movers, setMovers] = useState<Mover[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingMover, setEditingMover] = useState<Mover | null>(null);
   const [showSyncDialog, setShowSyncDialog] = useState(false);
@@ -47,48 +47,45 @@ const MoverList = () => {
   });
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchMovers();
-  }, [user, profile]);
+  // Optimized fetcher with targeted query
+  const fetchMovers = useCallback(async () => {
+    console.log('🔄 Fetching movers - User:', user?.email, 'Role:', profile?.role);
+    
+    const isAdminOrAgent = profile?.role === 'admin' || 
+                          user?.email === 'contact@matchmove.fr' || 
+                          user?.email === 'pierre@matchmove.fr' ||
+                          profile?.role === 'agent';
 
-  const fetchMovers = async () => {
-    try {
-      setLoading(true);
-      console.log('🔄 Fetching movers - User:', user?.email, 'Role:', profile?.role);
-      
-      // Admin et agents peuvent voir tous les déménageurs
-      const isAdminOrAgent = profile?.role === 'admin' || 
-                            user?.email === 'contact@matchmove.fr' || 
-                            user?.email === 'pierre@matchmove.fr' ||
-                            profile?.role === 'agent';
-
-      let query = supabase.from('movers').select('*');
-      
-      if (!isAdminOrAgent) {
-        // Les autres utilisateurs ne voient que leurs propres déménageurs
-        query = query.eq('created_by', user?.id);
-      }
-      
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('❌ Error fetching movers:', error);
-        throw error;
-      }
-      
-      console.log('✅ Movers fetched:', data?.length || 0, 'movers');
-      setMovers(data || []);
-    } catch (error) {
-      console.error('Error fetching movers:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les déménageurs",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+    // Optimized query - only select needed fields
+    let query = supabase
+      .from('movers')
+      .select('id, name, company_name, email, phone, created_at, created_by');
+    
+    if (!isAdminOrAgent) {
+      query = query.eq('created_by', user?.id);
     }
-  };
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error fetching movers:', error);
+      throw error;
+    }
+    
+    console.log('✅ Movers fetched:', data?.length || 0, 'movers');
+    return data || [];
+  }, [user?.id, user?.email, profile?.role]);
+
+  // Use cache for movers data
+  const { 
+    data: movers = [], 
+    loading, 
+    error, 
+    refetch 
+  } = useCache(fetchMovers, {
+    key: `movers-${user?.id}-${profile?.role}`,
+    ttl: 2 * 60 * 1000 // 2 minutes cache
+  });
 
   const resetForm = () => {
     setNewMover({ name: '', company_name: '', email: '', phone: '' });
@@ -149,19 +146,9 @@ const MoverList = () => {
   };
 
   const addMover = async () => {
-    if (!user) {
-      toast({
-        title: "Erreur",
-        description: "Vous devez être connecté pour ajouter un déménageur",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!validateForm()) return;
+    if (!user || !validateForm()) return;
 
     try {
-      setLoading(true);
       console.log('📝 Adding mover:', newMover);
       
       const isDuplicate = await checkForDuplicateMover(newMover.email);
@@ -175,7 +162,7 @@ const MoverList = () => {
         return;
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('movers')
         .insert({
           name: newMover.name.trim(),
@@ -183,16 +170,9 @@ const MoverList = () => {
           email: newMover.email.trim().toLowerCase(),
           phone: newMover.phone.trim(),
           created_by: user.id
-        })
-        .select()
-        .single();
+        });
 
-      if (error) {
-        console.error('❌ Mover creation error:', error);
-        throw error;
-      }
-
-      console.log('✅ Mover created successfully:', data);
+      if (error) throw error;
 
       toast({
         title: "Succès",
@@ -201,37 +181,23 @@ const MoverList = () => {
 
       resetForm();
       setShowAddForm(false);
-      await fetchMovers();
+      await refetch(); // Refresh cache
     } catch (error: any) {
       console.error('❌ Error adding mover:', error);
-      
-      let errorMessage = "Impossible d'ajouter le déménageur";
-      if (error.code === '23505') {
-        errorMessage = "Un déménageur avec cette adresse email existe déjà";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Erreur",
-        description: errorMessage,
+        description: error.code === '23505' ? "Un déménageur avec cette adresse email existe déjà" : "Impossible d'ajouter le déménageur",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const updateMover = async () => {
-    if (!editingMover || !user) return;
-
-    if (!validateForm()) return;
+    if (!editingMover || !user || !validateForm()) return;
 
     try {
-      setLoading(true);
       console.log('✏️ Updating mover:', editingMover.id);
       
-      // Vérifier les doublons
       const isDuplicate = await checkForDuplicateMover(newMover.email, editingMover.id);
       
       if (isDuplicate) {
@@ -254,12 +220,7 @@ const MoverList = () => {
         .eq('id', editingMover.id)
         .eq('created_by', user.id);
 
-      if (error) {
-        console.error('❌ Mover update error:', error);
-        throw error;
-      }
-
-      console.log('✅ Mover updated successfully');
+      if (error) throw error;
 
       toast({
         title: "Succès",
@@ -268,24 +229,14 @@ const MoverList = () => {
 
       setEditingMover(null);
       resetForm();
-      await fetchMovers();
+      await refetch(); // Refresh cache
     } catch (error: any) {
       console.error('❌ Error updating mover:', error);
-      
-      let errorMessage = "Impossible de mettre à jour le déménageur";
-      if (error.code === '23505') {
-        errorMessage = "Un déménageur avec cette adresse email existe déjà";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Erreur",
-        description: errorMessage,
+        description: error.code === '23505' ? "Un déménageur avec cette adresse email existe déjà" : "Impossible de mettre à jour le déménageur",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -293,7 +244,6 @@ const MoverList = () => {
     if (!user) return;
     
     try {
-      setLoading(true);
       console.log('🗑️ Deleting mover:', id);
       
       const { error } = await supabase
@@ -302,20 +252,14 @@ const MoverList = () => {
         .eq('id', id)
         .eq('created_by', user.id);
 
-      if (error) {
-        console.error('❌ Error deleting mover:', error);
-        throw error;
-      }
-
-      console.log('✅ Mover deleted successfully');
-      
-      // Mettre à jour l'état local immédiatement
-      setMovers(prevMovers => prevMovers.filter(m => m.id !== id));
+      if (error) throw error;
 
       toast({
         title: "Succès",
         description: "Déménageur supprimé avec succès",
       });
+
+      await refetch(); // Refresh cache
     } catch (error: any) {
       console.error('❌ Error deleting mover:', error);
       toast({
@@ -323,24 +267,39 @@ const MoverList = () => {
         description: `Impossible de supprimer le déménageur: ${error.message}`,
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleSyncComplete = () => {
     setShowSyncDialog(false);
-    fetchMovers();
+    refetch();
     toast({
       title: "Succès",
       description: "Synchronisation terminée avec succès",
     });
   };
 
+  // Show loading skeleton during data fetch
   if (loading && !showAddForm && !editingMover) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <Truck className="h-6 w-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-gray-800">Déménageurs</h2>
+          </div>
+          <div className="flex space-x-2">
+            <Button variant="outline" disabled>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Sync
+            </Button>
+            <Button disabled>
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter un déménageur
+            </Button>
+          </div>
+        </div>
+        <LoadingSkeleton type="card" count={3} />
       </div>
     );
   }
@@ -398,9 +357,8 @@ const MoverList = () => {
             <div className="flex space-x-2 mt-4">
               <Button 
                 onClick={editingMover ? updateMover : addMover}
-                disabled={loading}
               >
-                {loading ? 'Enregistrement...' : (editingMover ? 'Mettre à jour' : 'Ajouter')}
+                {editingMover ? 'Mettre à jour' : 'Ajouter'}
               </Button>
               <Button 
                 variant="outline" 
@@ -490,7 +448,15 @@ const MoverList = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setEditingMover(mover)}
+                    onClick={() => {
+                      setEditingMover(mover);
+                      setNewMover({
+                        name: mover.name,
+                        company_name: mover.company_name,
+                        email: mover.email,
+                        phone: mover.phone
+                      });
+                    }}
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -547,7 +513,15 @@ const MoverList = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setEditingMover(mover)}
+                  onClick={() => {
+                    setEditingMover(mover);
+                    setNewMover({
+                      name: mover.name,
+                      company_name: mover.company_name,
+                      email: mover.email,
+                      phone: mover.phone
+                    });
+                  }}
                 >
                   <Edit className="h-3 w-3" />
                 </Button>

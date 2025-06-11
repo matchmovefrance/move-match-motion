@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X } from 'lucide-react';
+import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCache } from '@/hooks/useCache';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import MatchFilters, { MatchFilterOptions } from './MatchFilters';
 
 interface ClientRequest {
@@ -76,11 +78,7 @@ interface Match {
 const MatchFinder = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [clientRequests, setClientRequests] = useState<ClientRequest[]>([]);
-  const [moves, setMoves] = useState<Move[]>([]);
-  const [matches, setMatches] = useState<Match[]>([]);
   const [filteredMatches, setFilteredMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [currentFilters, setCurrentFilters] = useState<MatchFilterOptions>({
     pending: true,
@@ -89,84 +87,98 @@ const MatchFinder = () => {
     showAll: false
   });
 
-  // Mémoriser la fonction fetchData pour éviter les re-rendus inutiles
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
+  // Optimized data fetchers with targeted queries
+  const fetchClientRequests = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('client_requests')
+      .select('id, name, email, phone, departure_city, departure_postal_code, arrival_city, arrival_postal_code, desired_date, estimated_volume, budget_min, budget_max, status, is_matched, match_status, flexible_dates, date_range_start, date_range_end, departure_address, departure_country, arrival_address, arrival_country')
+      .in('status', ['pending', 'confirmed'])
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }, []);
+
+  const fetchMoves = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('confirmed_moves')
+      .select('id, mover_name, company_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume, price_per_m3, total_price, status, status_custom, route_type')
+      .eq('status', 'confirmed')
+      .neq('status_custom', 'termine')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }, []);
+
+  const fetchMatchesWithActions = useCallback(async () => {
+    // Fetch matches
+    const { data: matchData, error: matchError } = await supabase
+      .from('move_matches')
+      .select('id, move_id, client_request_id, match_type, distance_km, date_diff_days, combined_volume, volume_ok, is_valid, created_at')
+      .order('created_at', { ascending: false });
+
+    if (matchError) throw matchError;
+
+    // Fetch actions
+    const { data: actionsData, error: actionsError } = await supabase
+      .from('match_actions')
+      .select('match_id, action_type, action_date, notes, user_id')
+      .order('action_date', { ascending: false });
+
+    if (actionsError) {
+      console.error('Erreur lors de la récupération des actions:', actionsError);
+    }
+
+    // Enrichir les matches avec leurs actions et statuts
+    const enrichedMatches = (matchData || []).map(match => {
+      const matchActions = actionsData?.filter(action => action.match_id === match.id) || [];
       
-      // Récupérer les demandes clients (seulement celles en attente et non terminées)
-      const { data: clientData, error: clientError } = await supabase
-        .from('client_requests')
-        .select('*')
-        .in('status', ['pending', 'confirmed'])
-        .order('created_at', { ascending: false });
-
-      if (clientError) throw clientError;
-
-      // Récupérer les déménagements confirmés (seulement ceux en cours)
-      const { data: moveData, error: moveError } = await supabase
-        .from('confirmed_moves')
-        .select('*')
-        .eq('status', 'confirmed')
-        .neq('status_custom', 'termine')
-        .order('created_at', { ascending: false });
-
-      if (moveError) throw moveError;
-
-      // Récupérer TOUS les matches existants (même ceux terminés)
-      const { data: matchData, error: matchError } = await supabase
-        .from('move_matches')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (matchError) throw matchError;
-
-      // Récupérer les actions pour chaque match
-      const { data: actionsData, error: actionsError } = await supabase
-        .from('match_actions')
-        .select('*')
-        .order('action_date', { ascending: false });
-
-      if (actionsError) {
-        console.error('Erreur lors de la récupération des actions:', actionsError);
+      let status = 'pending';
+      const latestAction = matchActions[0];
+      if (latestAction) {
+        status = latestAction.action_type;
       }
 
-      // Enrichir les matches avec leurs actions et statuts
-      const enrichedMatches = (matchData || []).map(match => {
-        const matchActions = actionsData?.filter(action => action.match_id === match.id) || [];
-        
-        // Déterminer le statut basé sur les actions
-        let status = 'pending';
-        const latestAction = matchActions[0];
-        if (latestAction) {
-          status = latestAction.action_type;
-        }
+      return {
+        ...match,
+        actions: matchActions,
+        status
+      };
+    });
 
-        return {
-          ...match,
-          actions: matchActions,
-          status
-        };
-      });
+    return enrichedMatches;
+  }, []);
 
-      setClientRequests(clientData || []);
-      setMoves(moveData || []);
-      setMatches(enrichedMatches);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les données",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
+  // Use cache for all data
+  const { 
+    data: clientRequests = [], 
+    loading: clientsLoading,
+    refetch: refetchClients
+  } = useCache(fetchClientRequests, {
+    key: 'client-requests',
+    ttl: 2 * 60 * 1000 // 2 minutes
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { 
+    data: moves = [], 
+    loading: movesLoading,
+    refetch: refetchMoves
+  } = useCache(fetchMoves, {
+    key: 'moves',
+    ttl: 2 * 60 * 1000 // 2 minutes
+  });
+
+  const { 
+    data: matches = [], 
+    loading: matchesLoading,
+    refetch: refetchMatches
+  } = useCache(fetchMatchesWithActions, {
+    key: 'matches-with-actions',
+    ttl: 1 * 60 * 1000 // 1 minute
+  });
+
+  const loading = clientsLoading || movesLoading || matchesLoading;
 
   useEffect(() => {
     // Appliquer les filtres
@@ -218,7 +230,7 @@ const MatchFinder = () => {
         description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
       });
 
-      fetchData();
+      refetchMatches();
     } catch (error: any) {
       console.error('Error processing match action:', error);
       toast({
@@ -227,7 +239,7 @@ const MatchFinder = () => {
         variant: "destructive",
       });
     }
-  }, [user?.id, toast, fetchData]);
+  }, [user?.id, toast, refetchMatches]);
 
   // Fonction améliorée pour calculer si les dates sont compatibles avec gestion des dates flexibles
   const areDatesCompatible = (client: ClientRequest, moveDate: string) => {
@@ -282,18 +294,11 @@ const MatchFinder = () => {
       }
 
       const directionsService = new google.maps.DirectionsService();
-
-      // Construire les adresses complètes avec pays pour plus de précision
       const clientDepartureAddress = `${client.departure_postal_code} ${client.departure_city}, France`;
       const clientArrivalAddress = `${client.arrival_postal_code} ${client.arrival_city}, France`;
       const moveDepartureAddress = `${move.departure_postal_code} ${move.departure_city}, France`;
       const moveArrivalAddress = `${move.arrival_postal_code} ${move.arrival_city}, France`;
 
-      console.log(`=== NOUVEAU CALCUL distance GOOGLE MAPS pour client ${client.id} -> move ${move.id} ===`);
-      console.log(`Client trajet: ${clientDepartureAddress} -> ${clientArrivalAddress}`);
-      console.log(`Move trajet: ${moveDepartureAddress} -> ${moveArrivalAddress}`);
-
-      // Calculer la distance du trajet CLIENT avec Google Directions API
       directionsService.route({
         origin: clientDepartureAddress,
         destination: clientArrivalAddress,
@@ -303,9 +308,7 @@ const MatchFinder = () => {
       }, (clientResult, clientStatus) => {
         if (clientStatus === 'OK' && clientResult?.routes[0]) {
           const clientDistanceKm = Math.round(clientResult.routes[0].legs[0].distance!.value / 1000);
-          console.log(`Distance trajet CLIENT (${client.departure_city} -> ${client.arrival_city}): ${clientDistanceKm}km`);
           
-          // Calculer la distance du trajet MOVE avec Google Directions API
           directionsService.route({
             origin: moveDepartureAddress,
             destination: moveArrivalAddress,
@@ -315,13 +318,7 @@ const MatchFinder = () => {
           }, (moveResult, moveStatus) => {
             if (moveStatus === 'OK' && moveResult?.routes[0]) {
               const moveDistanceKm = Math.round(moveResult.routes[0].legs[0].distance!.value / 1000);
-              console.log(`Distance trajet MOVE (${move.departure_city} -> ${move.arrival_city}): ${moveDistanceKm}km`);
               
-              // Pour le matching, on va prendre la différence entre les deux trajets
-              // Plus ils sont similaires, plus le score est bon
-              const distanceDifference = Math.abs(clientDistanceKm - moveDistanceKm);
-              
-              // Calculer aussi la distance entre les points de départ et d'arrivée
               directionsService.route({
                 origin: clientDepartureAddress,
                 destination: moveDepartureAddress,
@@ -341,33 +338,21 @@ const MatchFinder = () => {
                   }, (arrResult, arrStatus) => {
                     if (arrStatus === 'OK' && arrResult?.routes[0]) {
                       const arrDistanceKm = Math.round(arrResult.routes[0].legs[0].distance!.value / 1000);
-                      
-                      // La distance finale est la moyenne des distances entre départ et arrivée
                       const finalDistance = Math.round((deptDistanceKm + arrDistanceKm) / 2);
-                      
-                      console.log(`Distance départ-départ: ${deptDistanceKm}km`);
-                      console.log(`Distance arrivée-arrivée: ${arrDistanceKm}km`);
-                      console.log(`Distance finale moyenne: ${finalDistance}km`);
-                      console.log(`Distance trajet client: ${clientDistanceKm}km (référence Google)`);
-                      
                       resolve(finalDistance);
                     } else {
-                      console.warn('Erreur calcul distance arrivée-arrivée:', arrStatus);
                       resolve(deptDistanceKm);
                     }
                   });
                 } else {
-                  console.warn('Erreur calcul distance départ-départ:', deptStatus);
-                  resolve(distanceDifference);
+                  resolve(500);
                 }
               });
             } else {
-              console.warn('Erreur calcul distance trajet MOVE:', moveStatus);
               resolve(clientDistanceKm > 400 ? clientDistanceKm : 500);
             }
           });
         } else {
-          console.warn('Erreur calcul distance trajet CLIENT:', clientStatus);
           resolve(500);
         }
       });
@@ -376,34 +361,21 @@ const MatchFinder = () => {
 
   const findMatches = useCallback(async () => {
     try {
-      setLoading(true);
       setIsSearching(true);
       
-      setTimeout(() => {
-        setIsSearching(false);
-      }, 4000);
-      
+      // Clear old matches without actions
       await supabase
         .from('move_matches')
         .delete()
         .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions)`);
 
+      // Process new matches
       for (const client of clientRequests) {
         for (const move of moves) {
-          console.log(`\n=== NOUVEAU CALCUL MATCH client ${client.id} vs move ${move.id} ===`);
-          console.log(`Client: ${client.departure_city} (${client.departure_postal_code}) -> ${client.arrival_city} (${client.arrival_postal_code})`);
-          console.log(`Move: ${move.departure_city} (${move.departure_postal_code}) -> ${move.arrival_city} (${move.arrival_postal_code})`);
-          
           const distanceKm = await calculateRealDistance(client, move);
-          
-          console.log(`RÉSULTAT: Distance calculée avec Google Maps API: ${distanceKm}km`);
-          
           const datesCompatible = areDatesCompatible(client, move.departure_date);
           
-          if (!datesCompatible) {
-            console.log('Dates incompatibles, skip ce match');
-            continue;
-          }
+          if (!datesCompatible) continue;
           
           const dateDiffDays = calculateDateDifference(client, move.departure_date);
           const clientVolume = client.estimated_volume || 0;
@@ -415,8 +387,6 @@ const MatchFinder = () => {
             (dateDiffDays === 0 ? 0 : 15) : 15;
           
           const isValid = distanceKm <= 100 && dateDiffDays <= maxAllowedDays && volumeOk;
-          
-          console.log(`Final: distance=${distanceKm}km, dateDiff=${dateDiffDays}j, volumeOk=${volumeOk}, isValid=${isValid}`);
           
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
@@ -456,8 +426,6 @@ const MatchFinder = () => {
 
             if (error) {
               console.error('Error inserting match:', error);
-            } else {
-              console.log(`✅ Match créé avec distance Google Maps: ${distanceKm}km`);
             }
           }
         }
@@ -468,7 +436,8 @@ const MatchFinder = () => {
         description: "Recherche terminée avec distances Google Maps réelles",
       });
 
-      fetchData();
+      // Refresh data
+      await Promise.all([refetchClients(), refetchMoves(), refetchMatches()]);
     } catch (error) {
       console.error('Error finding matches:', error);
       toast({
@@ -477,9 +446,9 @@ const MatchFinder = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setIsSearching(false);
     }
-  }, [clientRequests, moves, matches, toast, fetchData]);
+  }, [clientRequests, moves, matches, toast, refetchClients, refetchMoves, refetchMatches]);
 
   const getMatchDetails = (match: Match) => {
     const client = clientRequests.find(c => c.id === match.client_request_id);
@@ -490,18 +459,29 @@ const MatchFinder = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'accepted':
-        return <Badge className="bg-green-100 text-green-800">Accepté</Badge>;
+        return <Badge className="bg-green-100 text-green-800 border-green-200">✅ Accepté</Badge>;
       case 'rejected':
-        return <Badge className="bg-red-100 text-red-800">Rejeté</Badge>;
+        return <Badge className="bg-red-100 text-red-800 border-red-200">❌ Rejeté</Badge>;
       default:
-        return <Badge className="bg-yellow-100 text-yellow-800">En attente</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">⏳ En attente</Badge>;
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <Search className="h-6 w-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances</h2>
+          </div>
+          <Button disabled>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Chargement...
+          </Button>
+        </div>
+        <LoadingSkeleton type="stats" />
+        <LoadingSkeleton type="card" count={3} />
       </div>
     );
   }
@@ -516,23 +496,19 @@ const MatchFinder = () => {
         <div className="relative">
           <Button
             onClick={findMatches}
-            disabled={loading || isSearching}
+            disabled={isSearching}
             className="bg-blue-600 hover:bg-blue-700 relative overflow-hidden"
           >
-            <Search className="h-4 w-4 mr-2" />
-            Trouver un match
-            
-            {isSearching && (
-              <div className="absolute inset-0 bg-blue-600">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="relative">
-                    <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 w-8 h-8 border border-white/30 rounded-full animate-ping"></div>
-                    <div className="absolute inset-0 w-8 h-8 border border-white/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="absolute inset-0 w-8 h-8 border border-white/10 rounded-full animate-ping" style={{ animationDelay: '1s' }}></div>
-                  </div>
-                </div>
-              </div>
+            {isSearching ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Recherche en cours...
+              </>
+            ) : (
+              <>
+                <Search className="h-4 w-4 mr-2" />
+                Trouver un match
+              </>
             )}
           </Button>
         </div>
@@ -699,8 +675,8 @@ const MatchFinder = () => {
                         match.match_type === 'good' ? 'bg-blue-100 text-blue-800' :
                         'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {match.match_type === 'perfect' ? 'Parfait' :
-                         match.match_type === 'good' ? 'Bon' : 'Partiel'}
+                        {match.match_type === 'perfect' ? '🎯 Parfait' :
+                         match.match_type === 'good' ? '👍 Bon' : '⚡ Partiel'}
                       </span>
                       
                       {getStatusBadge(match.status || 'pending')}
@@ -757,7 +733,7 @@ const MatchFinder = () => {
                         <span className={`ml-2 font-medium ${
                           isCompatible ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {isCompatible ? 'Oui' : 'Non'}
+                          {isCompatible ? '✅ Oui' : '❌ Non'}
                         </span>
                       </div>
                     </div>
@@ -773,3 +749,5 @@ const MatchFinder = () => {
 };
 
 export default MatchFinder;
+
+}
