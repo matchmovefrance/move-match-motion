@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle, User, Building, Euro, Calendar, Download, Check } from 'lucide-react';
+import { CheckCircle, User, Building, Euro, Calendar, Download, Check, Archive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,7 +45,7 @@ const AcceptedQuotesTab = () => {
           supplier:suppliers(company_name, contact_name, email, phone),
           opportunity:pricing_opportunities(title, departure_city, arrival_city)
         `)
-        .eq('status', 'accepted');
+        .in('status', ['accepted', 'validated_by_client']);
 
       if (error) throw error;
       
@@ -85,6 +85,65 @@ const AcceptedQuotesTab = () => {
       toast({
         title: "Erreur",
         description: "Impossible de valider le devis",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMarkAsCompleted = async (quoteId: string, quoteBidAmount: number, supplierName: string) => {
+    try {
+      // Marquer le devis comme terminé
+      const { error: quoteError } = await supabase
+        .from('quotes')
+        .update({ status: 'completed' })
+        .eq('id', quoteId);
+
+      if (quoteError) throw quoteError;
+
+      // Récupérer l'opportunité liée
+      const { data: quote, error: fetchError } = await supabase
+        .from('quotes')
+        .select(`
+          opportunity_id,
+          opportunity:pricing_opportunities(client_request_id)
+        `)
+        .eq('id', quoteId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Si il y a une demande client liée, la marquer comme terminée
+      if (quote?.opportunity?.client_request_id) {
+        const { error: clientError } = await supabase
+          .from('client_requests')
+          .update({ 
+            status: 'completed',
+            quote_amount: quoteBidAmount
+          })
+          .eq('id', quote.opportunity.client_request_id);
+
+        if (clientError) console.warn('⚠️ Erreur mise à jour client:', clientError);
+      }
+
+      // Marquer l'opportunité comme terminée
+      const { error: oppError } = await supabase
+        .from('pricing_opportunities')
+        .update({ status: 'completed' })
+        .eq('id', quote.opportunity_id);
+
+      if (oppError) console.warn('⚠️ Erreur mise à jour opportunité:', oppError);
+
+      toast({
+        title: "Trajet terminé",
+        description: `Le trajet avec ${supplierName} a été marqué comme terminé et déplacé vers l'historique.`,
+      });
+
+      refetch();
+    } catch (error) {
+      console.error('❌ Erreur marquage terminé:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de marquer le trajet comme terminé",
         variant: "destructive",
       });
     }
@@ -222,6 +281,17 @@ const AcceptedQuotesTab = () => {
                           >
                             <Check className="h-4 w-4 mr-1" />
                             Validé
+                          </Button>
+                        )}
+                        
+                        {quote.status === 'validated_by_client' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleMarkAsCompleted(quote.id, quote.bid_amount, quote.supplier?.company_name || 'Fournisseur')}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            <Archive className="h-4 w-4 mr-1" />
+                            Trajet terminé
                           </Button>
                         )}
                       </div>

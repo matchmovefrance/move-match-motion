@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { 
   Search, 
   Filter, 
@@ -15,21 +16,24 @@ import {
   AlertCircle,
   Archive,
   CheckCircle,
-  XCircle
+  XCircle,
+  Trash2
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Button } from "@/components/ui/button";
+import { useToast } from '@/hooks/use-toast';
 
 const HistoryTab = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+  const { toast } = useToast();
 
   // Charger l'historique des dossiers cloturés
   const { data: historyItems, isLoading, error, refetch } = useQuery({
-    queryKey: ['client-history', statusFilter, searchTerm],
+    queryKey: ['client-history', statusFilter, searchTerm, dateFilter],
     queryFn: async () => {
       console.log('📚 Chargement de l\'historique...');
       
@@ -47,6 +51,31 @@ const HistoryTab = () => {
         query = query.or(`name.ilike.%${searchTerm}%,departure_city.ilike.%${searchTerm}%,arrival_city.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
       }
 
+      // Filtre par date
+      if (dateFilter !== 'all') {
+        const now = new Date();
+        let dateThreshold = new Date();
+        
+        switch (dateFilter) {
+          case 'last_week':
+            dateThreshold.setDate(now.getDate() - 7);
+            break;
+          case 'last_month':
+            dateThreshold.setMonth(now.getMonth() - 1);
+            break;
+          case 'last_3_months':
+            dateThreshold.setMonth(now.getMonth() - 3);
+            break;
+          case 'last_year':
+            dateThreshold.setFullYear(now.getFullYear() - 1);
+            break;
+        }
+        
+        if (dateFilter !== 'all') {
+          query = query.gte('created_at', dateThreshold.toISOString());
+        }
+      }
+
       const { data, error } = await query;
       
       if (error) {
@@ -60,6 +89,83 @@ const HistoryTab = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
   });
+
+  // Charger aussi les devis terminés
+  const { data: completedQuotes } = useQuery({
+    queryKey: ['completed-quotes', searchTerm],
+    queryFn: async () => {
+      console.log('📋 Chargement des devis terminés...');
+      
+      let query = supabase
+        .from('quotes')
+        .select(`
+          *,
+          supplier:suppliers(company_name, contact_name),
+          opportunity:pricing_opportunities(title, departure_city, arrival_city, desired_date)
+        `)
+        .eq('status', 'completed')
+        .order('submitted_at', { ascending: false });
+
+      if (searchTerm) {
+        query = query.or(`notes.ilike.%${searchTerm}%`);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ Erreur chargement devis terminés:', error);
+        return [];
+      }
+      
+      // Filtrer les devis avec des prestataires demo
+      const filteredData = data?.filter(quote => {
+        const supplierName = quote.supplier?.company_name?.toLowerCase() || '';
+        const isDemo = supplierName.includes('demo') || 
+                      supplierName.includes('test') || 
+                      supplierName.includes('exemple') ||
+                      supplierName.includes('sample');
+        return !isDemo && quote.supplier && quote.opportunity;
+      }) || [];
+      
+      console.log('✅ Devis terminés chargés (sans demo):', filteredData.length);
+      return filteredData;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const handleDeleteHistoryItem = async (itemId: number, itemType: 'client_request' | 'quote') => {
+    try {
+      if (itemType === 'client_request') {
+        const { error } = await supabase
+          .from('client_requests')
+          .delete()
+          .eq('id', itemId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('quotes')
+          .delete()
+          .eq('id', itemId);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Élément supprimé",
+        description: "L'élément a été supprimé définitivement de l'historique.",
+      });
+
+      refetch();
+    } catch (error) {
+      console.error('❌ Erreur suppression:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer l'élément",
+        variant: "destructive",
+      });
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -101,6 +207,10 @@ const HistoryTab = () => {
       </div>
     );
   }
+
+  const totalItems = (historyItems?.length || 0) + (completedQuotes?.length || 0);
+  const completedItems = (historyItems?.filter(item => item.status === 'completed').length || 0) + (completedQuotes?.length || 0);
+  const cancelledItems = historyItems?.filter(item => item.status === 'cancelled').length || 0;
 
   return (
     <div className="space-y-6">
@@ -152,6 +262,20 @@ const HistoryTab = () => {
             <SelectItem value="closed">Fermés</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={dateFilter} onValueChange={setDateFilter}>
+          <SelectTrigger className="w-full sm:w-48">
+            <Calendar className="h-4 w-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les dates</SelectItem>
+            <SelectItem value="last_week">Dernière semaine</SelectItem>
+            <SelectItem value="last_month">Dernier mois</SelectItem>
+            <SelectItem value="last_3_months">3 derniers mois</SelectItem>
+            <SelectItem value="last_year">Dernière année</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Statistiques rapides */}
@@ -162,9 +286,7 @@ const HistoryTab = () => {
               <CheckCircle className="h-4 w-4 text-green-600" />
               <div>
                 <p className="text-sm font-medium leading-none">Trajets terminés</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {historyItems?.filter(item => item.status === 'completed').length || 0}
-                </p>
+                <p className="text-2xl font-bold text-green-600">{completedItems}</p>
               </div>
             </div>
           </CardContent>
@@ -175,9 +297,7 @@ const HistoryTab = () => {
               <XCircle className="h-4 w-4 text-red-600" />
               <div>
                 <p className="text-sm font-medium leading-none">Trajets annulés</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {historyItems?.filter(item => item.status === 'cancelled').length || 0}
-                </p>
+                <p className="text-2xl font-bold text-red-600">{cancelledItems}</p>
               </div>
             </div>
           </CardContent>
@@ -188,9 +308,7 @@ const HistoryTab = () => {
               <Archive className="h-4 w-4 text-gray-600" />
               <div>
                 <p className="text-sm font-medium leading-none">Total historique</p>
-                <p className="text-2xl font-bold text-gray-600">
-                  {historyItems?.length || 0}
-                </p>
+                <p className="text-2xl font-bold text-gray-600">{totalItems}</p>
               </div>
             </div>
           </CardContent>
@@ -215,13 +333,13 @@ const HistoryTab = () => {
             </Card>
           ))}
         </div>
-      ) : historyItems?.length === 0 ? (
+      ) : totalItems === 0 ? (
         <Card className="text-center py-12">
           <CardContent>
             <Archive className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Aucun élément dans l'historique</h3>
             <p className="text-muted-foreground">
-              {searchTerm || statusFilter !== 'all' 
+              {searchTerm || statusFilter !== 'all' || dateFilter !== 'all'
                 ? 'Aucun élément ne correspond à vos critères de recherche'
                 : 'Aucun dossier cloturé pour le moment'
               }
@@ -230,8 +348,9 @@ const HistoryTab = () => {
         </Card>
       ) : (
         <div className="grid gap-4">
+          {/* Demandes clients terminées */}
           {historyItems?.map((item) => (
-            <Card key={item.id} className="hover:shadow-md transition-shadow opacity-75">
+            <Card key={`client-${item.id}`} className="hover:shadow-md transition-shadow opacity-75">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -253,6 +372,14 @@ const HistoryTab = () => {
                       </CardDescription>
                     )}
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteHistoryItem(item.id, 'client_request')}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardHeader>
               
@@ -290,6 +417,75 @@ const HistoryTab = () => {
                       <span className="text-sm font-medium text-green-800">
                         Montant final: {item.quote_amount}€
                       </span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* Devis terminés */}
+          {completedQuotes?.map((quote) => (
+            <Card key={`quote-${quote.id}`} className="hover:shadow-md transition-shadow opacity-75 border-blue-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                      <CardTitle className="text-lg">
+                        Devis terminé - {quote.opportunity?.title}
+                      </CardTitle>
+                      <Badge className="bg-blue-100 text-blue-800">
+                        Devis terminé
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-sm">
+                      {quote.supplier?.company_name} • {quote.supplier?.contact_name}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteHistoryItem(quote.id, 'quote')}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-blue-500" />
+                    <span className="font-medium">Route:</span>
+                    <span>{quote.opportunity?.departure_city} → {quote.opportunity?.arrival_city}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Euro className="h-4 w-4 text-green-500" />
+                    <span className="font-medium">Montant:</span>
+                    <span>{quote.bid_amount.toLocaleString()}€</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-orange-500" />
+                    <span className="font-medium">Date souhaitée:</span>
+                    <span>{quote.opportunity?.desired_date ? format(new Date(quote.opportunity.desired_date), 'dd/MM/yyyy', { locale: fr }) : 'N/A'}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <span className="font-medium">Terminé le:</span>
+                    <span>{format(new Date(quote.submitted_at), 'dd/MM/yyyy', { locale: fr })}</span>
+                  </div>
+                </div>
+                
+                {quote.notes && (
+                  <div className="mt-3 p-2 bg-gray-50 rounded-md">
+                    <div className="text-sm text-gray-700">
+                      <span className="font-medium">Notes: </span>
+                      {quote.notes}
                     </div>
                   </div>
                 )}

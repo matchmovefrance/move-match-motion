@@ -1,298 +1,270 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Check, X, Eye, BarChart3, Euro, Clock, Calendar } from 'lucide-react';
+import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
 
-interface QuoteWithDetails {
-  id: string;
-  bid_amount: number;
-  status: string;
-  notes: string | null;
-  response_time_hours: number | null;
-  submitted_at: string;
-  supplier: {
-    company_name: string;
-    contact_name: string;
-  };
-  opportunity: {
-    title: string;
-    departure_city: string;
-    arrival_city: string;
-  };
+interface PricingResult {
+  opportunity_id: string;
+  opportunity_title: string;
+  route: string;
+  volume: number;
+  date: string;
+  best_price: number;
+  supplier_name: string;
+  margin: number;
+  client_price: number;
 }
 
 const QuotesTab = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('submitted_at');
+  const { toast } = useToast();
+  const [isSearching, setIsSearching] = useState(false);
+  const [pricingResults, setPricingResults] = useState<PricingResult[]>([]);
 
-  const { data: quotes, isLoading, refetch } = useQuery({
-    queryKey: ['quotes', searchTerm, statusFilter, sortBy],
+  // Compter les opportunités actives
+  const { data: stats } = useQuery({
+    queryKey: ['pricing-opportunities-stats'],
     queryFn: async () => {
-      let query = supabase
-        .from('quotes')
-        .select(`
-          *,
-          supplier:suppliers(company_name, contact_name),
-          opportunity:pricing_opportunities(title, departure_city, arrival_city)
-        `);
+      const { data: opportunities } = await supabase
+        .from('pricing_opportunities')
+        .select('id, status')
+        .in('status', ['draft', 'active', 'pending']);
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
+      const { data: clientRequests } = await supabase
+        .from('client_requests')
+        .select('id, status')
+        .in('status', ['pending', 'confirmed']);
 
-      if (searchTerm) {
-        query = query.or(`notes.ilike.%${searchTerm}%`);
-      }
-
-      query = query.order(sortBy, { ascending: false });
-
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      // Filtrer les devis avec des prestataires demo ou invalides
-      const filteredData = (data as QuoteWithDetails[])?.filter(quote => {
-        const supplierName = quote.supplier?.company_name?.toLowerCase() || '';
-        const isDemo = supplierName.includes('demo') || 
-                      supplierName.includes('test') || 
-                      supplierName.includes('exemple') ||
-                      supplierName.includes('sample');
-        return !isDemo && quote.supplier && quote.opportunity;
-      }) || [];
-
-      console.log('📋 Devis filtrés (sans demo):', filteredData.length);
-      return filteredData;
+      return {
+        opportunities: opportunities?.length || 0,
+        clientRequests: clientRequests?.length || 0,
+      };
     },
-    refetchInterval: 5000,
   });
 
-  const updateQuoteStatus = async (quoteId: string, status: string) => {
-    const { error } = await supabase
-      .from('quotes')
-      .update({ status })
-      .eq('id', quoteId);
+  const searchBestPrices = async () => {
+    setIsSearching(true);
+    try {
+      console.log('🔍 Recherche des meilleurs prix...');
 
-    if (error) {
-      console.error('Error updating quote:', error);
-      return;
+      // Récupérer les opportunités actives
+      const { data: opportunities, error: oppError } = await supabase
+        .from('pricing_opportunities')
+        .select('*')
+        .in('status', ['draft', 'active', 'pending']);
+
+      if (oppError) throw oppError;
+
+      // Récupérer les prestataires avec leurs modèles de tarification
+      const { data: suppliers, error: suppError } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('is_active', true);
+
+      if (suppError) throw suppError;
+
+      // Filtrer les prestataires demo
+      const validSuppliers = suppliers?.filter(supplier => {
+        const companyName = supplier.company_name?.toLowerCase() || '';
+        const isDemo = companyName.includes('demo') || 
+                      companyName.includes('test') || 
+                      companyName.includes('exemple') ||
+                      companyName.includes('sample');
+        return !isDemo;
+      }) || [];
+
+      const results: PricingResult[] = [];
+
+      // Pour chaque opportunité, calculer le meilleur prix
+      opportunities?.forEach(opportunity => {
+        let bestPrice = Infinity;
+        let bestSupplier = '';
+        let bestMargin = 0;
+
+        validSuppliers.forEach(supplier => {
+          if (supplier.pricing_model) {
+            const model = supplier.pricing_model;
+            
+            // Calcul simplifié du prix
+            const basePrice = model.basePrice || 150;
+            const volumePrice = (opportunity.estimated_volume || 0) * (model.volumeRate || 10);
+            const distancePrice = 100 * (model.distanceRate || 1); // Distance estimée
+            
+            const supplierPrice = Math.max(
+              basePrice + volumePrice + distancePrice,
+              model.minimumPrice || 200
+            );
+
+            if (supplierPrice < bestPrice) {
+              bestPrice = supplierPrice;
+              bestSupplier = supplier.company_name;
+              bestMargin = model.matchMoveMargin || 40;
+            }
+          }
+        });
+
+        if (bestPrice !== Infinity) {
+          const clientPrice = bestPrice * (1 + bestMargin / 100);
+          
+          results.push({
+            opportunity_id: opportunity.id,
+            opportunity_title: opportunity.title,
+            route: `${opportunity.departure_city} → ${opportunity.arrival_city}`,
+            volume: opportunity.estimated_volume,
+            date: opportunity.desired_date,
+            best_price: bestPrice,
+            supplier_name: bestSupplier,
+            margin: bestMargin,
+            client_price: clientPrice,
+          });
+        }
+      });
+
+      // Trier par meilleur prix
+      results.sort((a, b) => a.client_price - b.client_price);
+      
+      setPricingResults(results);
+      
+      toast({
+        title: "Recherche terminée",
+        description: `${results.length} devis calculés avec les meilleurs prix`,
+      });
+
+    } catch (error) {
+      console.error('❌ Erreur recherche prix:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de calculer les prix",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearching(false);
     }
-
-    refetch();
   };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'accepted': return 'bg-green-100 text-green-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      case 'expired': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending': return 'En attente';
-      case 'accepted': return 'Accepté';
-      case 'rejected': return 'Rejeté';
-      case 'expired': return 'Expiré';
-      default: return status;
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardHeader>
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
-                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
+      {/* En-tête du moteur de devis */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Moteur de comparaison des devis
+            <BarChart3 className="h-5 w-5 text-blue-600" />
+            Moteur de recherche des meilleurs prix
           </CardTitle>
+          <CardDescription>
+            Analysez automatiquement les opportunités et clients en cours pour trouver les meilleurs prix basés sur vos modèles de tarification.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Rechercher dans les notes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats?.opportunities || 0}</div>
+                <div className="text-sm text-muted-foreground">Opportunités actives</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{stats?.clientRequests || 0}</div>
+                <div className="text-sm text-muted-foreground">Demandes clients</div>
+              </div>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="accepted">Acceptés</SelectItem>
-                <SelectItem value="rejected">Rejetés</SelectItem>
-                <SelectItem value="expired">Expirés</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Trier par" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="submitted_at">Date de soumission</SelectItem>
-                <SelectItem value="bid_amount">Montant</SelectItem>
-                <SelectItem value="response_time_hours">Temps de réponse</SelectItem>
-              </SelectContent>
-            </Select>
+            
+            <Button 
+              onClick={searchBestPrices}
+              disabled={isSearching}
+              size="lg"
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Search className="h-4 w-4 mr-2" />
+              {isSearching ? 'Recherche en cours...' : 'Rechercher les meilleurs prix'}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Quotes List */}
-      {quotes && quotes.length > 0 ? (
-        <div className="space-y-4">
-          {quotes.map((quote) => (
-            <Card key={quote.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg">
-                      {quote.opportunity?.title || 'Opportunité supprimée'}
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-4">
-                      <span>{quote.supplier?.company_name || 'Fournisseur supprimé'}</span>
-                      <span className="text-xs">
-                        par {quote.supplier?.contact_name}
-                      </span>
-                      {quote.opportunity && (
-                        <span className="text-xs">
-                          {quote.opportunity.departure_city} → {quote.opportunity.arrival_city}
-                        </span>
-                      )}
-                    </CardDescription>
+      {/* Résultats de la recherche */}
+      {pricingResults.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+              Résultats - Meilleurs prix trouvés
+            </CardTitle>
+            <CardDescription>
+              Prix calculés automatiquement selon vos modèles de tarification
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {pricingResults.map((result, index) => (
+                <div key={result.opportunity_id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" className="text-xs">
+                          #{index + 1} Meilleur prix
+                        </Badge>
+                        <h3 className="font-semibold">{result.opportunity_title}</h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-blue-500" />
+                          <span>{result.route}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4 text-orange-500" />
+                          <span>{result.volume}m³</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-purple-500" />
+                          <span>{new Date(result.date).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-green-500" />
+                          <span>{result.supplier_name}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground mb-1">Prix fournisseur</div>
+                      <div className="text-lg font-semibold text-gray-600">
+                        {result.best_price.toLocaleString()}€
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Marge: {result.margin}%
+                      </div>
+                      <div className="text-xl font-bold text-green-600 flex items-center gap-1">
+                        <Euro className="h-5 w-5" />
+                        {Math.round(result.client_price).toLocaleString()}€
+                      </div>
+                      <div className="text-xs text-muted-foreground">Prix client final</div>
+                    </div>
                   </div>
-                  <Badge className={getStatusColor(quote.status)}>
-                    {getStatusLabel(quote.status)}
-                  </Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600 flex items-center justify-center gap-1">
-                      <Euro className="h-5 w-5" />
-                      {quote.bid_amount.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-gray-600">Montant du devis</div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <div className="text-lg font-semibold text-green-600 flex items-center justify-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      {quote.response_time_hours || 'N/A'}h
-                    </div>
-                    <div className="text-xs text-gray-600">Temps de réponse</div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                    <div className="text-sm font-semibold text-purple-600 flex items-center justify-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {format(new Date(quote.submitted_at), 'dd/MM', { locale: fr })}
-                    </div>
-                    <div className="text-xs text-gray-600">Date de soumission</div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm font-semibold text-gray-600">
-                      {quote.notes ? 'Avec notes' : 'Sans notes'}
-                    </div>
-                    <div className="text-xs text-gray-600">Annotations</div>
-                  </div>
-                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-                {quote.notes && (
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                    <h4 className="text-sm font-medium mb-1">Notes du fournisseur:</h4>
-                    <p className="text-sm text-gray-700">{quote.notes}</p>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-gray-500">
-                    Soumis le {format(new Date(quote.submitted_at), 'dd/MM/yyyy à HH:mm', { locale: fr })}
-                  </div>
-                  
-                  {quote.status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => updateQuoteStatus(quote.id, 'rejected')}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Rejeter
-                      </Button>
-                      <Button 
-                        variant="default" 
-                        size="sm"
-                        onClick={() => updateQuoteStatus(quote.id, 'accepted')}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <Check className="h-4 w-4 mr-1" />
-                        Accepter
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <Button variant="outline" size="sm">
-                    <Eye className="h-4 w-4 mr-1" />
-                    Détails
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
+      {/* Message si aucun résultat */}
+      {!isSearching && pricingResults.length === 0 && (
         <Card>
           <CardContent className="text-center py-8">
-            <div className="text-gray-500 mb-4">
-              <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium mb-2">Aucun devis trouvé</h3>
-              <p className="text-sm">
-                {searchTerm || statusFilter !== 'all' 
-                  ? 'Aucun devis ne correspond à vos critères.'
-                  : 'Les devis soumis par les fournisseurs apparaîtront ici.'}
-              </p>
-            </div>
+            <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Aucune recherche effectuée</h3>
+            <p className="text-muted-foreground mb-4">
+              Cliquez sur "Rechercher les meilleurs prix" pour analyser vos opportunités et trouver les tarifs optimaux.
+            </p>
           </CardContent>
         </Card>
       )}
