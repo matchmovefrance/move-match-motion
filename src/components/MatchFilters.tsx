@@ -63,6 +63,40 @@ const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
     });
   };
 
+  // Convert filters to array format for ToggleGroup
+  const getSelectedValues = (): string[] => {
+    const selected: string[] = [];
+    if (filters.pending) selected.push('pending');
+    if (filters.accepted) selected.push('accepted');
+    if (filters.rejected) selected.push('rejected');
+    if (filters.showAll) selected.push('showAll');
+    return selected;
+  };
+
+  // Handle ToggleGroup value changes
+  const handleToggleGroupChange = (values: string[]) => {
+    const newFilters = {
+      pending: values.includes('pending'),
+      accepted: values.includes('accepted'),
+      rejected: values.includes('rejected'),
+      showAll: values.includes('showAll')
+    };
+
+    // Si "Tout afficher" est sélectionné, désactiver les autres
+    if (newFilters.showAll) {
+      newFilters.pending = false;
+      newFilters.accepted = false;
+      newFilters.rejected = false;
+    }
+    
+    // Si d'autres filtres sont sélectionnés, désactiver "Tout afficher"
+    if (newFilters.pending || newFilters.accepted || newFilters.rejected) {
+      newFilters.showAll = false;
+    }
+
+    setFilters(newFilters);
+  };
+
   const getActiveFiltersCount = () => {
     if (filters.showAll) return 1;
     return Object.entries(filters).filter(([key, value]) => key !== 'showAll' && value).length;
@@ -166,11 +200,14 @@ const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
         {/* Filtres détaillés */}
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-gray-700">Filtres détaillés</h4>
-          <ToggleGroup type="multiple" className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
+          <ToggleGroup 
+            type="multiple" 
+            value={getSelectedValues()}
+            onValueChange={handleToggleGroupChange}
+            className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full"
+          >
             <ToggleGroupItem
               value="pending"
-              pressed={filters.pending}
-              onPressedChange={(pressed) => handleFilterChange('pending', pressed)}
               className="flex-1 flex items-center justify-center gap-2 h-auto py-3 px-2 text-xs data-[state=on]:bg-yellow-100 data-[state=on]:text-yellow-800 data-[state=on]:border-yellow-300"
             >
               <Clock className="h-4 w-4" />
@@ -179,8 +216,6 @@ const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
             
             <ToggleGroupItem
               value="accepted"
-              pressed={filters.accepted}
-              onPressedChange={(pressed) => handleFilterChange('accepted', pressed)}
               className="flex-1 flex items-center justify-center gap-2 h-auto py-3 px-2 text-xs data-[state=on]:bg-green-100 data-[state=on]:text-green-800 data-[state=on]:border-green-300"
             >
               <Check className="h-4 w-4" />
@@ -189,8 +224,6 @@ const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
             
             <ToggleGroupItem
               value="rejected"
-              pressed={filters.rejected}
-              onPressedChange={(pressed) => handleFilterChange('rejected', pressed)}
               className="flex-1 flex items-center justify-center gap-2 h-auto py-3 px-2 text-xs data-[state=on]:bg-red-100 data-[state=on]:text-red-800 data-[state=on]:border-red-300"
             >
               <X className="h-4 w-4" />
@@ -199,8 +232,6 @@ const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
             
             <ToggleGroupItem
               value="showAll"
-              pressed={filters.showAll}
-              onPressedChange={(pressed) => handleFilterChange('showAll', pressed)}
               className="flex-1 flex items-center justify-center gap-2 h-auto py-3 px-2 text-xs data-[state=on]:bg-blue-100 data-[state=on]:text-blue-800 data-[state=on]:border-blue-300"
             >
               <Eye className="h-4 w-4" />
