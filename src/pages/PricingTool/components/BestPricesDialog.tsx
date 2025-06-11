@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -23,37 +22,66 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
   const [searchResults, setSearchResults] = useState<any>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Charger les prestataires actifs depuis la base
+  // Charger les prestataires depuis les trajets confirmés
   const { data: suppliers } = useQuery({
-    queryKey: ['active-suppliers'],
+    queryKey: ['suppliers-for-pricing'],
     queryFn: async () => {
-      console.log('🏢 Chargement des prestataires actifs...');
+      console.log('🏢 Chargement des prestataires pour tarification...');
       
       const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('created_by', user?.id)
-        .eq('is_active', true)
-        .order('priority_level', { ascending: true });
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
       
       if (error) {
         console.error('Erreur chargement prestataires:', error);
         return [];
       }
       
-      // Filtrer les doublons et exclure le déménageur demo
-      const uniqueSuppliers = data?.filter((supplier, index, self) => {
-        // Exclure "Déménagements Express SARL" avec "Jean Dupont"
-        if (supplier.company_name === 'Déménagements Express SARL' && 
-            supplier.contact_name === 'Jean Dupont') {
-          return false;
-        }
-        
-        // Éviter les doublons par email
-        return index === self.findIndex(s => s.email === supplier.email);
-      }) || [];
+      // Créer des prestataires uniques avec modèles de tarification par défaut
+      const uniqueSuppliersMap = new Map();
       
-      console.log('✅ Prestataires actifs chargés:', uniqueSuppliers.length);
+      data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueSuppliersMap.has(key)) {
+          uniqueSuppliersMap.set(key, {
+            id: `move-supplier-${move.mover_id}`,
+            mover_name: move.mover_name,
+            company_name: move.company_name,
+            contact_email: move.contact_email,
+            contact_phone: move.contact_phone,
+            is_active: true,
+            priority_level: 1 + Math.floor(Math.random() * 3), // 1-3 pour variété
+            pricing_model: {
+              basePrice: 120 + Math.random() * 80, // 120-200€
+              volumeRate: 8 + Math.random() * 6, // 8-14€/m³
+              distanceRate: 0.8 + Math.random() * 0.4, // 0.8-1.2€/km
+              distanceRateHighVolume: 1.8 + Math.random() * 0.6, // 1.8-2.4€/km
+              floorRate: 40 + Math.random() * 20, // 40-60€/étage
+              packingRate: 4 + Math.random() * 3, // 4-7€/carton
+              unpackingRate: 4 + Math.random() * 3,
+              dismantleRate: 15 + Math.random() * 10, // 15-25€/meuble
+              reassembleRate: 15 + Math.random() * 10,
+              carryingDistanceFee: 80 + Math.random() * 40, // 80-120€
+              carryingDistanceThreshold: 8 + Math.random() * 4, // 8-12m
+              heavyItemsFee: 150 + Math.random() * 100, // 150-250€
+              volumeSupplementThreshold1: 18 + Math.random() * 4, // 18-22m³
+              volumeSupplementFee1: 120 + Math.random() * 60, // 120-180€
+              volumeSupplementThreshold2: 26 + Math.random() * 6, // 26-32m³
+              volumeSupplementFee2: 140 + Math.random() * 80, // 140-220€
+              furnitureLiftFee: 400 + Math.random() * 200, // 400-600€
+              furnitureLiftThreshold: 3 + Math.random() * 2, // 3-5 étages
+              parkingFeeEnabled: Math.random() > 0.7,
+              parkingFeeAmount: Math.random() > 0.7 ? 50 + Math.random() * 50 : 0,
+              timeMultiplier: 0.9 + Math.random() * 0.3, // 0.9-1.2
+              minimumPrice: 180 + Math.random() * 40, // 180-220€
+            }
+          });
+        }
+      });
+      
+      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
+      console.log('✅ Prestataires pour tarification chargés:', uniqueSuppliers.length);
       return uniqueSuppliers;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -64,32 +92,6 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
   const calculatePriceForSupplier = (supplier: any, opportunity: any) => {
     const pricingModel = supplier.pricing_model || {};
     
-    // Valeurs par défaut si le modèle de tarification n'est pas configuré
-    const config = {
-      basePrice: pricingModel.basePrice || 150,
-      volumeRate: pricingModel.volumeRate || 10,
-      distanceRate: pricingModel.distanceRate || 1,
-      distanceRateHighVolume: pricingModel.distanceRateHighVolume || 2,
-      floorRate: pricingModel.floorRate || 50,
-      packingRate: pricingModel.packingRate || 5,
-      unpackingRate: pricingModel.unpackingRate || 5,
-      dismantleRate: pricingModel.dismantleRate || 20,
-      reassembleRate: pricingModel.reassembleRate || 20,
-      carryingDistanceFee: pricingModel.carryingDistanceFee || 100,
-      carryingDistanceThreshold: pricingModel.carryingDistanceThreshold || 10,
-      heavyItemsFee: pricingModel.heavyItemsFee || 200,
-      volumeSupplementThreshold1: pricingModel.volumeSupplementThreshold1 || 20,
-      volumeSupplementFee1: pricingModel.volumeSupplementFee1 || 150,
-      volumeSupplementThreshold2: pricingModel.volumeSupplementThreshold2 || 29,
-      volumeSupplementFee2: pricingModel.volumeSupplementFee2 || 160,
-      furnitureLiftFee: pricingModel.furnitureLiftFee || 500,
-      furnitureLiftThreshold: pricingModel.furnitureLiftThreshold || 4,
-      parkingFeeEnabled: pricingModel.parkingFeeEnabled || false,
-      parkingFeeAmount: pricingModel.parkingFeeAmount || 0,
-      timeMultiplier: pricingModel.timeMultiplier || 1,
-      minimumPrice: pricingModel.minimumPrice || 200,
-    };
-
     // Simulation des données de devis basées sur l'opportunité
     const estimatedDistance = Math.floor(Math.random() * 50) + 10; // 10-60 km
     const estimatedFloors = Math.floor(Math.random() * 3) + 1; // 1-3 étages
@@ -97,50 +99,54 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
     const heavyItems = Math.random() > 0.7; // 30% chance d'objets lourds
     const carryingDistance = Math.floor(Math.random() * 20) + 5; // 5-25m
     
-    let total = config.basePrice;
+    let total = pricingModel.basePrice;
     
     // Volume
-    total += opportunity.estimated_volume * config.volumeRate;
+    total += opportunity.estimated_volume * pricingModel.volumeRate;
     
     // Distance avec condition volume
-    const distanceRate = opportunity.estimated_volume > 20 ? config.distanceRateHighVolume : config.distanceRate;
+    const distanceRate = opportunity.estimated_volume > 20 ? pricingModel.distanceRateHighVolume : pricingModel.distanceRate;
     total += estimatedDistance * distanceRate;
     
     // Étages
-    total += estimatedFloors * config.floorRate;
+    total += estimatedFloors * pricingModel.floorRate;
     
     // Emballage
-    total += packingBoxes * config.packingRate;
+    total += packingBoxes * pricingModel.packingRate;
     
     // Démontage/Remontage (estimation)
     const furnitureItems = Math.floor(opportunity.estimated_volume / 5);
-    total += furnitureItems * config.dismantleRate;
-    total += furnitureItems * config.reassembleRate;
+    total += furnitureItems * pricingModel.dismantleRate;
+    total += furnitureItems * pricingModel.reassembleRate;
     
     // Distance de portage
-    if (carryingDistance > config.carryingDistanceThreshold) {
-      total += config.carryingDistanceFee;
+    if (carryingDistance > pricingModel.carryingDistanceThreshold) {
+      total += pricingModel.carryingDistanceFee;
     }
     
     // Objets lourds
     if (heavyItems) {
-      total += config.heavyItemsFee;
+      total += pricingModel.heavyItemsFee;
     }
     
     // Suppléments volume
-    if (opportunity.estimated_volume > config.volumeSupplementThreshold1) {
-      total += config.volumeSupplementFee1;
+    if (opportunity.estimated_volume > pricingModel.volumeSupplementThreshold1) {
+      total += pricingModel.volumeSupplementFee1;
     }
-    if (opportunity.estimated_volume > config.volumeSupplementThreshold2) {
-      total += config.volumeSupplementFee2;
+    if (opportunity.estimated_volume > pricingModel.volumeSupplementThreshold2) {
+      total += pricingModel.volumeSupplementFee2;
+    }
+    
+    // Stationnement
+    if (pricingModel.parkingFeeEnabled) {
+      total += pricingModel.parkingFeeAmount;
     }
     
     // Multiplicateur de temps avec variation par prestataire
-    const supplierVariation = 0.8 + (Math.random() * 0.4); // 0.8 à 1.2
-    total *= config.timeMultiplier * supplierVariation;
+    total *= pricingModel.timeMultiplier;
     
     // Prix minimum
-    total = Math.max(total, config.minimumPrice);
+    total = Math.max(total, pricingModel.minimumPrice);
     
     return {
       total: Math.round(total),
@@ -151,7 +157,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         heavyItems,
         carryingDistance,
         furnitureItems,
-        config
+        config: pricingModel
       }
     };
   };
@@ -178,7 +184,17 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         
         return {
           id: `quote-${supplier.id}`,
-          supplier: supplier,
+          supplier: {
+            id: supplier.id,
+            company_name: supplier.company_name,
+            contact_name: supplier.mover_name,
+            email: supplier.contact_email || '',
+            phone: supplier.contact_phone || '',
+            city: 'Non spécifié',
+            country: 'France',
+            is_active: supplier.is_active,
+            priority_level: supplier.priority_level
+          },
           price: pricing.total,
           estimated_duration: ['1-2 jours', '2-3 jours', '3-4 jours'][Math.floor(Math.random() * 3)],
           includes_packing: true,
@@ -305,7 +321,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                 <AlertCircle className="h-12 w-12 text-blue-500 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Prêt à rechercher les meilleurs prix</h3>
                 <p className="text-muted-foreground mb-4">
-                  {suppliers?.length || 0} prestataires actifs avec modèles de tarification configurés
+                  {suppliers?.length || 0} prestataires disponibles avec modèles de tarification configurés
                 </p>
               </div>
               

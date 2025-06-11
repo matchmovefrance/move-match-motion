@@ -26,29 +26,32 @@ const PricingTool = () => {
     if (isDarkMode) setTheme('dark');
   }, []);
 
-  // Requête optimisée pour les statistiques sans doublons
+  // Requête optimisée pour les statistiques
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pricing-stats'],
     queryFn: async () => {
       console.log('📊 Chargement des statistiques...');
       
-      const [opportunities, suppliersRaw, quotes] = await Promise.all([
+      const [opportunities, movesRaw, quotes] = await Promise.all([
         supabase.from('pricing_opportunities').select('id, status').eq('created_by', user?.id),
-        supabase.from('suppliers').select('id, email, is_active, company_name, contact_name').eq('created_by', user?.id),
+        supabase.from('confirmed_moves').select('mover_id, mover_name, company_name').not('mover_id', 'is', null),
         supabase.from('quotes').select('id, status').eq('created_by', user?.id)
       ]);
 
-      // Filtrer les prestataires uniques (sans doublons et sans le demo)
-      const uniqueSuppliers = suppliersRaw.data?.filter((supplier, index, self) => {
-        // Exclure "Déménagements Express SARL" avec "Jean Dupont"
-        if (supplier.company_name === 'Déménagements Express SARL' && 
-            supplier.contact_name === 'Jean Dupont') {
-          return false;
+      // Compter les prestataires uniques depuis les trajets
+      const uniqueSuppliersMap = new Map();
+      movesRaw.data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueSuppliersMap.has(key)) {
+          uniqueSuppliersMap.set(key, {
+            mover_name: move.mover_name,
+            company_name: move.company_name,
+            is_active: true
+          });
         }
-        
-        // Éviter les doublons par email
-        return index === self.findIndex(s => s.email === supplier.email);
-      }) || [];
+      });
+
+      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
 
       const stats = {
         totalOpportunities: opportunities.data?.length || 0,
@@ -60,7 +63,7 @@ const PricingTool = () => {
         acceptedQuotes: quotes.data?.filter(q => q.status === 'accepted').length || 0,
       };
 
-      console.log('✅ Statistiques chargées (sans doublons):', stats);
+      console.log('✅ Statistiques chargées (prestataires depuis trajets):', stats);
       return stats;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes

@@ -8,7 +8,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Tables } from '@/integrations/supabase/types';
 import CreateSupplierDialog from './CreateSupplierDialog';
 import SupplierPricingDialog from './SupplierPricingDialog';
 import {
@@ -23,7 +22,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-type Supplier = Tables<'suppliers'>;
+type SupplierFromMoves = {
+  id: string;
+  mover_name: string;
+  company_name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  is_active: boolean;
+  priority_level: number;
+  pricing_model: any;
+  city?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+};
 
 const SuppliersTab = () => {
   const { user } = useAuth();
@@ -31,84 +43,99 @@ const SuppliersTab = () => {
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPricingDialog, setShowPricingDialog] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierFromMoves | null>(null);
 
   const { data: suppliers, isLoading } = useQuery({
-    queryKey: ['suppliers'],
+    queryKey: ['suppliers-from-moves'],
     queryFn: async () => {
-      console.log('🏢 Chargement des prestataires...');
+      console.log('🏢 Chargement des prestataires depuis les trajets...');
       
       const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('created_by', user?.id)
-        .order('created_at', { ascending: false });
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
 
       if (error) {
         console.error('❌ Erreur chargement prestataires:', error);
         throw error;
       }
 
-      // Filtrer les doublons et exclure le déménageur demo spécifique
-      const uniqueSuppliers = data?.filter((supplier, index, self) => {
-        // Exclure "Déménagements Express SARL" avec "Jean Dupont"
-        if (supplier.company_name === 'Déménagements Express SARL' && 
-            supplier.contact_name === 'Jean Dupont') {
-          return false;
+      // Créer un Map pour éviter les doublons basés sur mover_name + company_name
+      const uniqueSuppliersMap = new Map();
+      
+      data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueSuppliersMap.has(key)) {
+          uniqueSuppliersMap.set(key, {
+            id: `move-supplier-${move.mover_id}`,
+            mover_name: move.mover_name,
+            company_name: move.company_name,
+            contact_email: move.contact_email,
+            contact_phone: move.contact_phone,
+            email: move.contact_email || '',
+            phone: move.contact_phone || '',
+            city: 'Non spécifié',
+            country: 'France',
+            is_active: true,
+            priority_level: 1,
+            pricing_model: {
+              basePrice: 150,
+              volumeRate: 10,
+              distanceRate: 1,
+              distanceRateHighVolume: 2,
+              floorRate: 50,
+              packingRate: 5,
+              unpackingRate: 5,
+              dismantleRate: 20,
+              reassembleRate: 20,
+              carryingDistanceFee: 100,
+              carryingDistanceThreshold: 10,
+              heavyItemsFee: 200,
+              volumeSupplementThreshold1: 20,
+              volumeSupplementFee1: 150,
+              volumeSupplementThreshold2: 29,
+              volumeSupplementFee2: 160,
+              furnitureLiftFee: 500,
+              furnitureLiftThreshold: 4,
+              parkingFeeEnabled: false,
+              parkingFeeAmount: 0,
+              timeMultiplier: 1,
+              minimumPrice: 200,
+            }
+          });
         }
-        
-        // Éviter les doublons par email
-        return index === self.findIndex(s => s.email === supplier.email);
-      }) || [];
+      });
 
-      console.log('✅ Prestataires uniques chargés:', uniqueSuppliers.length);
+      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
+      console.log('✅ Prestataires uniques chargés depuis les trajets:', uniqueSuppliers.length);
       return uniqueSuppliers;
     },
     enabled: !!user,
   });
 
-  const handleDelete = async (supplier: Supplier) => {
-    try {
-      const { error } = await supabase
-        .from('suppliers')
-        .delete()
-        .eq('id', supplier.id)
-        .eq('created_by', user?.id);
-
-      if (error) throw error;
-
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
-      
-      toast({
-        title: "Succès",
-        description: "Prestataire supprimé avec succès",
-      });
-    } catch (error) {
-      console.error('Erreur suppression:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de supprimer le prestataire",
-        variant: "destructive",
-      });
-    }
+  const handleDelete = async (supplier: SupplierFromMoves) => {
+    // Pour les prestataires issus des trajets, on ne peut pas les supprimer
+    toast({
+      title: "Information",
+      description: "Ce prestataire provient des trajets confirmés et ne peut pas être supprimé",
+    });
   };
 
-  const handleEditPricing = (supplier: Supplier) => {
+  const handleEditPricing = (supplier: SupplierFromMoves) => {
     setSelectedSupplier(supplier);
     setShowPricingDialog(true);
   };
 
   const handleCreateSuccess = () => {
     setShowCreateDialog(false);
-    queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+    queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
     queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
   };
 
   const handlePricingUpdate = () => {
     setShowPricingDialog(false);
     setSelectedSupplier(null);
-    queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+    queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
   };
 
   if (isLoading) {
@@ -125,7 +152,7 @@ const SuppliersTab = () => {
         <div>
           <h3 className="text-lg font-semibold">Prestataires ({suppliers?.length || 0})</h3>
           <p className="text-sm text-muted-foreground">
-            Gérez vos prestataires et leurs modèles de tarification
+            Prestataires extraits des trajets confirmés avec leurs modèles de tarification
           </p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)}>
@@ -145,7 +172,7 @@ const SuppliersTab = () => {
                     {supplier.company_name}
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    {supplier.contact_name}
+                    {supplier.mover_name}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-1">
@@ -161,14 +188,18 @@ const SuppliersTab = () => {
             
             <CardContent className="space-y-3">
               <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Mail className="h-3 w-3" />
-                  <span className="truncate">{supplier.email}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Phone className="h-3 w-3" />
-                  <span>{supplier.phone}</span>
-                </div>
+                {supplier.email && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-3 w-3" />
+                    <span className="truncate">{supplier.email}</span>
+                  </div>
+                )}
+                {supplier.phone && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-3 w-3" />
+                    <span>{supplier.phone}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-3 w-3" />
                   <span className="truncate">{supplier.city}, {supplier.country}</span>
@@ -201,18 +232,11 @@ const SuppliersTab = () => {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Êtes-vous sûr de vouloir supprimer {supplier.company_name} ? 
-                          Cette action est irréversible.
+                          Ce prestataire provient des trajets confirmés et ne peut pas être supprimé.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Annuler</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(supplier)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Supprimer
-                        </AlertDialogAction>
+                        <AlertDialogCancel>Fermer</AlertDialogCancel>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -226,13 +250,13 @@ const SuppliersTab = () => {
           <Card className="col-span-full">
             <CardContent className="flex flex-col items-center justify-center py-8">
               <Building className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Aucun prestataire</h3>
+              <h3 className="text-lg font-semibold mb-2">Aucun prestataire trouvé</h3>
               <p className="text-muted-foreground text-center mb-4">
-                Commencez par ajouter des prestataires pour utiliser le système de devis
+                Aucun trajet confirmé trouvé avec des prestataires
               </p>
               <Button onClick={() => setShowCreateDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Ajouter le premier prestataire
+                Ajouter un prestataire manuellement
               </Button>
             </CardContent>
           </Card>
