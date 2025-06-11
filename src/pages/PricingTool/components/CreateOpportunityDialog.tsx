@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tables } from '@/integrations/supabase/types';
 
 type PricingOpportunity = Tables<'pricing_opportunities'>;
+type OpportunityStatus = 'draft' | 'active' | 'closed' | 'pending';
 
 interface CreateOpportunityDialogProps {
   open: boolean;
@@ -52,7 +52,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
     arrival_postal_code: '',
     special_requirements: '',
     priority: '1',
-    status: 'draft' as const,
+    status: 'draft' as OpportunityStatus,
     client_name: '',
     client_email: '',
     client_phone: '',
@@ -75,7 +75,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
         arrival_postal_code: opportunity.arrival_postal_code || '',
         special_requirements: opportunity.special_requirements || '',
         priority: opportunity.priority?.toString() || '1',
-        status: opportunity.status || 'draft',
+        status: (opportunity.status || 'draft') as OpportunityStatus,
         client_name: '',
         client_email: '',
         client_phone: '',
@@ -99,7 +99,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
         arrival_postal_code: '',
         special_requirements: '',
         priority: '1',
-        status: 'draft',
+        status: 'draft' as OpportunityStatus,
         client_name: '',
         client_email: '',
         client_phone: '',

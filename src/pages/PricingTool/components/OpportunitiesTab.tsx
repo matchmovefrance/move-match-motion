@@ -62,7 +62,7 @@ const OpportunitiesTab = () => {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 15000,
+    // Removed automatic refresh interval - data will only refresh when user actions trigger it
   });
 
   const { data: suppliers } = useQuery({

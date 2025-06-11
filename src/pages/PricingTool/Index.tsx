@@ -28,7 +28,7 @@ const PricingTool = () => {
     if (isDarkMode) setTheme('dark');
   }, []);
 
-  // Fetch dashboard stats
+  // Fetch dashboard stats - removed automatic refresh interval
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pricing-stats'],
     queryFn: async () => {
@@ -47,7 +47,7 @@ const PricingTool = () => {
         pendingQuotes: quotes.data?.filter(q => q.status === 'pending').length || 0,
       };
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    // Removed automatic refresh - stats will only refresh when user navigates or takes actions
   });
 
   const handleKeyboard = (e: KeyboardEvent) => {
