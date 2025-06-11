@@ -24,17 +24,21 @@ import {
 
 type SupplierFromMoves = {
   id: string;
-  mover_name: string;
   company_name: string;
-  contact_email: string | null;
-  contact_phone: string | null;
+  contact_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  country: string;
   is_active: boolean;
   priority_level: number;
   pricing_model: any;
-  city?: string;
-  country?: string;
-  phone?: string;
-  email?: string;
+  performance_metrics: any;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
 };
 
 const SuppliersTab = () => {
@@ -68,13 +72,13 @@ const SuppliersTab = () => {
         if (!uniqueSuppliersMap.has(key)) {
           uniqueSuppliersMap.set(key, {
             id: `move-supplier-${move.mover_id}`,
-            mover_name: move.mover_name,
             company_name: move.company_name,
-            contact_email: move.contact_email,
-            contact_phone: move.contact_phone,
+            contact_name: move.mover_name,
             email: move.contact_email || '',
             phone: move.contact_phone || '',
+            address: 'Non spécifié',
             city: 'Non spécifié',
+            postal_code: '00000',
             country: 'France',
             is_active: true,
             priority_level: 1,
@@ -101,7 +105,15 @@ const SuppliersTab = () => {
               parkingFeeAmount: 0,
               timeMultiplier: 1,
               minimumPrice: 200,
-            }
+            },
+            performance_metrics: {
+              total_bids: 0,
+              acceptance_rate: 0,
+              avg_response_time: 0
+            },
+            created_at: new Date().toISOString(),
+            created_by: user?.id || '',
+            updated_at: new Date().toISOString(),
           });
         }
       });
@@ -172,7 +184,7 @@ const SuppliersTab = () => {
                     {supplier.company_name}
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    {supplier.mover_name}
+                    {supplier.contact_name}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-1">

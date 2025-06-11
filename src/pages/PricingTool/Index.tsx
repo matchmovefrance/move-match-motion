@@ -1,7 +1,8 @@
+
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, ClipboardList, Users2, Settings, CircleDollarSign, BarChart3, Plus, CheckCircle } from 'lucide-react';
+import { CalendarDays, ClipboardList, Users2, Settings, CircleDollarSign, BarChart3, Plus, CheckCircle, Archive } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +12,7 @@ import OpportunitiesTab from './components/OpportunitiesTab';
 import SuppliersTab from './components/SuppliersTab';
 import QuotesTab from './components/QuotesTab';
 import AcceptedQuotesTab from './components/AcceptedQuotesTab';
+import HistoryTab from './components/HistoryTab';
 import CreateOpportunityDialog from './components/CreateOpportunityDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -32,11 +34,16 @@ const PricingTool = () => {
     queryFn: async () => {
       console.log('📊 Chargement des statistiques...');
       
-      const [opportunities, movesRaw, quotes] = await Promise.all([
-        supabase.from('pricing_opportunities').select('id, status').eq('created_by', user?.id),
+      const [clientRequests, movesRaw, quotes] = await Promise.all([
+        supabase.from('client_requests').select('id, status'),
         supabase.from('confirmed_moves').select('mover_id, mover_name, company_name').not('mover_id', 'is', null),
         supabase.from('quotes').select('id, status').eq('created_by', user?.id)
       ]);
+
+      // Compter les clients uniques depuis client_requests
+      const totalClients = clientRequests.data?.length || 0;
+      const activeClients = clientRequests.data?.filter(c => ['pending', 'confirmed'].includes(c.status)).length || 0;
+      const completedClients = clientRequests.data?.filter(c => ['completed', 'cancelled', 'closed'].includes(c.status)).length || 0;
 
       // Compter les prestataires uniques depuis les trajets
       const uniqueSuppliersMap = new Map();
@@ -54,8 +61,9 @@ const PricingTool = () => {
       const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
 
       const stats = {
-        totalOpportunities: opportunities.data?.length || 0,
-        activeOpportunities: opportunities.data?.filter(o => o.status === 'active').length || 0,
+        totalClients,
+        activeClients,
+        completedClients,
         totalSuppliers: uniqueSuppliers.length,
         activeSuppliers: uniqueSuppliers.filter(s => s.is_active).length,
         totalQuotes: quotes.data?.length || 0,
@@ -63,7 +71,7 @@ const PricingTool = () => {
         acceptedQuotes: quotes.data?.filter(q => q.status === 'accepted').length || 0,
       };
 
-      console.log('✅ Statistiques chargées (prestataires depuis trajets):', stats);
+      console.log('✅ Statistiques chargées:', stats);
       return stats;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -100,7 +108,7 @@ const PricingTool = () => {
             {!statsLoading && stats && (
               <div className="hidden md:flex items-center gap-4 ml-8">
                 <Badge variant="outline" className="text-xs">
-                  {stats.activeOpportunities}/{stats.totalOpportunities} opportunités
+                  {stats.activeClients}/{stats.totalClients} clients actifs
                 </Badge>
                 <Badge variant="outline" className="text-xs">
                   {stats.activeSuppliers}/{stats.totalSuppliers} prestataires
@@ -109,7 +117,7 @@ const PricingTool = () => {
                   {stats.pendingQuotes} devis en attente
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {stats.acceptedQuotes} devis acceptés
+                  {stats.completedClients} terminés
                 </Badge>
               </div>
             )}
@@ -143,18 +151,18 @@ const PricingTool = () => {
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-2">Tableau de bord des devis</h2>
           <p className="text-muted-foreground">
-            Générez des devis compétitifs, gérez vos prestataires et optimisez votre workflow de tarification.
+            Générez des devis compétitifs, gérez vos clients et prestataires, consultez l'historique.
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-3xl grid-cols-4 mb-8 h-12">
+          <TabsList className="grid w-full max-w-4xl grid-cols-5 mb-8 h-12">
             <TabsTrigger value="opportunities" className="flex items-center gap-2 text-sm">
               <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">Opportunités</span>
-              {stats?.activeOpportunities > 0 && (
+              <span className="hidden sm:inline">Clients</span>
+              {stats?.activeClients > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
-                  {stats.activeOpportunities}
+                  {stats.activeClients}
                 </Badge>
               )}
             </TabsTrigger>
@@ -185,6 +193,15 @@ const PricingTool = () => {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-2 text-sm">
+              <Archive className="h-4 w-4" />
+              <span className="hidden sm:inline">Historique</span>
+              {stats?.completedClients > 0 && (
+                <Badge variant="outline" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
+                  {stats.completedClients}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="opportunities" className="space-y-6">
@@ -201,6 +218,10 @@ const PricingTool = () => {
 
           <TabsContent value="accepted" className="space-y-6">
             <AcceptedQuotesTab />
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <HistoryTab />
           </TabsContent>
         </Tabs>
 

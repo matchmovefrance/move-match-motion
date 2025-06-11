@@ -16,7 +16,10 @@ import {
   Euro,
   RefreshCw,
   TrendingDown,
-  AlertCircle
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Users
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,35 +28,42 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import CreateOpportunityDialog from './CreateOpportunityDialog';
 import BestPricesDialog from './BestPricesDialog';
+import CreateClientDialog from './CreateClientDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const OpportunitiesTab = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCreateClientDialog, setShowCreateClientDialog] = useState(false);
   const [showBestPricesDialog, setShowBestPricesDialog] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState<any>(null);
   const [editingOpportunity, setEditingOpportunity] = useState<any>(null);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Charger les opportunités depuis la base de données
+  // Charger les clients depuis les demandes client requests (opportunités)
   const { data: opportunities, isLoading, error, refetch } = useQuery({
-    queryKey: ['pricing-opportunities', statusFilter, searchTerm],
+    queryKey: ['client-opportunities', statusFilter, searchTerm],
     queryFn: async () => {
-      console.log('🔍 Chargement des opportunités...');
+      console.log('🔍 Chargement des opportunités depuis client_requests...');
       
       let query = supabase
-        .from('pricing_opportunities')
+        .from('client_requests')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (statusFilter !== 'all') {
+      // Filtrer par statut (considérer les statuts correspondants)
+      if (statusFilter === 'active') {
+        query = query.in('status', ['pending', 'confirmed']);
+      } else if (statusFilter === 'closed') {
+        query = query.in('status', ['completed', 'cancelled', 'closed']);
+      } else if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
       }
 
       if (searchTerm) {
-        query = query.or(`title.ilike.%${searchTerm}%,departure_city.ilike.%${searchTerm}%,arrival_city.ilike.%${searchTerm}%`);
+        query = query.or(`name.ilike.%${searchTerm}%,departure_city.ilike.%${searchTerm}%,arrival_city.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
       }
 
       const { data, error } = await query;
@@ -63,7 +73,7 @@ const OpportunitiesTab = () => {
         throw error;
       }
       
-      console.log('✅ Opportunités chargées:', data?.length || 0);
+      console.log('✅ Opportunités client chargées:', data?.length || 0);
       return data || [];
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -84,34 +94,36 @@ const OpportunitiesTab = () => {
     setShowCreateDialog(true);
   };
 
-  const handleEditOpportunity = (opportunity: any) => {
-    setEditingOpportunity(opportunity);
-    setShowCreateDialog(true);
+  const handleCreateClient = () => {
+    setShowCreateClientDialog(true);
   };
 
-  const handleDeleteOpportunity = async (opportunityId: string) => {
+  const handleCloseOpportunity = async (opportunityId: string, action: 'completed' | 'cancelled') => {
     try {
-      console.log('🗑️ Suppression opportunité:', opportunityId);
+      console.log(`🔄 ${action === 'completed' ? 'Finalisation' : 'Annulation'} de l'opportunité:`, opportunityId);
       
       const { error } = await supabase
-        .from('pricing_opportunities')
-        .delete()
+        .from('client_requests')
+        .update({ 
+          status: action,
+          status_custom: action === 'completed' ? 'termine' : 'annule'
+        })
         .eq('id', opportunityId);
 
       if (error) throw error;
 
       toast({
-        title: "Opportunité supprimée",
-        description: "L'opportunité a été supprimée avec succès",
+        title: action === 'completed' ? "Trajet terminé" : "Trajet annulé",
+        description: `L'opportunité a été ${action === 'completed' ? 'finalisée' : 'annulée'} avec succès`,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['pricing-opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['client-opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
     } catch (error) {
-      console.error('❌ Erreur suppression:', error);
+      console.error('❌ Erreur lors de la mise à jour:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer l'opportunité",
+        description: `Impossible de ${action === 'completed' ? 'finaliser' : 'annuler'} l'opportunité`,
         variant: "destructive",
       });
     }
@@ -124,37 +136,23 @@ const OpportunitiesTab = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 border-green-200';
-      case 'draft': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'closed': return 'bg-red-100 text-red-800 border-red-200';
       case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'confirmed': return 'bg-green-100 text-green-800 border-green-200';
+      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
+      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return 'Active';
-      case 'draft': return 'Brouillon';
-      case 'closed': return 'Fermée';
       case 'pending': return 'En attente';
+      case 'confirmed': return 'Confirmé';
+      case 'completed': return 'Terminé';
+      case 'cancelled': return 'Annulé';
+      case 'closed': return 'Fermé';
       default: return status;
-    }
-  };
-
-  const getPriorityColor = (priority: number) => {
-    switch (priority) {
-      case 3: return 'text-red-600';
-      case 2: return 'text-orange-600';
-      default: return 'text-gray-600';
-    }
-  };
-
-  const getPriorityLabel = (priority: number) => {
-    switch (priority) {
-      case 3: return 'Urgente';
-      case 2: return 'Élevée';
-      default: return 'Normale';
     }
   };
 
@@ -177,9 +175,9 @@ const OpportunitiesTab = () => {
       {/* Header avec actions */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Opportunités de devis</h2>
+          <h2 className="text-2xl font-bold">Clients & Opportunités</h2>
           <p className="text-muted-foreground">
-            Gérez vos opportunités commerciales et générez des devis compétitifs
+            Gérez vos clients et leurs demandes de déménagement
           </p>
         </div>
         
@@ -192,6 +190,10 @@ const OpportunitiesTab = () => {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Actualiser
+          </Button>
+          <Button onClick={handleCreateClient} variant="outline">
+            <Users className="h-4 w-4 mr-2" />
+            Nouveau client
           </Button>
           <Button onClick={handleCreateOpportunity} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
@@ -206,7 +208,7 @@ const OpportunitiesTab = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Rechercher par titre, ville de départ ou d'arrivée..."
+              placeholder="Rechercher par nom, email, ville..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -221,10 +223,10 @@ const OpportunitiesTab = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="active">Actives</SelectItem>
-            <SelectItem value="draft">Brouillons</SelectItem>
+            <SelectItem value="active">Actifs</SelectItem>
             <SelectItem value="pending">En attente</SelectItem>
-            <SelectItem value="closed">Fermées</SelectItem>
+            <SelectItem value="confirmed">Confirmés</SelectItem>
+            <SelectItem value="closed">Fermés</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -250,19 +252,25 @@ const OpportunitiesTab = () => {
       ) : opportunities?.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent>
-            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Aucune opportunité</h3>
             <p className="text-muted-foreground mb-4">
-              {searchTerm || statusFilter !== 'all' 
+              {searchTerm || statusFilter !== 'active' 
                 ? 'Aucune opportunité ne correspond à vos critères de recherche'
-                : 'Commencez par créer votre première opportunité de devis'
+                : 'Commencez par créer votre première opportunité client'
               }
             </p>
-            {(!searchTerm && statusFilter === 'all') && (
-              <Button onClick={handleCreateOpportunity}>
-                <Plus className="h-4 w-4 mr-2" />
-                Créer une opportunité
-              </Button>
+            {(!searchTerm && statusFilter === 'active') && (
+              <div className="flex gap-2 justify-center">
+                <Button onClick={handleCreateClient} variant="outline">
+                  <Users className="h-4 w-4 mr-2" />
+                  Nouveau client
+                </Button>
+                <Button onClick={handleCreateOpportunity}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nouvelle opportunité
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -274,23 +282,19 @@ const OpportunitiesTab = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <CardTitle className="text-lg">{opportunity.title}</CardTitle>
+                      <CardTitle className="text-lg">
+                        {opportunity.name || `Client #${opportunity.id}`}
+                      </CardTitle>
                       <Badge 
                         variant="outline" 
                         className={getStatusColor(opportunity.status)}
                       >
                         {getStatusLabel(opportunity.status)}
                       </Badge>
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs ${getPriorityColor(opportunity.priority)}`}
-                      >
-                        {getPriorityLabel(opportunity.priority)}
-                      </Badge>
                     </div>
-                    {opportunity.description && (
+                    {opportunity.email && (
                       <CardDescription className="text-sm">
-                        {opportunity.description}
+                        {opportunity.email}
                       </CardDescription>
                     )}
                   </div>
@@ -302,9 +306,6 @@ const OpportunitiesTab = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditOpportunity(opportunity)}>
-                        Modifier
-                      </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => handleSearchPrices(opportunity)}
                         className="text-blue-600"
@@ -312,12 +313,24 @@ const OpportunitiesTab = () => {
                         <TrendingDown className="h-4 w-4 mr-2" />
                         Rechercher prix
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteOpportunity(opportunity.id)}
-                        className="text-red-600"
-                      >
-                        Supprimer
-                      </DropdownMenuItem>
+                      {(opportunity.status === 'pending' || opportunity.status === 'confirmed') && (
+                        <>
+                          <DropdownMenuItem 
+                            onClick={() => handleCloseOpportunity(opportunity.id, 'completed')}
+                            className="text-green-600"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Trajet terminé
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleCloseOpportunity(opportunity.id, 'cancelled')}
+                            className="text-red-600"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Annuler trajet
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -343,16 +356,16 @@ const OpportunitiesTab = () => {
                     <span>{format(new Date(opportunity.desired_date), 'dd/MM/yyyy', { locale: fr })}</span>
                   </div>
                   
-                  {(opportunity.budget_range_min || opportunity.budget_range_max) && (
+                  {(opportunity.budget_min || opportunity.budget_max) && (
                     <div className="flex items-center gap-2">
                       <Euro className="h-4 w-4 text-purple-500" />
                       <span className="font-medium">Budget:</span>
                       <span>
-                        {opportunity.budget_range_min && opportunity.budget_range_max 
-                          ? `${opportunity.budget_range_min}€ - ${opportunity.budget_range_max}€`
-                          : opportunity.budget_range_min 
-                            ? `À partir de ${opportunity.budget_range_min}€`
-                            : `Jusqu'à ${opportunity.budget_range_max}€`
+                        {opportunity.budget_min && opportunity.budget_max 
+                          ? `${opportunity.budget_min}€ - ${opportunity.budget_max}€`
+                          : opportunity.budget_min 
+                            ? `À partir de ${opportunity.budget_min}€`
+                            : `Jusqu'à ${opportunity.budget_max}€`
                         }
                       </span>
                     </div>
@@ -377,7 +390,16 @@ const OpportunitiesTab = () => {
         onOpenChange={setShowCreateDialog}
         opportunity={editingOpportunity}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['pricing-opportunities'] });
+          queryClient.invalidateQueries({ queryKey: ['client-opportunities'] });
+          queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
+        }}
+      />
+
+      <CreateClientDialog
+        open={showCreateClientDialog}
+        onOpenChange={setShowCreateClientDialog}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['client-opportunities'] });
           queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
         }}
       />
