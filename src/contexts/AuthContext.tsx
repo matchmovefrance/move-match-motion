@@ -110,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('👤 Loading profile for:', user.email);
       
-      // Special handling for admin users
+      // Special handling for admin users (only contact@matchmove.fr and pierre@matchmove.fr)
       if (user.email === 'contact@matchmove.fr' || user.email === 'pierre@matchmove.fr') {
         console.log('👑 Admin user detected');
         const adminProfile: Profile = {
@@ -124,21 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // For mehdi@matchmove.fr, set as admin directly
-      if (user.email === 'mehdi@matchmove.fr') {
-        console.log('👑 Mehdi admin user detected');
-        const mehdiProfile: Profile = {
-          id: user.id,
-          email: user.email,
-          role: 'admin',
-          company_name: 'MatchMove'
-        };
-        setProfile(mehdiProfile);
-        console.log('✅ Mehdi admin profile set:', mehdiProfile);
-        return;
-      }
-
-      // For other users, try to fetch from database with timeout
+      // For all other users (including mehdi@matchmove.fr), fetch from database
       try {
         const { data: profileData, error } = await Promise.race([
           supabase
