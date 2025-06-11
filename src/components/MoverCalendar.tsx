@@ -18,6 +18,7 @@ interface Move {
   arrival_city: string;
   used_volume: number;
   status_custom: string;
+  contact_email: string;
 }
 
 const MoverCalendar = () => {
@@ -45,22 +46,13 @@ const MoverCalendar = () => {
     try {
       console.log('🔍 Fetching moves for user:', user?.email, 'role:', profile?.role);
       
-      // Pour les agents et admins, récupérer TOUS les trajets sans aucun filtre
-      // Pour les déménageurs, filtrer par contact_email
-      let query = supabase
+      setLoading(true);
+
+      // Récupérer TOUS les trajets - les politiques RLS gèrent maintenant les permissions
+      const { data, error } = await supabase
         .from('confirmed_moves')
         .select('*')
         .order('departure_date', { ascending: true });
-
-      if (profile?.role === 'demenageur') {
-        console.log('👤 Déménageur - filtering by contact_email:', user?.email);
-        query = query.eq('contact_email', user?.email);
-      } else {
-        console.log('👨‍💼 Agent/Admin - showing ALL moves without any filter');
-        // Pas de filtre du tout pour les agents et admins - ils voient TOUT
-      }
-
-      const { data, error } = await query;
 
       if (error) {
         console.error('❌ Error fetching moves:', error);
@@ -68,9 +60,8 @@ const MoverCalendar = () => {
       }
       
       console.log('✅ Raw moves data from database:', data);
-      console.log('✅ Total number of moves in database:', data?.length || 0);
+      console.log('✅ Total number of moves retrieved:', data?.length || 0);
       
-      // Log de la structure de la première entrée pour debug
       if (data && data.length > 0) {
         console.log('📋 First move structure:', data[0]);
         
@@ -86,22 +77,15 @@ const MoverCalendar = () => {
           });
         });
       } else {
-        console.log('⚠️ No moves found in database');
-        
-        // Vérification additionnelle - compter le total dans la table
-        const { count } = await supabase
-          .from('confirmed_moves')
-          .select('*', { count: 'exact', head: true });
-        
-        console.log('🔢 Total count in confirmed_moves table:', count);
+        console.log('⚠️ No moves found - this could be due to RLS policies or empty table');
       }
       
       setMoves(data || []);
     } catch (error) {
-      console.error('Error fetching moves:', error);
+      console.error('❌ Error fetching moves:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les trajets",
+        description: "Impossible de charger les trajets. Vérifiez vos permissions.",
         variant: "destructive",
       });
     } finally {
@@ -113,15 +97,17 @@ const MoverCalendar = () => {
     if (!user) return;
 
     try {
+      console.log('➕ Adding new move:', newMove);
+      
       const { error } = await supabase
         .from('confirmed_moves')
         .insert({
           ...newMove,
-          mover_id: 1, // Default mover for now
-          truck_id: 1, // Default truck for now
+          mover_id: 1,
+          truck_id: 1,
           created_by: user.id,
           status_custom: 'en_cours',
-          contact_email: user.email // Associer l'email de l'utilisateur
+          contact_email: user.email
         });
 
       if (error) throw error;
@@ -142,7 +128,7 @@ const MoverCalendar = () => {
       setShowAddMove(false);
       fetchMoves();
     } catch (error: any) {
-      console.error('Error adding move:', error);
+      console.error('❌ Error adding move:', error);
       toast({
         title: "Erreur",
         description: "Impossible d'ajouter le trajet",
@@ -167,7 +153,7 @@ const MoverCalendar = () => {
 
       fetchMoves();
     } catch (error: any) {
-      console.error('Error updating move status:', error);
+      console.error('❌ Error updating move status:', error);
       toast({
         title: "Erreur",
         description: "Impossible de mettre à jour le statut",
@@ -208,7 +194,7 @@ const MoverCalendar = () => {
         <p>📧 Utilisateur: {user?.email}</p>
         <p>👤 Rôle: {profile?.role}</p>
         <p>📊 Nombre de trajets trouvés: {moves.length}</p>
-        <p>🔄 Filtre appliqué: {profile?.role === 'demenageur' ? `contact_email = ${user?.email}` : 'Aucun filtre (tous les trajets)'}</p>
+        <p>🔐 Politiques RLS: Mises à jour - Agent/Admin voient tout, Déménageur voit ses trajets</p>
         <Button 
           onClick={fetchMoves} 
           variant="outline" 
@@ -260,49 +246,7 @@ const MoverCalendar = () => {
             />
           </div>
           <div className="flex space-x-2 mt-4">
-            <Button onClick={async () => {
-              if (!user) return;
-
-              try {
-                console.log('➕ Adding new move:', newMove);
-                
-                const { error } = await supabase
-                  .from('confirmed_moves')
-                  .insert({
-                    ...newMove,
-                    mover_id: 1,
-                    truck_id: 1,
-                    created_by: user.id,
-                    status_custom: 'en_cours',
-                    contact_email: user.email
-                  });
-
-                if (error) throw error;
-
-                toast({
-                  title: "Succès",
-                  description: "Trajet ajouté avec succès",
-                });
-
-                setNewMove({
-                  departure_date: '',
-                  departure_postal_code: '',
-                  departure_city: '',
-                  arrival_postal_code: '',
-                  arrival_city: '',
-                  used_volume: 0
-                });
-                setShowAddMove(false);
-                fetchMoves();
-              } catch (error: any) {
-                console.error('Error adding move:', error);
-                toast({
-                  title: "Erreur",
-                  description: "Impossible d'ajouter le trajet",
-                  variant: "destructive",
-                });
-              }
-            }}>Ajouter</Button>
+            <Button onClick={addMove}>Ajouter</Button>
             <Button variant="outline" onClick={() => setShowAddMove(false)}>
               Annuler
             </Button>
@@ -315,17 +259,15 @@ const MoverCalendar = () => {
           <div className="text-center py-8">
             <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">
-              {profile?.role === 'demenageur' 
-                ? 'Aucun trajet assigné pour le moment' 
-                : 'Aucun trajet trouvé dans la base de données'}
+              Aucun trajet trouvé
             </p>
             <p className="text-sm text-gray-400 mt-2">
               {profile?.role === 'demenageur' 
-                ? 'Les trajets vous seront assignés par votre email de contact'
-                : 'Vérifiez que des trajets ont été créés dans la table confirmed_moves'}
+                ? 'Aucun trajet ne vous est assigné pour le moment'
+                : 'Aucun trajet dans la base de données ou problème de permissions'}
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Consultez les logs de la console pour plus d'informations de débogage
+              Consultez les logs de la console et vérifiez les politiques RLS
             </p>
           </div>
         ) : (
@@ -352,6 +294,9 @@ const MoverCalendar = () => {
                     <div className="flex items-center space-x-2 mt-2 text-xs text-gray-500">
                       <MapPin className="h-3 w-3" />
                       <span>{move.departure_postal_code} → {move.arrival_postal_code}</span>
+                      {move.contact_email && (
+                        <span className="ml-4">Contact: {move.contact_email}</span>
+                      )}
                     </div>
                   </div>
                 </div>
