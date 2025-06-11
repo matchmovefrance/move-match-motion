@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro, RefreshCw } from 'lucide-react';
+import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ListView } from '@/components/ui/list-view';
 import {
@@ -18,89 +18,63 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import MoveForm from './MoveForm';
-import DateFilter from './DateFilter';
-import SyncStatusDialog from './SyncStatusDialog';
+import StatusToggle from './StatusToggle';
 
-interface Move {
+interface ConfirmedMove {
   id: number;
   mover_name: string | null;
   company_name: string | null;
-  truck_identifier: string | null;
-  departure_address: string | null;
   departure_city: string;
   departure_postal_code: string;
-  departure_country: string | null;
-  arrival_address: string | null;
   arrival_city: string;
   arrival_postal_code: string;
-  arrival_country: string | null;
   departure_date: string;
   max_volume: number | null;
   used_volume: number;
   available_volume: number;
-  status: 'pending' | 'confirmed' | 'completed';
   price_per_m3: number | null;
   total_price: number | null;
-  description: string | null;
-  special_requirements: string | null;
-  access_conditions: string | null;
-  contact_phone: string | null;
-  contact_email: string | null;
+  status: string;
+  status_custom: string | null;
+  route_type: string | null;
   created_at: string;
-  mover_id: number;
-  truck_id: number;
+  created_by: string;
 }
 
 const MoveManagement = () => {
   const { user, profile } = useAuth();
-  const [moves, setMoves] = useState<Move[]>([]);
-  const [filteredMoves, setFilteredMoves] = useState<Move[]>([]);
+  const [moves, setMoves] = useState<ConfirmedMove[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingMove, setEditingMove] = useState<Move | null>(null);
-  const [showSyncDialog, setShowSyncDialog] = useState(false);
+  const [editingMove, setEditingMove] = useState<ConfirmedMove | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchMoves();
   }, []);
 
-  useEffect(() => {
-    setFilteredMoves(moves);
-  }, [moves]);
-
   const fetchMoves = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching moves from database... Role:', profile?.role);
+      console.log('🔄 Fetching moves from database...', { userRole: profile?.role });
       
-      let query = supabase
-        .from('confirmed_moves')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Les admins et agents voient tout, pas de filtre par created_by
-      // Seuls les utilisateurs non-admin/agent sont filtrés
-      if (profile?.role !== 'admin' && profile?.role !== 'agent') {
+      let query = supabase.from('confirmed_moves').select('*');
+      
+      // Pour les admins et agents, voir toutes les données
+      // Pour les autres rôles, voir seulement leurs propres données
+      if (profile?.role !== 'admin' && user?.email !== 'contact@matchmove.fr' && user?.email !== 'pierre@matchmove.fr') {
         query = query.eq('created_by', user?.id);
       }
-
-      const { data, error } = await query;
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error('❌ Error fetching moves:', error);
         throw error;
       }
       
-      const movesWithCalculatedVolume = (data || []).map(move => ({
-        ...move,
-        available_volume: (move.max_volume || 0) - (move.used_volume || 0),
-        status: (move.status as 'pending' | 'confirmed' | 'completed') || 'confirmed'
-      }));
-      
-      console.log('✅ Moves fetched from DB:', movesWithCalculatedVolume.length);
-      console.log('🔍 Query type:', profile?.role === 'admin' || profile?.role === 'agent' ? 'ALL moves' : 'Filtered by created_by');
-      setMoves(movesWithCalculatedVolume);
+      console.log('✅ Moves fetched from DB:', data?.length || 0);
+      setMoves(data || []);
     } catch (error) {
       console.error('Error fetching moves:', error);
       toast({
@@ -113,58 +87,29 @@ const MoveManagement = () => {
     }
   };
 
-  const handleDateFilter = (filteredData: Move[]) => {
-    setFilteredMoves(filteredData);
-  };
+  const handleStatusChange = async (moveId: number, newStatus: 'en_cours' | 'termine') => {
+    try {
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .update({ status_custom: newStatus })
+        .eq('id', moveId);
 
-  const validateRequiredFields = (formData: any) => {
-    const requiredFields = ['mover_name', 'company_name', 'departure_city', 'arrival_city', 'departure_date', 'max_volume'];
-    const missingFields = [];
+      if (error) throw error;
 
-    for (const field of requiredFields) {
-      if (!formData[field] || String(formData[field]).trim() === '') {
-        missingFields.push(field);
-      }
+      toast({
+        title: "Succès",
+        description: `Déménagement ${newStatus === 'termine' ? 'terminé' : 'remis en cours'}`,
+      });
+
+      fetchMoves();
+    } catch (error) {
+      console.error('Error updating move status:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut",
+        variant: "destructive",
+      });
     }
-
-    return missingFields;
-  };
-
-  const cleanAndProcessFormData = (formData: any) => {
-    const parseNumeric = (value: any): number | null => {
-      if (value === null || value === undefined || value === '') return null;
-      const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
-      return isNaN(parsed) ? null : parsed;
-    };
-
-    return {
-      mover_name: formData.mover_name?.trim() || null,
-      company_name: formData.company_name?.trim() || null,
-      truck_identifier: formData.truck_identifier?.trim() || `TRUCK-${Date.now()}`,
-      departure_address: formData.departure_address?.trim() || null,
-      departure_city: formData.departure_city?.trim() || '',
-      departure_postal_code: formData.departure_postal_code?.trim() || '',
-      departure_country: formData.departure_country?.trim() || 'France',
-      arrival_address: formData.arrival_address?.trim() || null,
-      arrival_city: formData.arrival_city?.trim() || '',
-      arrival_postal_code: formData.arrival_postal_code?.trim() || '',
-      arrival_country: formData.arrival_country?.trim() || 'France',
-      departure_date: formData.departure_date || new Date().toISOString().split('T')[0],
-      departure_time: formData.departure_time || null,
-      arrival_time: formData.arrival_time || null,
-      estimated_arrival_date: formData.estimated_arrival_date || null,
-      estimated_arrival_time: formData.estimated_arrival_time || null,
-      max_volume: parseNumeric(formData.max_volume) || 50,
-      used_volume: parseNumeric(formData.used_volume) || 0,
-      price_per_m3: parseNumeric(formData.price_per_m3),
-      total_price: parseNumeric(formData.total_price),
-      description: formData.description?.trim() || null,
-      special_requirements: formData.special_requirements?.trim() || null,
-      access_conditions: formData.access_conditions?.trim() || null,
-      contact_phone: formData.contact_phone?.trim() || null,
-      contact_email: formData.contact_email?.trim() || null,
-      status: formData.status || 'confirmed'
-    };
   };
 
   const handleFormSubmit = async (formData: any) => {
@@ -179,10 +124,11 @@ const MoveManagement = () => {
 
     try {
       setLoading(true);
-      console.log('📝 Move form submission:', { isEditing: !!editingMove, formData });
-      
+      console.log('📝 Form submission started:', { isEditing: !!editingMove, formData });
+
       // Validation des champs obligatoires
-      const missingFields = validateRequiredFields(formData);
+      const requiredFields = ['company_name', 'departure_city', 'arrival_city', 'departure_date'];
+      const missingFields = requiredFields.filter(field => !formData[field] || String(formData[field]).trim() === '');
       if (missingFields.length > 0) {
         toast({
           title: "Erreur",
@@ -192,93 +138,48 @@ const MoveManagement = () => {
         return;
       }
 
-      // Nettoyer et traiter les données
-      const processedData = cleanAndProcessFormData(formData);
-      console.log('Processed move data:', processedData);
+      // Préparation des données
+      const processedData = {
+        ...formData,
+        created_by: user.id,
+        max_volume: formData.max_volume ? parseFloat(formData.max_volume) : null,
+        price_per_m3: formData.price_per_m3 ? parseFloat(formData.price_per_m3) : null,
+        total_price: formData.total_price ? parseFloat(formData.total_price) : null,
+        used_volume: formData.used_volume ? parseFloat(formData.used_volume) : 0,
+        available_volume: formData.max_volume ? parseFloat(formData.max_volume) - (formData.used_volume ? parseFloat(formData.used_volume) : 0) : 0,
+      };
+      console.log('🧹 Processed data:', processedData);
 
       if (editingMove) {
-        // Mode édition
         console.log('✏️ Updating existing move:', editingMove.id);
         
         const { error } = await supabase
           .from('confirmed_moves')
-          .update({
-            ...processedData,
-            created_by: user.id
-          })
-          .eq('id', editingMove.id)
-          .eq('created_by', user.id);
+          .update(processedData)
+          .eq('id', editingMove.id);
 
-        if (error) {
-          console.error('❌ Move update error:', error);
-          throw error;
-        }
+        if (error) throw error;
 
-        console.log('✅ Move updated successfully');
         toast({
           title: "Succès",
           description: "Déménagement mis à jour avec succès",
         });
       } else {
-        // Mode création
         console.log('➕ Creating new move');
         
-        // Créer d'abord un déménageur et un camion
-        const { data: moverData, error: moverError } = await supabase
-          .from('movers')
-          .insert({
-            name: processedData.mover_name,
-            company_name: processedData.company_name,
-            email: processedData.contact_email || `mover-${Date.now()}@example.com`,
-            phone: processedData.contact_phone || '0123456789',
-            created_by: user.id
-          })
-          .select()
-          .single();
-
-        if (moverError) {
-          console.error('❌ Mover creation error:', moverError);
-          throw moverError;
-        }
-
-        const { data: truckData, error: truckError } = await supabase
-          .from('trucks')
-          .insert({
-            mover_id: moverData.id,
-            identifier: processedData.truck_identifier,
-            max_volume: processedData.max_volume
-          })
-          .select()
-          .single();
-
-        if (truckError) {
-          console.error('❌ Truck creation error:', truckError);
-          throw truckError;
-        }
-
-        // Créer le déménagement avec les IDs corrects
-        const { error: moveError } = await supabase
+        const { data, error } = await supabase
           .from('confirmed_moves')
-          .insert({
-            ...processedData,
-            mover_id: moverData.id,
-            truck_id: truckData.id,
-            created_by: user.id
-          });
+          .insert(processedData)
+          .select();
 
-        if (moveError) {
-          console.error('❌ Move creation error:', moveError);
-          throw moveError;
-        }
+        if (error) throw error;
 
-        console.log('✅ Move created successfully');
         toast({
           title: "Succès",
           description: "Déménagement ajouté avec succès",
         });
       }
 
-      // Fermer les formulaires et retourner à la liste
       setShowAddForm(false);
       setEditingMove(null);
       await fetchMoves();
@@ -295,33 +196,26 @@ const MoveManagement = () => {
     }
   };
 
-  const deleteMove = async (id: number) => {
+  const deleteMove = async (moveId: number) => {
     if (!user) return;
     
     try {
-      setLoading(true);
-      console.log('🗑️ Deleting move:', id);
+      console.log('🗑️ Deleting move:', moveId);
       
       const { error } = await supabase
         .from('confirmed_moves')
         .delete()
-        .eq('id', id)
-        .eq('created_by', user.id);
+        .eq('id', moveId);
 
-      if (error) {
-        console.error('❌ Error deleting move:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('✅ Move deleted successfully');
-      
-      // Mettre à jour l'état local immédiatement
-      setMoves(prevMoves => prevMoves.filter(m => m.id !== id));
+      setMoves(prevMoves => prevMoves.filter(m => m.id !== moveId));
 
       toast({
         title: "Succès",
         description: "Déménagement supprimé avec succès",
       });
+
     } catch (error: any) {
       console.error('❌ Error deleting move:', error);
       toast({
@@ -329,21 +223,10 @@ const MoveManagement = () => {
         description: `Impossible de supprimer le déménagement: ${error.message}`,
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleSyncComplete = () => {
-    setShowSyncDialog(false);
-    fetchMoves();
-    toast({
-      title: "Succès",
-      description: "Synchronisation terminée avec succès",
-    });
-  };
-
-  if (loading && !showAddForm && !editingMove) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -374,14 +257,7 @@ const MoveManagement = () => {
         
         <MoveForm
           onSubmit={handleFormSubmit}
-          initialData={editingMove ? {
-            ...editingMove,
-            max_volume: editingMove.max_volume?.toString() || '',
-            used_volume: editingMove.used_volume?.toString() || '',
-            available_volume: editingMove.available_volume?.toString() || '',
-            price_per_m3: editingMove.price_per_m3?.toString() || '',
-            total_price: editingMove.total_price?.toString() || ''
-          } : undefined}
+          initialData={editingMove}
           isEditing={!!editingMove}
         />
       </div>
@@ -393,46 +269,22 @@ const MoveManagement = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Truck className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Déménagements</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Déménagements confirmés</h2>
+          <span className="text-sm text-gray-500">({moves.length} déménagements)</span>
         </div>
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowSyncDialog(true)}
-            title="Vérifier la synchronisation"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Sync
-          </Button>
-          <Button
-            onClick={() => setShowAddForm(true)}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Ajouter un déménagement
-          </Button>
-        </div>
+        <Button
+          onClick={() => setShowAddForm(true)}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Ajouter un déménagement
+        </Button>
       </div>
-
-      {/* Debug info avec informations sur la requête */}
-      <div className="bg-green-50 p-4 rounded-lg text-sm border border-green-200">
-        <p><strong>🔍 Debug MoveManagement:</strong></p>
-        <p>👤 Rôle: {profile?.role}</p>
-        <p>🔍 Type de requête: {profile?.role === 'admin' || profile?.role === 'agent' ? 'TOUS les déménagements' : 'Filtrés par created_by'}</p>
-        <p>📊 Déménagements trouvés: {moves.length}</p>
-      </div>
-
-      <DateFilter 
-        data={moves} 
-        onFilter={handleDateFilter}
-        dateField="departure_date"
-        label="Filtrer par date de départ"
-      />
 
       <ListView
-        items={filteredMoves}
+        items={moves}
         searchFields={['company_name', 'mover_name', 'departure_city', 'arrival_city']}
-        renderCard={(move: Move) => (
+        renderCard={(move: ConfirmedMove) => (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -441,7 +293,7 @@ const MoveManagement = () => {
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-800 mb-2">
-                  {move.company_name || 'Entreprise non renseignée'} - {move.mover_name || 'Déménageur non renseigné'}
+                  {move.company_name || 'Déménageur non renseigné'}
                 </h3>
                 
                 <div className="space-y-2 text-sm text-gray-600">
@@ -456,34 +308,25 @@ const MoveManagement = () => {
                   {move.max_volume && (
                     <div className="flex items-center space-x-2">
                       <Volume2 className="h-4 w-4 text-orange-600" />
-                      <span>Volume: {move.used_volume}m³ / {move.max_volume}m³ (Disponible: {move.available_volume}m³)</span>
+                      <span>Volume max: {move.max_volume}m³ | Utilisé: {move.used_volume}m³ | Disponible: {move.available_volume}m³</span>
                     </div>
                   )}
                   {move.total_price && (
                     <div className="flex items-center space-x-2">
                       <Euro className="h-4 w-4 text-green-600" />
-                      <span>{move.total_price}€</span>
+                      <span>Prix total: {move.total_price}€</span>
                     </div>
                   )}
-                  {move.contact_phone && (
-                    <div className="flex items-center space-x-2">
-                      <User className="h-4 w-4 text-blue-600" />
-                      <span>{move.contact_phone}</span>
-                    </div>
-                  )}
+                  <div className="text-xs text-gray-400 mt-3">
+                    Créé le {new Date(move.created_at).toLocaleDateString('fr-FR')}
+                  </div>
                 </div>
                 
-                <div className="mt-3">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                    move.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    move.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                    move.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {move.status === 'pending' ? 'En attente' : 
-                     move.status === 'confirmed' ? 'Confirmé' :
-                     move.status === 'completed' ? 'Terminé' : move.status}
-                  </span>
+                <div className="mt-3 flex items-center space-x-3">
+                  <StatusToggle
+                    status={move.status_custom || 'en_cours'}
+                    onStatusChange={(newStatus) => handleStatusChange(move.id, newStatus)}
+                  />
                 </div>
               </div>
               
@@ -509,8 +352,8 @@ const MoveManagement = () => {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Supprimer le déménagement</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Êtes-vous sûr de vouloir supprimer le déménagement de {move.company_name || 'cette entreprise'} ? 
-                        Cette action est irréversible.
+                        Êtes-vous sûr de vouloir supprimer ce déménagement ? 
+                        Cette action supprimera définitivement le déménagement de la base de données.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -528,13 +371,13 @@ const MoveManagement = () => {
             </div>
           </motion.div>
         )}
-        renderListItem={(move: Move) => (
+        renderListItem={(move: ConfirmedMove) => (
           <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex-1">
               <div className="flex items-center space-x-4">
                 <div>
-                  <h4 className="font-medium text-gray-800">{move.company_name || 'Entreprise non renseignée'}</h4>
-                  <p className="text-sm text-gray-600">{move.mover_name || 'Déménageur non renseigné'}</p>
+                  <h4 className="font-medium text-gray-800">{move.company_name || 'Déménageur non renseigné'}</h4>
+                  <p className="text-sm text-gray-600">{move.mover_name}</p>
                 </div>
                 <div className="text-sm text-gray-500">
                   <span>{move.departure_city} → {move.arrival_city}</span>
@@ -542,21 +385,16 @@ const MoveManagement = () => {
                 <div className="text-sm text-gray-500">
                   <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
                 </div>
-                {move.available_volume && (
+                {move.max_volume && (
                   <div className="text-sm text-gray-500">
-                    <span>{move.available_volume}m³ disponible</span>
+                    <span>{move.available_volume}m³ dispo</span>
                   </div>
                 )}
-                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  move.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  move.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                  move.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {move.status === 'pending' ? 'En attente' : 
-                   move.status === 'confirmed' ? 'Confirmé' :
-                   move.status === 'completed' ? 'Terminé' : move.status}
-                </div>
+                <StatusToggle
+                  status={move.status_custom || 'en_cours'}
+                  onStatusChange={(newStatus) => handleStatusChange(move.id, newStatus)}
+                  variant="inline"
+                />
               </div>
             </div>
             <div className="flex space-x-2">
@@ -581,8 +419,8 @@ const MoveManagement = () => {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Supprimer le déménagement</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Êtes-vous sûr de vouloir supprimer le déménagement de {move.company_name || 'cette entreprise'} ? 
-                      Cette action est irréversible.
+                      Êtes-vous sûr de vouloir supprimer ce déménagement ? 
+                      Cette action supprimera définitivement le déménagement de la base de données.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -595,7 +433,7 @@ const MoveManagement = () => {
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
-              </AlertDialog>
+                </AlertDialog>
             </div>
           </div>
         )}
@@ -603,12 +441,6 @@ const MoveManagement = () => {
         emptyStateMessage="Aucun déménagement trouvé"
         emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
         itemsPerPage={10}
-      />
-
-      <SyncStatusDialog
-        isOpen={showSyncDialog}
-        onClose={() => setShowSyncDialog(false)}
-        onSyncComplete={handleSyncComplete}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye, RefreshCw } from 'lucide-react';
+import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye, RefreshCw, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ListView } from '@/components/ui/list-view';
 import {
@@ -362,6 +362,36 @@ const ClientList = () => {
     });
   };
 
+  const handleClientCompleted = async (clientId: number, requestId: number) => {
+    try {
+      console.log('🏁 Marking client as completed:', { clientId, requestId });
+      
+      const { error } = await supabase
+        .from('client_requests')
+        .update({ 
+          status: 'completed',
+          status_custom: 'termine'
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Client marqué comme terminé",
+      });
+
+      fetchClients();
+    } catch (error: any) {
+      console.error('❌ Error marking client as completed:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de marquer le client comme terminé",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -532,6 +562,17 @@ const ClientList = () => {
                   <Eye className="h-4 w-4" />
                 </Button>
                 <QuoteGenerator client={client} />
+                {client.status !== 'completed' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleClientCompleted(client.client_id, client.id)}
+                    className="text-green-600 hover:text-green-700"
+                    title="Marquer le déménagement comme terminé"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -623,6 +664,17 @@ const ClientList = () => {
                 <Eye className="h-3 w-3" />
               </Button>
               <QuoteGenerator client={client} />
+              {client.status !== 'completed' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleClientCompleted(client.client_id, client.id)}
+                  className="text-green-600 hover:text-green-700"
+                  title="Marquer le déménagement comme terminé"
+                >
+                  <CheckCircle className="h-3 w-3" />
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

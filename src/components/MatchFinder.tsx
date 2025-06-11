@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Users, Truck, Clock, Check, X, Loader2 } from 'lucide-react';
@@ -359,6 +358,9 @@ const MatchFinder = () => {
 
       // Process matches with distance-based priority
       for (const client of clientRequests) {
+        // Skip completed clients
+        if (client.status === 'completed') continue;
+        
         const clientMatches: Array<{
           move: Move;
           distance: number;
@@ -367,6 +369,9 @@ const MatchFinder = () => {
 
         // Calculate all potential matches for this client
         for (const move of moves) {
+          // Skip terminated moves
+          if (move.status_custom === 'termine') continue;
+          
           const datesCompatible = areDatesCompatible(client, move.departure_date);
           
           if (!datesCompatible) continue;
@@ -742,3 +747,5 @@ const MatchFinder = () => {
 };
 
 export default MatchFinder;
+
+}
