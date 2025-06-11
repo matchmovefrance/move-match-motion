@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, MapPin, Truck } from 'lucide-react';
@@ -44,19 +45,19 @@ const MoverCalendar = () => {
     try {
       console.log('🔍 Fetching moves for user:', user?.email, 'role:', profile?.role);
       
+      // Pour les agents et admins, récupérer TOUS les trajets sans aucun filtre
+      // Pour les déménageurs, filtrer par contact_email
       let query = supabase
         .from('confirmed_moves')
         .select('*')
         .order('departure_date', { ascending: true });
 
-      // Appliquer le filtrage selon le rôle
       if (profile?.role === 'demenageur') {
         console.log('👤 Déménageur - filtering by contact_email:', user?.email);
-        // Pour les déménageurs, on filtre par contact_email
         query = query.eq('contact_email', user?.email);
       } else {
-        console.log('👨‍💼 Agent/Admin - showing all moves');
-        // Pour les agents et admins, on affiche tous les trajets (pas de filtre supplémentaire)
+        console.log('👨‍💼 Agent/Admin - showing ALL moves without any filter');
+        // Pas de filtre du tout pour les agents et admins - ils voient TOUT
       }
 
       const { data, error } = await query;
@@ -66,20 +67,33 @@ const MoverCalendar = () => {
         throw error;
       }
       
-      console.log('✅ Raw moves data:', data);
-      console.log('✅ Number of moves found:', data?.length || 0);
+      console.log('✅ Raw moves data from database:', data);
+      console.log('✅ Total number of moves in database:', data?.length || 0);
       
-      // Log détaillé de chaque trajet pour debug
+      // Log de la structure de la première entrée pour debug
       if (data && data.length > 0) {
+        console.log('📋 First move structure:', data[0]);
+        
         data.forEach((move, index) => {
-          console.log(`Move ${index + 1}:`, {
+          console.log(`📍 Move ${index + 1}:`, {
             id: move.id,
             departure_city: move.departure_city,
             arrival_city: move.arrival_city,
             contact_email: move.contact_email,
-            departure_date: move.departure_date
+            departure_date: move.departure_date,
+            created_by: move.created_by,
+            status_custom: move.status_custom
           });
         });
+      } else {
+        console.log('⚠️ No moves found in database');
+        
+        // Vérification additionnelle - compter le total dans la table
+        const { count } = await supabase
+          .from('confirmed_moves')
+          .select('*', { count: 'exact', head: true });
+        
+        console.log('🔢 Total count in confirmed_moves table:', count);
       }
       
       setMoves(data || []);
@@ -188,12 +202,21 @@ const MoverCalendar = () => {
         </Button>
       </div>
 
-      {/* Informations de debug pour aider à comprendre le problème */}
-      <div className="bg-gray-100 p-4 rounded-lg text-sm">
-        <p><strong>Debug Info:</strong></p>
-        <p>Utilisateur: {user?.email}</p>
-        <p>Rôle: {profile?.role}</p>
-        <p>Nombre de trajets trouvés: {moves.length}</p>
+      {/* Informations de debug améliorées */}
+      <div className="bg-blue-50 p-4 rounded-lg text-sm border border-blue-200">
+        <p><strong>🔍 Debug Info:</strong></p>
+        <p>📧 Utilisateur: {user?.email}</p>
+        <p>👤 Rôle: {profile?.role}</p>
+        <p>📊 Nombre de trajets trouvés: {moves.length}</p>
+        <p>🔄 Filtre appliqué: {profile?.role === 'demenageur' ? `contact_email = ${user?.email}` : 'Aucun filtre (tous les trajets)'}</p>
+        <Button 
+          onClick={fetchMoves} 
+          variant="outline" 
+          size="sm" 
+          className="mt-2"
+        >
+          🔄 Recharger les trajets
+        </Button>
       </div>
 
       {showAddMove && (
@@ -237,50 +260,48 @@ const MoverCalendar = () => {
             />
           </div>
           <div className="flex space-x-2 mt-4">
-            <Button onClick={() => {
-              // Implémentation de addMove simplifiée pour le debug
-              const addMove = async () => {
-                if (!user) return;
+            <Button onClick={async () => {
+              if (!user) return;
 
-                try {
-                  const { error } = await supabase
-                    .from('confirmed_moves')
-                    .insert({
-                      ...newMove,
-                      mover_id: 1,
-                      truck_id: 1,
-                      created_by: user.id,
-                      status_custom: 'en_cours',
-                      contact_email: user.email
-                    });
-
-                  if (error) throw error;
-
-                  toast({
-                    title: "Succès",
-                    description: "Trajet ajouté avec succès",
+              try {
+                console.log('➕ Adding new move:', newMove);
+                
+                const { error } = await supabase
+                  .from('confirmed_moves')
+                  .insert({
+                    ...newMove,
+                    mover_id: 1,
+                    truck_id: 1,
+                    created_by: user.id,
+                    status_custom: 'en_cours',
+                    contact_email: user.email
                   });
 
-                  setNewMove({
-                    departure_date: '',
-                    departure_postal_code: '',
-                    departure_city: '',
-                    arrival_postal_code: '',
-                    arrival_city: '',
-                    used_volume: 0
-                  });
-                  setShowAddMove(false);
-                  fetchMoves();
-                } catch (error: any) {
-                  console.error('Error adding move:', error);
-                  toast({
-                    title: "Erreur",
-                    description: "Impossible d'ajouter le trajet",
-                    variant: "destructive",
-                  });
-                }
-              };
-              addMove();
+                if (error) throw error;
+
+                toast({
+                  title: "Succès",
+                  description: "Trajet ajouté avec succès",
+                });
+
+                setNewMove({
+                  departure_date: '',
+                  departure_postal_code: '',
+                  departure_city: '',
+                  arrival_postal_code: '',
+                  arrival_city: '',
+                  used_volume: 0
+                });
+                setShowAddMove(false);
+                fetchMoves();
+              } catch (error: any) {
+                console.error('Error adding move:', error);
+                toast({
+                  title: "Erreur",
+                  description: "Impossible d'ajouter le trajet",
+                  variant: "destructive",
+                });
+              }
             }}>Ajouter</Button>
             <Button variant="outline" onClick={() => setShowAddMove(false)}>
               Annuler
@@ -293,13 +314,18 @@ const MoverCalendar = () => {
         {moves.length === 0 ? (
           <div className="text-center py-8">
             <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">
+            <p className="text-gray-500 text-lg">
               {profile?.role === 'demenageur' 
                 ? 'Aucun trajet assigné pour le moment' 
-                : 'Aucun trajet disponible'}
+                : 'Aucun trajet trouvé dans la base de données'}
+            </p>
+            <p className="text-sm text-gray-400 mt-2">
+              {profile?.role === 'demenageur' 
+                ? 'Les trajets vous seront assignés par votre email de contact'
+                : 'Vérifiez que des trajets ont été créés dans la table confirmed_moves'}
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Vérifiez les logs de la console pour plus d'informations
+              Consultez les logs de la console pour plus d'informations de débogage
             </p>
           </div>
         ) : (
