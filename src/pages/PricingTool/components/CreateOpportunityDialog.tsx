@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,13 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarIcon, Loader2, Users, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CreateOpportunityDialogProps {
   open: boolean;
@@ -27,6 +28,8 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
+  const [creationMode, setCreationMode] = useState<'existing' | 'new'>('existing');
+  const [selectedClientRequest, setSelectedClientRequest] = useState<string>('');
   
   const [formData, setFormData] = useState({
     title: '',
@@ -43,10 +46,64 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
     special_requirements: '',
     priority: '1',
     status: 'draft' as const,
+    // Nouveau: informations client
+    client_name: '',
+    client_email: '',
+    client_phone: '',
+  });
+
+  // Récupérer les demandes clients existantes
+  const { data: clientRequests } = useQuery({
+    queryKey: ['client-requests'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_requests')
+        .select(`
+          *,
+          clients (
+            id,
+            name,
+            email,
+            phone
+          )
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: open,
   });
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleClientRequestSelect = (requestId: string) => {
+    const selected = clientRequests?.find(req => req.id.toString() === requestId);
+    if (selected) {
+      setFormData(prev => ({
+        ...prev,
+        title: `Déménagement ${selected.departure_city} → ${selected.arrival_city}`,
+        description: selected.description || '',
+        estimated_volume: selected.estimated_volume?.toString() || '',
+        budget_range_min: selected.budget_min?.toString() || '',
+        budget_range_max: selected.budget_max?.toString() || '',
+        departure_address: selected.departure_address || '',
+        departure_city: selected.departure_city,
+        departure_postal_code: selected.departure_postal_code,
+        arrival_address: selected.arrival_address || '',
+        arrival_city: selected.arrival_city,
+        arrival_postal_code: selected.arrival_postal_code,
+        special_requirements: selected.special_requirements || '',
+        client_name: (selected.clients as any)?.name || selected.name || '',
+        client_email: (selected.clients as any)?.email || selected.email || '',
+        client_phone: (selected.clients as any)?.phone || selected.phone || '',
+      }));
+      setSelectedDate(new Date(selected.desired_date));
+      setSelectedClientRequest(requestId);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,17 +112,20 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
 
     setIsLoading(true);
     try {
+      const opportunityData = {
+        ...formData,
+        estimated_volume: parseFloat(formData.estimated_volume),
+        budget_range_min: formData.budget_range_min ? parseFloat(formData.budget_range_min) : null,
+        budget_range_max: formData.budget_range_max ? parseFloat(formData.budget_range_max) : null,
+        priority: parseInt(formData.priority),
+        desired_date: format(selectedDate, 'yyyy-MM-dd'),
+        created_by: user.id,
+        client_request_id: selectedClientRequest ? parseInt(selectedClientRequest) : null,
+      };
+
       const { error } = await supabase
         .from('pricing_opportunities')
-        .insert({
-          ...formData,
-          estimated_volume: parseFloat(formData.estimated_volume),
-          budget_range_min: formData.budget_range_min ? parseFloat(formData.budget_range_min) : null,
-          budget_range_max: formData.budget_range_max ? parseFloat(formData.budget_range_max) : null,
-          priority: parseInt(formData.priority),
-          desired_date: format(selectedDate, 'yyyy-MM-dd'),
-          created_by: user.id,
-        });
+        .insert(opportunityData);
 
       if (error) throw error;
 
@@ -90,10 +150,13 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
         special_requirements: '',
         priority: '1',
         status: 'draft',
+        client_name: '',
+        client_email: '',
+        client_phone: '',
       });
       setSelectedDate(undefined);
+      setSelectedClientRequest('');
       
-      // Refresh queries
       queryClient.invalidateQueries({ queryKey: ['pricing-opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
       
@@ -112,13 +175,106 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Créer une nouvelle opportunité</DialogTitle>
           <DialogDescription>
-            Ajoutez les détails de la demande de déménagement pour commencer à recevoir des devis.
+            Créez une opportunité depuis une demande client existante ou manuellement.
           </DialogDescription>
         </DialogHeader>
+
+        <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as 'existing' | 'new')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="existing" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Depuis demande existante
+            </TabsTrigger>
+            <TabsTrigger value="new" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Création manuelle
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="existing" className="space-y-4">
+            <div>
+              <Label htmlFor="client_request">Sélectionner une demande client *</Label>
+              <Select value={selectedClientRequest} onValueChange={handleClientRequestSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir une demande client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientRequests?.map((request) => (
+                    <SelectItem key={request.id} value={request.id.toString()}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {(request.clients as any)?.name || request.name} - {request.departure_city} → {request.arrival_city}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {request.estimated_volume}m³ - {format(new Date(request.desired_date), 'dd/MM/yyyy')}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedClientRequest && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Informations client</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-blue-600 font-medium">Nom:</span> {formData.client_name}
+                  </div>
+                  <div>
+                    <span className="text-blue-600 font-medium">Email:</span> {formData.client_email}
+                  </div>
+                  <div>
+                    <span className="text-blue-600 font-medium">Téléphone:</span> {formData.client_phone}
+                  </div>
+                  <div>
+                    <span className="text-blue-600 font-medium">Volume:</span> {formData.estimated_volume}m³
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="new">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="client_name">Nom du client *</Label>
+                <Input
+                  id="client_name"
+                  value={formData.client_name}
+                  onChange={(e) => handleInputChange('client_name', e.target.value)}
+                  placeholder="Jean Dupont"
+                  required={creationMode === 'new'}
+                />
+              </div>
+              <div>
+                <Label htmlFor="client_email">Email du client *</Label>
+                <Input
+                  id="client_email"
+                  type="email"
+                  value={formData.client_email}
+                  onChange={(e) => handleInputChange('client_email', e.target.value)}
+                  placeholder="jean.dupont@email.com"
+                  required={creationMode === 'new'}
+                />
+              </div>
+              <div>
+                <Label htmlFor="client_phone">Téléphone du client</Label>
+                <Input
+                  id="client_phone"
+                  value={formData.client_phone}
+                  onChange={(e) => handleInputChange('client_phone', e.target.value)}
+                  placeholder="+33 6 12 34 56 78"
+                />
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
@@ -131,17 +287,6 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
                 onChange={(e) => handleInputChange('title', e.target.value)}
                 placeholder="ex: Déménagement 3 pièces Paris → Lyon"
                 required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                placeholder="Détails additionnels sur le déménagement..."
-                rows={3}
               />
             </div>
 

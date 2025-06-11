@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Plus, Edit, Link, BarChart3, Phone, Mail, MapPin, Users2 } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Link, BarChart3, Phone, Mail, MapPin, Users2, Sync } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -32,13 +32,26 @@ const SuppliersTab = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data: suppliers, isLoading, refetch } = useQuery({
     queryKey: ['suppliers', searchTerm, activeFilter, sortBy],
     queryFn: async () => {
       let query = supabase
         .from('suppliers')
-        .select('*');
+        .select(`
+          *,
+          service_providers (
+            id,
+            name,
+            company_name,
+            email,
+            phone,
+            address,
+            city,
+            postal_code
+          )
+        `);
 
       if (activeFilter === 'active') {
         query = query.eq('is_active', true);
@@ -54,7 +67,7 @@ const SuppliersTab = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as Supplier[];
+      return data;
     },
     refetchInterval: 15000,
   });
@@ -74,18 +87,14 @@ const SuppliersTab = () => {
     },
   });
 
-  // Effet pour synchroniser les fournisseurs depuis service_providers
-  useEffect(() => {
-    if (serviceProviders && serviceProviders.length > 0) {
-      syncServiceProvidersToSuppliers();
-    }
-  }, [serviceProviders]);
-
+  // Synchronisation manuelle des prestataires
   const syncServiceProvidersToSuppliers = async () => {
     if (!serviceProviders || !user) return;
     
+    setIsSyncing(true);
     try {
-      // Pour chaque service_provider, vérifier s'il existe déjà dans suppliers
+      let syncCount = 0;
+      
       for (const provider of serviceProviders) {
         const { data } = await supabase
           .from('suppliers')
@@ -93,11 +102,11 @@ const SuppliersTab = () => {
           .eq('email', provider.email.toLowerCase())
           .limit(1);
         
-        // S'il n'existe pas encore, l'ajouter
         if (!data || data.length === 0) {
           await supabase
             .from('suppliers')
             .insert({
+              service_provider_id: provider.id,
               company_name: provider.company_name,
               contact_name: provider.name,
               email: provider.email.toLowerCase(),
@@ -108,14 +117,32 @@ const SuppliersTab = () => {
               is_active: true,
               created_by: user.id
             });
+          syncCount++;
         }
       }
       
-      // Actualiser la liste après synchronisation
-      refetch();
+      if (syncCount > 0) {
+        toast({
+          title: "Synchronisation réussie",
+          description: `${syncCount} nouveau(x) fournisseur(s) synchronisé(s).`,
+        });
+        refetch();
+      } else {
+        toast({
+          title: "Synchronisation terminée",
+          description: "Aucun nouveau fournisseur à synchroniser.",
+        });
+      }
       
     } catch (error) {
       console.error('Error syncing suppliers:', error);
+      toast({
+        title: "Erreur de synchronisation",
+        description: "Impossible de synchroniser les prestataires.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -192,13 +219,24 @@ const SuppliersTab = () => {
               <Filter className="h-5 w-5" />
               Gestion des fournisseurs
             </CardTitle>
-            <Button 
-              className="flex items-center gap-2"
-              onClick={() => setShowAddDialog(true)}
-            >
-              <Plus className="h-4 w-4" />
-              Ajouter un fournisseur
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline"
+                onClick={syncServiceProvidersToSuppliers}
+                disabled={isSyncing}
+                className="flex items-center gap-2"
+              >
+                <Sync className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                Synchroniser prestataires
+              </Button>
+              <Button 
+                className="flex items-center gap-2"
+                onClick={() => setShowAddDialog(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Ajouter un fournisseur
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -245,7 +283,14 @@ const SuppliersTab = () => {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-lg">{supplier.company_name}</CardTitle>
-                    <CardDescription>{supplier.contact_name}</CardDescription>
+                    <CardDescription className="flex items-center gap-2">
+                      {supplier.contact_name}
+                      {supplier.service_providers && (
+                        <Badge variant="outline" className="text-xs">
+                          Synchronisé
+                        </Badge>
+                      )}
+                    </CardDescription>
                   </div>
                   <div className="flex flex-col gap-1">
                     <Badge variant={supplier.is_active ? "default" : "secondary"}>
@@ -274,6 +319,19 @@ const SuppliersTab = () => {
                     <span className="truncate">{supplier.email}</span>
                   </div>
                 </div>
+
+                {/* Lien avec prestataire de service */}
+                {supplier.service_providers && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <h4 className="text-xs font-medium text-green-700 uppercase tracking-wide mb-1">
+                      Prestataire lié
+                    </h4>
+                    <div className="text-xs text-green-800">
+                      <div>ID: {(supplier.service_providers as any).id}</div>
+                      <div>Nom: {(supplier.service_providers as any).name}</div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Pricing Model */}
                 <div className="bg-blue-50 rounded-lg p-3 space-y-1">
@@ -362,13 +420,19 @@ const SuppliersTab = () => {
               <p className="text-sm">
                 {searchTerm || activeFilter !== 'all' 
                   ? 'Aucun fournisseur ne correspond à vos critères.'
-                  : 'Commencez par ajouter votre premier fournisseur.'}
+                  : 'Commencez par ajouter votre premier fournisseur ou synchroniser depuis les prestataires.'}
               </p>
             </div>
-            <Button onClick={() => setShowAddDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un fournisseur
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={() => setShowAddDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter un fournisseur
+              </Button>
+              <Button variant="outline" onClick={syncServiceProvidersToSuppliers}>
+                <Sync className="h-4 w-4 mr-2" />
+                Synchroniser prestataires
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

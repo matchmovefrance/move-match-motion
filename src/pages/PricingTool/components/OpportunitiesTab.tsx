@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp } from 'lucide-react';
+import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -30,7 +30,21 @@ const OpportunitiesTab = () => {
     queryFn: async () => {
       let query = supabase
         .from('pricing_opportunities')
-        .select('*');
+        .select(`
+          *,
+          client_requests (
+            id,
+            name,
+            email,
+            phone,
+            clients (
+              id,
+              name,
+              email,
+              phone
+            )
+          )
+        `);
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
@@ -44,7 +58,7 @@ const OpportunitiesTab = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as PricingOpportunity[];
+      return data;
     },
     refetchInterval: 15000,
   });
@@ -85,6 +99,27 @@ const OpportunitiesTab = () => {
       case 'pending': return 'En attente';
       default: return status;
     }
+  };
+
+  const getClientInfo = (opportunity: any) => {
+    // Si l'opportunité est liée à une demande client
+    if (opportunity.client_requests) {
+      const clientRequest = opportunity.client_requests;
+      const client = clientRequest.clients;
+      
+      return {
+        name: client?.name || clientRequest.name || 'Client non spécifié',
+        email: client?.email || clientRequest.email || '',
+        phone: client?.phone || clientRequest.phone || ''
+      };
+    }
+    
+    // Sinon, utiliser les informations saisies manuellement (si disponibles)
+    return {
+      name: opportunity.client_name || 'Client non spécifié',
+      email: opportunity.client_email || '',
+      phone: opportunity.client_phone || ''
+    };
   };
 
   if (isLoading) {
@@ -165,80 +200,110 @@ const OpportunitiesTab = () => {
       {/* Opportunities Grid */}
       {opportunities && opportunities.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {opportunities.map((opportunity) => (
-            <Card key={opportunity.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg">{opportunity.title}</CardTitle>
-                    <CardDescription className="flex items-center gap-4">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {opportunity.departure_city} → {opportunity.arrival_city}
-                      </span>
-                    </CardDescription>
-                  </div>
-                  <Badge className={getStatusColor(opportunity.status)}>
-                    {getStatusLabel(opportunity.status)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600">{opportunity.estimated_volume}</div>
-                    <div className="text-xs text-gray-600">m³ estimés</div>
-                  </div>
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <div className="text-sm font-bold text-green-600 flex items-center justify-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
+          {opportunities.map((opportunity) => {
+            const clientInfo = getClientInfo(opportunity);
+            
+            return (
+              <Card key={opportunity.id} className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg">{opportunity.title}</CardTitle>
+                      <CardDescription className="flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {opportunity.departure_city} → {opportunity.arrival_city}
+                        </span>
+                      </CardDescription>
                     </div>
-                    <div className="text-xs text-gray-600">Date souhaitée</div>
+                    <Badge className={getStatusColor(opportunity.status)}>
+                      {getStatusLabel(opportunity.status)}
+                    </Badge>
                   </div>
-                </div>
-
-                {opportunity.budget_range_min && opportunity.budget_range_max && (
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Budget client :</span>
-                      <span className="font-medium flex items-center gap-1">
-                        <Euro className="h-3 w-3" />
-                        {opportunity.budget_range_min.toLocaleString()} - {opportunity.budget_range_max.toLocaleString()}€
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {opportunity.special_requirements && (
-                  <div className="bg-yellow-50 rounded-lg p-3">
-                    <h4 className="text-xs font-medium text-yellow-700 uppercase tracking-wide mb-1">
-                      Exigences particulières
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Informations client */}
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <h4 className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      Informations client
                     </h4>
-                    <p className="text-xs text-yellow-800">{opportunity.special_requirements}</p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2 text-blue-800">
+                        <User className="h-3 w-3" />
+                        <span className="font-medium">{clientInfo.name}</span>
+                      </div>
+                      {clientInfo.email && (
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <Mail className="h-3 w-3" />
+                          <span className="truncate">{clientInfo.email}</span>
+                        </div>
+                      )}
+                      {clientInfo.phone && (
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <Phone className="h-3 w-3" />
+                          <span>{clientInfo.phone}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
 
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                    onClick={() => handleFindBestPrices(opportunity)}
-                  >
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    Trouver les prix
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <BarChart3 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <div className="text-lg font-bold text-blue-600">{opportunity.estimated_volume}</div>
+                      <div className="text-xs text-gray-600">m³ estimés</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <div className="text-sm font-bold text-green-600 flex items-center justify-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
+                      </div>
+                      <div className="text-xs text-gray-600">Date souhaitée</div>
+                    </div>
+                  </div>
+
+                  {opportunity.budget_range_min && opportunity.budget_range_max && (
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Budget client :</span>
+                        <span className="font-medium flex items-center gap-1">
+                          <Euro className="h-3 w-3" />
+                          {opportunity.budget_range_min.toLocaleString()} - {opportunity.budget_range_max.toLocaleString()}€
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {opportunity.special_requirements && (
+                    <div className="bg-yellow-50 rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-yellow-700 uppercase tracking-wide mb-1">
+                        Exigences particulières
+                      </h4>
+                      <p className="text-xs text-yellow-800">{opportunity.special_requirements}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                      onClick={() => handleFindBestPrices(opportunity)}
+                    >
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                      Trouver les prix
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <BarChart3 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>
