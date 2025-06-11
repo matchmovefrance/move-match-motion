@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -135,10 +134,9 @@ const HistoryTab = () => {
 
   const handleDeleteHistoryItem = async (itemId: string | number, itemType: 'client_request' | 'quote') => {
     try {
-      // Convert itemId to string to ensure consistency with UUID format
-      const id = String(itemId);
-      
       if (itemType === 'client_request') {
+        // client_requests.id is integer, so convert to number
+        const id = typeof itemId === 'string' ? parseInt(itemId, 10) : itemId;
         const { error } = await supabase
           .from('client_requests')
           .delete()
@@ -146,6 +144,8 @@ const HistoryTab = () => {
 
         if (error) throw error;
       } else {
+        // quotes.id is uuid (string), so convert to string
+        const id = String(itemId);
         const { error } = await supabase
           .from('quotes')
           .delete()
