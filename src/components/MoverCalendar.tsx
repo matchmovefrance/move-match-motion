@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, MapPin, Truck } from 'lucide-react';
@@ -32,27 +31,50 @@ const MoverCalendar = () => {
     used_volume: 0
   });
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
     if (user) {
       fetchMoves();
     }
-  }, [user]);
+  }, [user, profile]);
 
   const fetchMoves = async () => {
     try {
-      const { data, error } = await supabase
+      console.log('🔍 Fetching moves for user:', user?.email, 'role:', profile?.role);
+      
+      let query = supabase
         .from('confirmed_moves')
         .select('*')
-        .eq('created_by', user?.id)
         .order('departure_date', { ascending: true });
 
-      if (error) throw error;
+      // Pour les déménageurs, filtrer par email dans contact_email
+      // Pour les agents et admins, afficher tous les trajets
+      if (profile?.role === 'demenageur') {
+        console.log('👤 Déménageur - filtering by contact_email:', user?.email);
+        query = query.eq('contact_email', user?.email);
+      } else {
+        console.log('👨‍💼 Agent/Admin - showing all moves');
+        // Pas de filtre supplémentaire pour les agents et admins
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ Error fetching moves:', error);
+        throw error;
+      }
+      
+      console.log('✅ Moves fetched:', data?.length || 0, 'moves');
       setMoves(data || []);
     } catch (error) {
       console.error('Error fetching moves:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les trajets",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -69,7 +91,8 @@ const MoverCalendar = () => {
           mover_id: 1, // Default mover for now
           truck_id: 1, // Default truck for now
           created_by: user.id,
-          status_custom: 'en_cours'
+          status_custom: 'en_cours',
+          contact_email: user.email // Associer l'email de l'utilisateur
         });
 
       if (error) throw error;
@@ -79,6 +102,7 @@ const MoverCalendar = () => {
         description: "Trajet ajouté avec succès",
       });
 
+      // ... keep existing code (reset form and refetch)
       setNewMove({
         departure_date: '',
         departure_postal_code: '',
@@ -137,7 +161,9 @@ const MoverCalendar = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Calendar className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Mon Agenda</h2>
+          <h2 className="text-2xl font-bold text-gray-800">
+            {profile?.role === 'demenageur' ? 'Mon Agenda' : 'Agenda des Trajets'}
+          </h2>
         </div>
         <Button
           onClick={() => setShowAddMove(true)}
@@ -198,40 +224,51 @@ const MoverCalendar = () => {
       )}
 
       <div className="grid gap-4">
-        {moves.map((move) => (
-          <motion.div
-            key={move.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Truck className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">
-                    {move.departure_city} → {move.arrival_city}
-                  </h3>
-                  <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                    <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
-                    <span>Volume: {move.used_volume}m³</span>
+        {moves.length === 0 ? (
+          <div className="text-center py-8">
+            <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">
+              {profile?.role === 'demenageur' 
+                ? 'Aucun trajet assigné pour le moment' 
+                : 'Aucun trajet disponible'}
+            </p>
+          </div>
+        ) : (
+          moves.map((move) => (
+            <motion.div
+              key={move.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Truck className="h-6 w-6 text-blue-600" />
                   </div>
-                  <div className="flex items-center space-x-2 mt-2 text-xs text-gray-500">
-                    <MapPin className="h-3 w-3" />
-                    <span>{move.departure_postal_code} → {move.arrival_postal_code}</span>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">
+                      {move.departure_city} → {move.arrival_city}
+                    </h3>
+                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
+                      <span>{new Date(move.departure_date).toLocaleDateString('fr-FR')}</span>
+                      <span>Volume: {move.used_volume}m³</span>
+                    </div>
+                    <div className="flex items-center space-x-2 mt-2 text-xs text-gray-500">
+                      <MapPin className="h-3 w-3" />
+                      <span>{move.departure_postal_code} → {move.arrival_postal_code}</span>
+                    </div>
                   </div>
                 </div>
+                
+                <StatusToggle
+                  status={move.status_custom || 'en_cours'}
+                  onStatusChange={(newStatus) => updateMoveStatus(move.id, newStatus)}
+                />
               </div>
-              
-              <StatusToggle
-                status={move.status_custom || 'en_cours'}
-                onStatusChange={(newStatus) => updateMoveStatus(move.id, newStatus)}
-              />
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );
