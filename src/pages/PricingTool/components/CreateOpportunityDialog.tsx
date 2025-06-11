@@ -640,5 +640,3 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
 };
 
 export default CreateOpportunityDialog;
-
-</edits_to_apply>
