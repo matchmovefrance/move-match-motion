@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import BestPricesDialog from './BestPricesDialog';
+import CreateOpportunityDialog from './CreateOpportunityDialog';
 
 type PricingOpportunity = Tables<'pricing_opportunities'>;
 type Supplier = Tables<'suppliers'>;
@@ -24,8 +25,9 @@ const OpportunitiesTab = () => {
   const [sortBy, setSortBy] = useState<string>('created_at');
   const [selectedOpportunity, setSelectedOpportunity] = useState<PricingOpportunity | null>(null);
   const [showBestPrices, setShowBestPrices] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  const { data: opportunities, isLoading } = useQuery({
+  const { data: opportunities, isLoading, refetch } = useQuery({
     queryKey: ['pricing-opportunities', searchTerm, statusFilter, sortBy],
     queryFn: async () => {
       let query = supabase
@@ -79,6 +81,11 @@ const OpportunitiesTab = () => {
   const handleFindBestPrices = (opportunity: PricingOpportunity) => {
     setSelectedOpportunity(opportunity);
     setShowBestPrices(true);
+  };
+
+  const handleEditOpportunity = (opportunity: PricingOpportunity) => {
+    setSelectedOpportunity(opportunity);
+    setShowCreateDialog(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -153,7 +160,10 @@ const OpportunitiesTab = () => {
               <Filter className="h-5 w-5" />
               Opportunités de tarification
             </CardTitle>
-            <Button className="flex items-center gap-2">
+            <Button 
+              className="flex items-center gap-2"
+              onClick={() => setShowCreateDialog(true)}
+            >
               <Plus className="h-4 w-4" />
               Nouvelle opportunité
             </Button>
@@ -293,7 +303,11 @@ const OpportunitiesTab = () => {
                       <TrendingUp className="h-3 w-3 mr-1" />
                       Trouver les prix
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleEditOpportunity(opportunity)}
+                    >
                       <Edit className="h-3 w-3" />
                     </Button>
                     <Button variant="outline" size="sm">
@@ -317,7 +331,7 @@ const OpportunitiesTab = () => {
                   : 'Commencez par créer votre première opportunité.'}
               </p>
             </div>
-            <Button>
+            <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Créer une opportunité
             </Button>
@@ -325,12 +339,28 @@ const OpportunitiesTab = () => {
         </Card>
       )}
 
-      {/* Best Prices Dialog */}
+      {/* Dialogs */}
       <BestPricesDialog
         open={showBestPrices}
         onOpenChange={setShowBestPrices}
         opportunity={selectedOpportunity}
         suppliers={suppliers || []}
+      />
+
+      <CreateOpportunityDialog
+        open={showCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) {
+            setSelectedOpportunity(null);
+          }
+        }}
+        opportunity={selectedOpportunity}
+        onSuccess={() => {
+          refetch();
+          setShowCreateDialog(false);
+          setSelectedOpportunity(null);
+        }}
       />
     </div>
   );

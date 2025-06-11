@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2, Users, Plus } from 'lucide-react';
+import { CalendarIcon, Loader2, Users, Plus, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,20 +16,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tables } from '@/integrations/supabase/types';
+
+type PricingOpportunity = Tables<'pricing_opportunities'>;
 
 interface CreateOpportunityDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  opportunity?: PricingOpportunity | null;
+  onSuccess?: () => void;
 }
 
-const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialogProps) => {
+const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuccess }: CreateOpportunityDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
-  const [creationMode, setCreationMode] = useState<'existing' | 'new'>('existing');
+  const [creationMode, setCreationMode] = useState<'existing' | 'new' | 'search'>('existing');
   const [selectedClientRequest, setSelectedClientRequest] = useState<string>('');
+  const [selectedClient, setSelectedClient] = useState<string>('');
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
   
   const [formData, setFormData] = useState({
     title: '',
@@ -46,11 +53,63 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
     special_requirements: '',
     priority: '1',
     status: 'draft' as const,
-    // Nouveau: informations client
     client_name: '',
     client_email: '',
     client_phone: '',
   });
+
+  // Remplir le formulaire si on édite une opportunité existante
+  useEffect(() => {
+    if (opportunity && open) {
+      setFormData({
+        title: opportunity.title || '',
+        description: opportunity.description || '',
+        estimated_volume: opportunity.estimated_volume?.toString() || '',
+        budget_range_min: opportunity.budget_range_min?.toString() || '',
+        budget_range_max: opportunity.budget_range_max?.toString() || '',
+        departure_address: opportunity.departure_address || '',
+        departure_city: opportunity.departure_city || '',
+        departure_postal_code: opportunity.departure_postal_code || '',
+        arrival_address: opportunity.arrival_address || '',
+        arrival_city: opportunity.arrival_city || '',
+        arrival_postal_code: opportunity.arrival_postal_code || '',
+        special_requirements: opportunity.special_requirements || '',
+        priority: opportunity.priority?.toString() || '1',
+        status: opportunity.status || 'draft',
+        client_name: '',
+        client_email: '',
+        client_phone: '',
+      });
+      if (opportunity.desired_date) {
+        setSelectedDate(new Date(opportunity.desired_date));
+      }
+    } else if (!opportunity && open) {
+      // Reset pour nouvelle opportunité
+      setFormData({
+        title: '',
+        description: '',
+        estimated_volume: '',
+        budget_range_min: '',
+        budget_range_max: '',
+        departure_address: '',
+        departure_city: '',
+        departure_postal_code: '',
+        arrival_address: '',
+        arrival_city: '',
+        arrival_postal_code: '',
+        special_requirements: '',
+        priority: '1',
+        status: 'draft',
+        client_name: '',
+        client_email: '',
+        client_phone: '',
+      });
+      setSelectedDate(undefined);
+      setSelectedClientRequest('');
+      setSelectedClient('');
+      setClientSearchTerm('');
+    }
+  }, [opportunity, open]);
 
   // Récupérer les demandes clients existantes
   const { data: clientRequests } = useQuery({
@@ -74,6 +133,27 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
       return data;
     },
     enabled: open,
+  });
+
+  // Récupérer les clients pour la recherche
+  const { data: clients } = useQuery({
+    queryKey: ['clients-search', clientSearchTerm],
+    queryFn: async () => {
+      let query = supabase
+        .from('clients')
+        .select('*');
+      
+      if (clientSearchTerm) {
+        query = query.or(`name.ilike.%${clientSearchTerm}%,email.ilike.%${clientSearchTerm}%`);
+      }
+      
+      query = query.order('name', { ascending: true }).limit(20);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && creationMode === 'search',
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -106,6 +186,19 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
     }
   };
 
+  const handleClientSelect = (clientId: string) => {
+    const selected = clients?.find(client => client.id.toString() === clientId);
+    if (selected) {
+      setFormData(prev => ({
+        ...prev,
+        client_name: selected.name,
+        client_email: selected.email,
+        client_phone: selected.phone,
+      }));
+      setSelectedClient(clientId);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !selectedDate) return;
@@ -123,49 +216,45 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
         client_request_id: selectedClientRequest ? parseInt(selectedClientRequest) : null,
       };
 
-      const { error } = await supabase
-        .from('pricing_opportunities')
-        .insert(opportunityData);
+      if (opportunity) {
+        // Mise à jour d'une opportunité existante
+        const { error } = await supabase
+          .from('pricing_opportunities')
+          .update(opportunityData)
+          .eq('id', opportunity.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: "Opportunité créée",
-        description: "L'opportunité de devis a été créée avec succès.",
-      });
+        toast({
+          title: "Opportunité mise à jour",
+          description: "L'opportunité a été mise à jour avec succès.",
+        });
+      } else {
+        // Création d'une nouvelle opportunité
+        const { error } = await supabase
+          .from('pricing_opportunities')
+          .insert(opportunityData);
 
-      // Reset form
-      setFormData({
-        title: '',
-        description: '',
-        estimated_volume: '',
-        budget_range_min: '',
-        budget_range_max: '',
-        departure_address: '',
-        departure_city: '',
-        departure_postal_code: '',
-        arrival_address: '',
-        arrival_city: '',
-        arrival_postal_code: '',
-        special_requirements: '',
-        priority: '1',
-        status: 'draft',
-        client_name: '',
-        client_email: '',
-        client_phone: '',
-      });
-      setSelectedDate(undefined);
-      setSelectedClientRequest('');
-      
+        if (error) throw error;
+
+        toast({
+          title: "Opportunité créée",
+          description: "L'opportunité de devis a été créée avec succès.",
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ['pricing-opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
       
+      if (onSuccess) {
+        onSuccess();
+      }
       onOpenChange(false);
     } catch (error) {
-      console.error('Error creating opportunity:', error);
+      console.error('Error saving opportunity:', error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la création de l'opportunité.",
+        description: "Une erreur est survenue lors de la sauvegarde de l'opportunité.",
         variant: "destructive",
       });
     } finally {
@@ -177,104 +266,149 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Créer une nouvelle opportunité</DialogTitle>
+          <DialogTitle>
+            {opportunity ? 'Modifier l\'opportunité' : 'Créer une nouvelle opportunité'}
+          </DialogTitle>
           <DialogDescription>
-            Créez une opportunité depuis une demande client existante ou manuellement.
+            {opportunity 
+              ? 'Modifiez les informations de cette opportunité.'
+              : 'Créez une opportunité depuis une demande client existante ou manuellement.'
+            }
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as 'existing' | 'new')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="existing" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Depuis demande existante
-            </TabsTrigger>
-            <TabsTrigger value="new" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Création manuelle
-            </TabsTrigger>
-          </TabsList>
+        {!opportunity && (
+          <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as 'existing' | 'new' | 'search')}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="existing" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Demande existante
+              </TabsTrigger>
+              <TabsTrigger value="search" className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                Chercher client
+              </TabsTrigger>
+              <TabsTrigger value="new" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Nouveau client
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="existing" className="space-y-4">
-            <div>
-              <Label htmlFor="client_request">Sélectionner une demande client *</Label>
-              <Select value={selectedClientRequest} onValueChange={handleClientRequestSelect}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir une demande client..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientRequests?.map((request) => (
-                    <SelectItem key={request.id} value={request.id.toString()}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">
-                          {(request.clients as any)?.name || request.name} - {request.departure_city} → {request.arrival_city}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {request.estimated_volume}m³ - {format(new Date(request.desired_date), 'dd/MM/yyyy')}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TabsContent value="existing" className="space-y-4">
+              <div>
+                <Label htmlFor="client_request">Sélectionner une demande client *</Label>
+                <Select value={selectedClientRequest} onValueChange={handleClientRequestSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir une demande client..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientRequests?.map((request) => (
+                      <SelectItem key={request.id} value={request.id.toString()}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {(request.clients as any)?.name || request.name} - {request.departure_city} → {request.arrival_city}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {request.estimated_volume}m³ - {format(new Date(request.desired_date), 'dd/MM/yyyy')}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
 
-            {selectedClientRequest && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-2">Informations client</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-blue-600 font-medium">Nom:</span> {formData.client_name}
-                  </div>
-                  <div>
-                    <span className="text-blue-600 font-medium">Email:</span> {formData.client_email}
-                  </div>
-                  <div>
-                    <span className="text-blue-600 font-medium">Téléphone:</span> {formData.client_phone}
-                  </div>
-                  <div>
-                    <span className="text-blue-600 font-medium">Volume:</span> {formData.estimated_volume}m³
-                  </div>
+            <TabsContent value="search" className="space-y-4">
+              <div>
+                <Label htmlFor="client_search">Rechercher un client existant *</Label>
+                <div className="space-y-2">
+                  <Input
+                    id="client_search"
+                    placeholder="Tapez le nom ou email du client..."
+                    value={clientSearchTerm}
+                    onChange={(e) => setClientSearchTerm(e.target.value)}
+                  />
+                  {clientSearchTerm && clients && clients.length > 0 && (
+                    <Select value={selectedClient} onValueChange={handleClientSelect}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un client..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id.toString()}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{client.name}</span>
+                              <span className="text-sm text-gray-500">{client.email}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
-            )}
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="new">
-            <div className="grid grid-cols-2 gap-4">
+            <TabsContent value="new" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="client_name">Nom du client *</Label>
+                  <Input
+                    id="client_name"
+                    value={formData.client_name}
+                    onChange={(e) => handleInputChange('client_name', e.target.value)}
+                    placeholder="Jean Dupont"
+                    required={creationMode === 'new'}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="client_email">Email du client *</Label>
+                  <Input
+                    id="client_email"
+                    type="email"
+                    value={formData.client_email}
+                    onChange={(e) => handleInputChange('client_email', e.target.value)}
+                    placeholder="jean.dupont@email.com"
+                    required={creationMode === 'new'}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="client_phone">Téléphone du client</Label>
+                  <Input
+                    id="client_phone"
+                    value={formData.client_phone}
+                    onChange={(e) => handleInputChange('client_phone', e.target.value)}
+                    placeholder="+33 6 12 34 56 78"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {/* Informations client affichées */}
+        {(formData.client_name || selectedClientRequest || selectedClient) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-medium text-blue-900 mb-2">Informations client</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <Label htmlFor="client_name">Nom du client *</Label>
-                <Input
-                  id="client_name"
-                  value={formData.client_name}
-                  onChange={(e) => handleInputChange('client_name', e.target.value)}
-                  placeholder="Jean Dupont"
-                  required={creationMode === 'new'}
-                />
+                <span className="text-blue-600 font-medium">Nom:</span> {formData.client_name}
               </div>
               <div>
-                <Label htmlFor="client_email">Email du client *</Label>
-                <Input
-                  id="client_email"
-                  type="email"
-                  value={formData.client_email}
-                  onChange={(e) => handleInputChange('client_email', e.target.value)}
-                  placeholder="jean.dupont@email.com"
-                  required={creationMode === 'new'}
-                />
+                <span className="text-blue-600 font-medium">Email:</span> {formData.client_email}
               </div>
               <div>
-                <Label htmlFor="client_phone">Téléphone du client</Label>
-                <Input
-                  id="client_phone"
-                  value={formData.client_phone}
-                  onChange={(e) => handleInputChange('client_phone', e.target.value)}
-                  placeholder="+33 6 12 34 56 78"
-                />
+                <span className="text-blue-600 font-medium">Téléphone:</span> {formData.client_phone}
               </div>
+              {formData.estimated_volume && (
+                <div>
+                  <span className="text-blue-600 font-medium">Volume:</span> {formData.estimated_volume}m³
+                </div>
+              )}
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
@@ -461,7 +595,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange }: CreateOpportunityDialog
             </Button>
             <Button type="submit" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Créer l'opportunité
+              {opportunity ? 'Mettre à jour' : 'Créer l\'opportunité'}
             </Button>
           </DialogFooter>
         </form>
