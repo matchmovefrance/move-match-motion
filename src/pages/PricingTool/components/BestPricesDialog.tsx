@@ -25,12 +25,17 @@ interface BestPriceOffer {
 interface BestPricesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  opportunity: PricingOpportunity;
+  opportunity: PricingOpportunity | null;
   suppliers: Supplier[];
 }
 
 const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPricesDialogProps) => {
   const [selectedOffer, setSelectedOffer] = useState<BestPriceOffer | null>(null);
+
+  // Early return if no opportunity
+  if (!opportunity) {
+    return null;
+  }
 
   // Simulation du calcul des meilleurs prix
   const calculateBestOffers = (): BestPriceOffer[] => {

@@ -264,7 +264,7 @@ const OpportunitiesTab = () => {
       <BestPricesDialog
         open={showBestPrices}
         onOpenChange={setShowBestPrices}
-        opportunity={selectedOpportunity!}
+        opportunity={selectedOpportunity}
         suppliers={suppliers || []}
       />
     </div>
