@@ -106,16 +106,19 @@ const QuotesTab = () => {
   const calculatePriceForClient = (client: any, supplier: any) => {
     const pricingModel = supplier.pricing_model as PricingModel;
     
-    let price = pricingModel.basePrice || 150;
-    price += client.estimated_volume * (pricingModel.volumeRate || 10);
-    price += 50 * (pricingModel.distanceRate || 1); // Distance estimée
-    price = Math.max(price, pricingModel.minimumPrice || 200);
+    // Prix de base du prestataire
+    let supplierPrice = pricingModel.basePrice || 150;
+    supplierPrice += client.estimated_volume * (pricingModel.volumeRate || 10);
+    supplierPrice += 50 * (pricingModel.distanceRate || 1); // Distance estimée
+    supplierPrice = Math.max(supplierPrice, pricingModel.minimumPrice || 200);
     
-    // Ajouter marge MatchMove
-    const margin = pricingModel.matchMoveMargin || 40;
-    price *= (1 + margin / 100);
+    // ⚠️ IMPORTANT: Appliquer la marge MatchMove (comme dans OpportunitiesTab)
+    const matchMoveMargin = 40; // Marge fixe de 40% comme dans OpportunitiesTab
+    const finalPrice = supplierPrice * (1 + matchMoveMargin / 100);
     
-    return Math.round(price);
+    console.log(`💰 Calcul pour ${client.name}: Base ${supplierPrice}€ + Marge ${matchMoveMargin}% = ${Math.round(finalPrice)}€`);
+    
+    return Math.round(finalPrice);
   };
 
   const generateAllQuotes = async () => {
@@ -186,11 +189,11 @@ const QuotesTab = () => {
     try {
       console.log('✅ Acceptation devis:', quote.id);
       
-      // Créer le devis accepté dans la base
+      // Créer le devis accepté dans la base - CORRECTION: utiliser client_id comme string
       const { error } = await supabase
         .from('quotes')
         .insert({
-          opportunity_id: quote.client_id, // Utiliser client_id comme opportunity_id temporaire
+          opportunity_id: quote.client_id.toString(), // Convertir en string
           supplier_id: quote.supplier_id,
           bid_amount: quote.calculated_price,
           status: 'accepted',
@@ -222,11 +225,11 @@ const QuotesTab = () => {
     try {
       console.log('❌ Rejet devis:', quote.id);
       
-      // Créer le devis rejeté dans la base
+      // Créer le devis rejeté dans la base - CORRECTION: utiliser client_id comme string
       const { error } = await supabase
         .from('quotes')
         .insert({
-          opportunity_id: quote.client_id,
+          opportunity_id: quote.client_id.toString(), // Convertir en string
           supplier_id: quote.supplier_id,
           bid_amount: quote.calculated_price,
           status: 'rejected',
@@ -287,6 +290,7 @@ const QuotesTab = () => {
           </CardTitle>
           <CardDescription>
             Génération automatique des 3 meilleurs devis pour chaque client actif avec tous les prestataires disponibles.
+            <strong className="text-orange-600 ml-2">✨ Marge MatchMove de 40% incluse dans tous les prix</strong>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -361,6 +365,7 @@ const QuotesTab = () => {
                           <div className="text-2xl font-bold text-green-600 flex items-center gap-2">
                             <Euro className="h-5 w-5" />
                             {quote.calculated_price.toLocaleString()}€
+                            <span className="text-sm text-orange-600 font-normal">(marge MatchMove incluse)</span>
                           </div>
                         </div>
                         
