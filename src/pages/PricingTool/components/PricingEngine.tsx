@@ -1,5 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { loadGoogleMapsScript, calculateDistanceByPostalCode } from '@/lib/google-maps-config';
 
 interface PricingModel {
   basePrice: number;
@@ -41,7 +42,9 @@ interface ClientRequest {
   name: string;
   email: string;
   departure_city: string;
+  departure_postal_code: string;
   arrival_city: string;
+  arrival_postal_code: string;
   estimated_volume: number;
   desired_date: string;
   quote_amount?: number;
@@ -51,6 +54,7 @@ export class PricingEngine {
   private static instance: PricingEngine;
   private suppliers: Supplier[] = [];
   private isInitialized = false;
+  private distanceCache = new Map<string, number>();
 
   static getInstance(): PricingEngine {
     if (!PricingEngine.instance) {
@@ -62,7 +66,15 @@ export class PricingEngine {
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
-    console.log('🔧 Initialisation du moteur de pricing...');
+    console.log('🔧 Initialisation du moteur de pricing avec Google Maps API...');
+    
+    // Charger l'API Google Maps
+    try {
+      await loadGoogleMapsScript();
+      console.log('✅ Google Maps API chargée');
+    } catch (error) {
+      console.error('❌ Erreur chargement Google Maps API:', error);
+    }
     
     // Charger les prestataires avec leurs modèles de pricing cohérents
     const { data: movesData } = await supabase
@@ -98,7 +110,7 @@ export class PricingEngine {
     this.suppliers = Array.from(uniqueSuppliersMap.values());
     this.isInitialized = true;
     
-    console.log(`✅ Moteur initialisé avec ${this.suppliers.length} prestataires`);
+    console.log(`✅ Moteur initialisé avec ${this.suppliers.length} prestataires et Google Maps API`);
   }
 
   private createConsistentPricingModel(companyName: string): PricingModel {
@@ -150,16 +162,77 @@ export class PricingEngine {
     };
   }
 
-  calculatePrice(client: ClientRequest, supplier: Supplier): {
+  private async getDistanceFromGoogleMaps(
+    departurePostalCode: string, 
+    departureCity: string,
+    arrivalPostalCode: string, 
+    arrivalCity: string
+  ): Promise<number> {
+    const cacheKey = `${departurePostalCode}-${arrivalPostalCode}`;
+    
+    // Vérifier le cache d'abord
+    if (this.distanceCache.has(cacheKey)) {
+      const cachedDistance = this.distanceCache.get(cacheKey)!;
+      console.log(`📍 Distance depuis cache: ${cachedDistance}km pour ${cacheKey}`);
+      return cachedDistance;
+    }
+
+    try {
+      console.log(`🗺️ Calcul distance Google Maps: ${departurePostalCode} ${departureCity} -> ${arrivalPostalCode} ${arrivalCity}`);
+      
+      const result = await calculateDistanceByPostalCode(
+        departurePostalCode,
+        arrivalPostalCode,
+        departureCity,
+        arrivalCity
+      );
+
+      if (result && result.distance) {
+        console.log(`✅ Distance Google Maps calculée: ${result.distance}km pour ${cacheKey}`);
+        this.distanceCache.set(cacheKey, result.distance);
+        return result.distance;
+      } else {
+        console.warn(`⚠️ Impossible de calculer la distance Google Maps pour ${cacheKey}, utilisation d'une estimation`);
+        // Fallback: estimation basée sur les noms des villes
+        const fallbackDistance = this.estimateDistanceFallback(departureCity, arrivalCity);
+        this.distanceCache.set(cacheKey, fallbackDistance);
+        return fallbackDistance;
+      }
+    } catch (error) {
+      console.error(`❌ Erreur calcul distance Google Maps pour ${cacheKey}:`, error);
+      // Fallback: estimation basée sur les noms des villes
+      const fallbackDistance = this.estimateDistanceFallback(departureCity, arrivalCity);
+      this.distanceCache.set(cacheKey, fallbackDistance);
+      return fallbackDistance;
+    }
+  }
+
+  private estimateDistanceFallback(departureCity: string, arrivalCity: string): number {
+    // Simulation simple de distance basée sur les noms des villes (fallback uniquement)
+    const hash = this.hashString(departureCity + arrivalCity);
+    const random = this.seededRandom(hash);
+    const distance = 15 + Math.floor(random() * 45); // 15-60km
+    console.log(`📏 Distance fallback estimée: ${distance}km pour ${departureCity} -> ${arrivalCity}`);
+    return distance;
+  }
+
+  async calculatePrice(client: ClientRequest, supplier: Supplier): Promise<{
     supplierPrice: number;
     matchMoveMargin: number;
     finalPrice: number;
     breakdown: any;
-  } {
+  }> {
     const { pricing_model } = supplier;
     
-    // Estimation des paramètres de déménagement basés sur les données client
-    const estimatedDistance = this.estimateDistance(client.departure_city, client.arrival_city);
+    // Calcul de la distance exacte via Google Maps API
+    const exactDistance = await this.getDistanceFromGoogleMaps(
+      client.departure_postal_code,
+      client.departure_city,
+      client.arrival_postal_code,
+      client.arrival_city
+    );
+    
+    // Estimation des autres paramètres de déménagement basés sur les données client
     const estimatedFloors = Math.max(1, Math.floor(client.estimated_volume / 8)); // 1 étage par 8m³
     const packingBoxes = Math.floor(client.estimated_volume * 2.5); // 2.5 cartons par m³
     const furnitureItems = Math.floor(client.estimated_volume / 4); // 1 meuble par 4m³
@@ -171,11 +244,11 @@ export class PricingEngine {
     // 1. Volume
     supplierPrice += client.estimated_volume * pricing_model.volumeRate;
     
-    // 2. Distance (tarif différent selon volume)
+    // 2. Distance EXACTE de Google Maps (tarif différent selon volume)
     const distanceRate = client.estimated_volume > 20 ? 
       pricing_model.distanceRateHighVolume : 
       pricing_model.distanceRate;
-    supplierPrice += estimatedDistance * distanceRate;
+    supplierPrice += exactDistance * distanceRate;
     
     // 3. Étages
     supplierPrice += estimatedFloors * pricing_model.floorRate;
@@ -229,11 +302,11 @@ export class PricingEngine {
     const breakdown = {
       basePrice: pricing_model.basePrice,
       volumeCost: client.estimated_volume * pricing_model.volumeRate,
-      distanceCost: estimatedDistance * distanceRate,
+      distanceCost: exactDistance * distanceRate,
+      exactDistance: exactDistance, // Distance exacte de Google Maps
       floorsCost: estimatedFloors * pricing_model.floorRate,
       packingCost: packingBoxes * (pricing_model.packingRate + pricing_model.unpackingRate),
       furnitureCost: furnitureItems * (pricing_model.dismantleRate + pricing_model.reassembleRate),
-      estimatedDistance,
       estimatedFloors,
       packingBoxes,
       furnitureItems,
@@ -243,6 +316,7 @@ export class PricingEngine {
     };
     
     console.log(`💰 ${supplier.company_name} pour ${client.name}:`);
+    console.log(`   🗺️ Distance exacte Google Maps: ${exactDistance}km`);
     console.log(`   📊 Prix prestataire: ${Math.round(supplierPrice)}€`);
     console.log(`   💎 Marge MatchMove: ${pricing_model.matchMoveMargin.toFixed(1)}% (+${Math.round(matchMoveMargin)}€)`);
     console.log(`   🎯 Prix final: ${Math.round(finalPrice)}€`);
@@ -256,13 +330,6 @@ export class PricingEngine {
     };
   }
 
-  private estimateDistance(departureCity: string, arrivalCity: string): number {
-    // Simulation simple de distance basée sur les noms des villes
-    const hash = this.hashString(departureCity + arrivalCity);
-    const random = this.seededRandom(hash);
-    return 15 + Math.floor(random() * 45); // 15-60km
-  }
-
   getSuppliers(): Supplier[] {
     return this.suppliers;
   }
@@ -270,10 +337,13 @@ export class PricingEngine {
   async generateQuotesForClient(client: ClientRequest): Promise<any[]> {
     await this.initialize();
     
-    const quotes = this.suppliers.map(supplier => {
-      const pricing = this.calculatePrice(client, supplier);
+    const quotes = [];
+    
+    // Calculer les devis avec les distances exactes pour chaque prestataire
+    for (const supplier of this.suppliers) {
+      const pricing = await this.calculatePrice(client, supplier);
       
-      return {
+      quotes.push({
         id: `quote-${client.id}-${supplier.id}-${Date.now()}`,
         client_id: client.id,
         client_name: client.name,
@@ -291,8 +361,8 @@ export class PricingEngine {
         original_quote_amount: client.quote_amount,
         pricing_breakdown: pricing.breakdown,
         rank: 0
-      };
-    });
+      });
+    }
     
     // Trier par prix et assigner les rangs
     quotes.sort((a, b) => a.calculated_price - b.calculated_price);

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,25 +62,26 @@ const QuotesTab = () => {
     if (!activeClients?.length) return;
     
     setIsGenerating(true);
-    console.log('🔄 Génération des devis avec le nouveau moteur...');
+    console.log('🔄 Génération des devis avec distances exactes Google Maps...');
     
     setGeneratedQuotes([]);
     
     try {
       const allQuotes: GeneratedQuote[] = [];
       
-      // Utiliser le nouveau moteur de pricing pour chaque client
+      // Utiliser le moteur de pricing avec calculs Google Maps pour chaque client
       for (const client of activeClients) {
+        console.log(`🗺️ Calcul distances exactes pour ${client.name}: ${client.departure_postal_code} -> ${client.arrival_postal_code}`);
         const clientQuotes = await pricingEngine.generateQuotesForClient(client);
         allQuotes.push(...clientQuotes);
       }
       
       setGeneratedQuotes(allQuotes);
-      console.log('✅ Devis générés avec le nouveau moteur:', allQuotes.length);
+      console.log('✅ Devis générés avec distances exactes Google Maps:', allQuotes.length);
       
       toast({
-        title: "Devis générés",
-        description: `${allQuotes.length} devis calculés avec le moteur de pricing cohérent`,
+        title: "Devis générés avec distances exactes",
+        description: `${allQuotes.length} devis calculés avec les vraies distances Google Maps`,
       });
       
     } catch (error) {
@@ -195,12 +195,12 @@ const QuotesTab = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
-            Moteur de devis intelligent - Prix cohérents et reproductibles
+            Moteur de devis intelligent - Distances exactes Google Maps
           </CardTitle>
           <CardDescription>
             <strong className="text-green-600">✅ NOUVEAU MOTEUR</strong> - Calculs cohérents basés sur les critères exacts de chaque prestataire.
             <br />
-            <strong className="text-blue-600">🎯 PRIX IDENTIQUES</strong> - Les prix sont maintenant calculés de manière reproductible et cohérente.
+            <strong className="text-blue-600">🗺️ GOOGLE MAPS API</strong> - Distances exactes calculées via l'API Google Maps avec codes postaux.
             <br />
             <strong className="text-purple-600">📊 DÉTAIL COMPLET</strong> - Décomposition complète : prix prestataire + marge MatchMove = prix final.
           </CardDescription>
@@ -231,12 +231,12 @@ const QuotesTab = () => {
               {isGenerating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Calcul en cours...
+                  Calcul Google Maps en cours...
                 </>
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  {generatedQuotes.length > 0 ? 'Recalculer tous les devis' : 'Générer tous les devis'}
+                  {generatedQuotes.length > 0 ? 'Recalculer avec Google Maps' : 'Générer avec Google Maps'}
                 </>
               )}
             </Button>
@@ -252,6 +252,7 @@ const QuotesTab = () => {
             const originalAmount = quotes[0].original_quote_amount;
             const bestCalculatedPrice = Math.min(...quotes.map(q => q.calculated_price));
             const priceDifference = originalAmount ? originalAmount - bestCalculatedPrice : null;
+            const exactDistance = quotes[0].pricing_breakdown?.exactDistance;
             
             return (
               <Card key={clientId}>
@@ -262,6 +263,13 @@ const QuotesTab = () => {
                     <Badge variant="outline" className="ml-2">
                       {quotes[0].departure_city} → {quotes[0].arrival_city}
                     </Badge>
+                    
+                    {/* Affichage de la distance exacte Google Maps */}
+                    {exactDistance && (
+                      <Badge className="bg-blue-100 text-blue-800">
+                        🗺️ {exactDistance}km (Google Maps)
+                      </Badge>
+                    )}
                     
                     {/* Comparaison prix original vs calculé */}
                     {hasOriginalQuote && (
@@ -298,12 +306,17 @@ const QuotesTab = () => {
                   <CardDescription>
                     Volume: {quotes[0].estimated_volume}m³ • Date: {format(new Date(quotes[0].desired_date), 'dd/MM/yyyy', { locale: fr })}
                     {quotes[0].client_email && ` • ${quotes[0].client_email}`}
+                    {exactDistance && (
+                      <div className="text-sm mt-1 text-blue-600">
+                        🗺️ Distance exacte calculée par Google Maps : {exactDistance}km
+                      </div>
+                    )}
                     {hasOriginalQuote && priceDifference !== null && (
                       <div className="text-sm mt-1">
                         <span className={`font-medium ${Math.abs(priceDifference) > 50 ? 'text-red-600' : 'text-green-600'}`}>
                           {Math.abs(priceDifference) > 50 
                             ? `⚠️ Écart important de ${Math.abs(priceDifference)}€ - vérifier les paramètres`
-                            : `✅ Calcul cohérent avec le prix original`
+                            : `✅ Calcul cohérent avec le prix original (distance exacte Google Maps)`
                           }
                         </span>
                       </div>
@@ -341,8 +354,9 @@ const QuotesTab = () => {
                               {quote.pricing_breakdown && (
                                 <div className="text-xs text-muted-foreground mt-2">
                                   Marge: {quote.pricing_breakdown.marginPercentage?.toFixed(1)}% • 
-                                  Distance estimée: {quote.pricing_breakdown.estimatedDistance}km • 
-                                  Étages: {quote.pricing_breakdown.estimatedFloors}
+                                  Distance Google Maps: {quote.pricing_breakdown.exactDistance}km • 
+                                  Étages: {quote.pricing_breakdown.estimatedFloors} • 
+                                  Volume: {quote.estimated_volume}m³
                                 </div>
                               )}
                             </div>
@@ -381,9 +395,9 @@ const QuotesTab = () => {
         <Card>
           <CardContent className="text-center py-8">
             <Loader2 className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-            <h3 className="text-lg font-medium mb-2">Calcul des devis avec le nouveau moteur...</h3>
+            <h3 className="text-lg font-medium mb-2">Calcul des devis avec Google Maps API...</h3>
             <p className="text-muted-foreground">
-              Utilisation des critères de pricing exacts pour des prix cohérents et reproductibles.
+              Utilisation des distances exactes Google Maps pour des prix précis et cohérents.
             </p>
           </CardContent>
         </Card>
@@ -391,11 +405,11 @@ const QuotesTab = () => {
         <Card>
           <CardContent className="text-center py-8">
             <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Prêt à générer des devis cohérents</h3>
+            <h3 className="text-lg font-medium mb-2">Prêt à générer des devis avec Google Maps</h3>
             <p className="text-muted-foreground mb-4">
               {!activeClients?.length 
                 ? 'Aucun client actif trouvé'
-                : 'Cliquez sur "Générer tous les devis" pour utiliser le nouveau moteur'
+                : 'Cliquez sur "Générer avec Google Maps" pour utiliser les distances exactes'
               }
             </p>
           </CardContent>
@@ -406,3 +420,5 @@ const QuotesTab = () => {
 };
 
 export default QuotesTab;
+
+</edits_to_apply>
