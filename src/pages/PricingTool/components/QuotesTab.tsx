@@ -420,5 +420,3 @@ const QuotesTab = () => {
 };
 
 export default QuotesTab;
-
-</edits_to_apply>
