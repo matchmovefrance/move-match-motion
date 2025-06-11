@@ -161,7 +161,7 @@ const OpportunitiesTab = () => {
                 Opportunités de tarification
               </CardTitle>
               <Button 
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 bg-primary hover:bg-primary/90"
                 onClick={() => setShowCreateDialog(true)}
               >
                 <Plus className="h-4 w-4" />
@@ -172,7 +172,7 @@ const OpportunitiesTab = () => {
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Rechercher par titre, ville de départ ou d'arrivée..."
                   value={searchTerm}
@@ -214,12 +214,12 @@ const OpportunitiesTab = () => {
               const clientInfo = getClientInfo(opportunity);
               
               return (
-                <Card key={opportunity.id} className="hover:shadow-lg transition-all duration-200 border-2 hover:border-blue-200">
+                <Card key={opportunity.id} className="hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
-                        <CardTitle className="text-lg font-bold text-gray-900">{opportunity.title}</CardTitle>
-                        <CardDescription className="flex items-center gap-2 text-gray-600">
+                        <CardTitle className="text-lg font-bold">{opportunity.title}</CardTitle>
+                        <CardDescription className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" />
                           <span className="font-medium">{opportunity.departure_city} → {opportunity.arrival_city}</span>
                         </CardDescription>
@@ -232,24 +232,24 @@ const OpportunitiesTab = () => {
                   
                   <CardContent className="space-y-4">
                     {/* Informations client */}
-                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                      <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <div className="bg-muted/50 rounded-lg p-3 border">
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
                         <User className="h-3 w-3" />
                         Client
                       </h4>
                       <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-2 text-blue-900 font-medium">
+                        <div className="flex items-center gap-2 font-medium">
                           <User className="h-3 w-3" />
                           <span>{clientInfo.name}</span>
                         </div>
                         {clientInfo.email && (
-                          <div className="flex items-center gap-2 text-blue-700">
+                          <div className="flex items-center gap-2 text-muted-foreground">
                             <Mail className="h-3 w-3" />
                             <span className="truncate">{clientInfo.email}</span>
                           </div>
                         )}
                         {clientInfo.phone && (
-                          <div className="flex items-center gap-2 text-blue-700">
+                          <div className="flex items-center gap-2 text-muted-foreground">
                             <Phone className="h-3 w-3" />
                             <span>{clientInfo.phone}</span>
                           </div>
@@ -259,11 +259,11 @@ const OpportunitiesTab = () => {
 
                     {/* Métriques */}
                     <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="text-center p-3 bg-green-50 rounded-lg border border-green-100">
+                      <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
                         <div className="text-lg font-bold text-green-700">{opportunity.estimated_volume}</div>
                         <div className="text-xs text-green-600 font-medium">m³ estimés</div>
                       </div>
-                      <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-100">
+                      <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
                         <div className="text-sm font-bold text-orange-700 flex items-center justify-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
@@ -274,7 +274,7 @@ const OpportunitiesTab = () => {
 
                     {/* Budget */}
                     {opportunity.budget_range_min && opportunity.budget_range_max && (
-                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-purple-700 font-medium">Budget client :</span>
                           <span className="font-bold text-purple-900 flex items-center gap-1">
@@ -296,27 +296,27 @@ const OpportunitiesTab = () => {
                     )}
 
                     {/* BOUTON PRINCIPAL - TROUVER LES PRIX */}
-                    <div className="pt-3 border-t border-gray-100">
+                    <div className="pt-3 border-t">
                       <Button 
                         onClick={() => handleFindBestPrices(opportunity)}
-                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
                         size="lg"
                       >
                         <Calculator className="h-5 w-5 mr-2" />
-                        <span className="text-base font-extrabold">TROUVER LES MEILLEURS PRIX</span>
+                        <span className="text-base font-bold">TROUVER LES MEILLEURS PRIX</span>
                         <TrendingUp className="h-5 w-5 ml-2" />
                       </Button>
                     </div>
 
                     {/* Actions secondaires */}
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {/* Ligne 1 - Actions principales */}
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={() => handleEditOpportunity(opportunity)}
-                          className="flex-1 hover:bg-blue-50 border-blue-200"
+                          className="flex-1"
                         >
                           <Edit className="h-4 w-4 mr-1" />
                           Modifier
@@ -327,7 +327,7 @@ const OpportunitiesTab = () => {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="flex-1 hover:bg-orange-50 border-orange-200"
+                              className="flex-1"
                               disabled
                             >
                               <BarChart3 className="h-4 w-4 mr-1" />
@@ -347,7 +347,7 @@ const OpportunitiesTab = () => {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="flex-1 hover:bg-green-50 border-green-200"
+                              className="flex-1"
                               disabled
                             >
                               <Clock className="h-4 w-4 mr-1" />
@@ -364,7 +364,7 @@ const OpportunitiesTab = () => {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="flex-1 hover:bg-purple-50 border-purple-200"
+                              className="flex-1"
                               disabled
                             >
                               <FileText className="h-4 w-4 mr-1" />
@@ -381,7 +381,7 @@ const OpportunitiesTab = () => {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="flex-1 hover:bg-red-50 border-red-200"
+                              className="flex-1"
                               disabled
                             >
                               <Mail className="h-4 w-4 mr-1" />
@@ -402,10 +402,10 @@ const OpportunitiesTab = () => {
         ) : (
           <Card>
             <CardContent className="text-center py-12">
-              <div className="text-gray-500 mb-4">
+              <div className="text-muted-foreground mb-4">
                 <Calculator className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 <h3 className="text-xl font-bold mb-2">Aucune opportunité trouvée</h3>
-                <p className="text-sm text-gray-600 mb-6">
+                <p className="text-sm mb-6">
                   {searchTerm || statusFilter !== 'all' 
                     ? 'Aucune opportunité ne correspond à vos critères.'
                     : 'Commencez par créer votre première opportunité pour comparer les prix.'}
@@ -413,7 +413,7 @@ const OpportunitiesTab = () => {
               </div>
               <Button 
                 onClick={() => setShowCreateDialog(true)}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary hover:bg-primary/90"
                 size="lg"
               >
                 <Plus className="h-5 w-5 mr-2" />
