@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp, CheckCircle, X, Loader2 } from 'lucide-react';
+import { Search, BarChart3, Euro, MapPin, Calendar, Package, Users, TrendingUp, CheckCircle, X, Loader2, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +31,7 @@ interface GeneratedQuote {
   supplier_name: string;
   supplier_company: string;
   calculated_price: number;
+  original_quote_amount?: number; // Prix original du client
   rank: number;
 }
 
@@ -121,6 +122,7 @@ const QuotesTab = () => {
     console.log(`   📊 Prix base: ${basePrice}€`);
     console.log(`   💎 Marge MatchMove: ${matchMoveMargin}%`);
     console.log(`   🎯 Prix final: ${Math.round(finalPrice)}€`);
+    console.log(`   🔍 Prix original client: ${client.quote_amount || 'Non défini'}€`);
     
     return Math.round(finalPrice);
   };
@@ -148,7 +150,7 @@ const QuotesTab = () => {
           const price = calculatePriceForClient(client, supplier);
           
           clientQuotes.push({
-            id: `quote-${client.id}-${supplier.id}-${Date.now()}`, // Timestamp pour éviter les doublons
+            id: `quote-${client.id}-${supplier.id}-${Date.now()}`,
             client_id: client.id,
             client_name: client.name || `Client #${client.id}`,
             client_email: client.email || '',
@@ -160,6 +162,7 @@ const QuotesTab = () => {
             supplier_name: supplier.mover_name,
             supplier_company: supplier.company_name,
             calculated_price: price,
+            original_quote_amount: client.quote_amount, // 🎯 AJOUT: Prix original du client
             price: price,
             rank: 0
           });
@@ -301,6 +304,8 @@ const QuotesTab = () => {
           <CardDescription>
             Génération automatique des 3 meilleurs devis pour chaque client actif avec tous les prestataires disponibles.
             <strong className="text-orange-600 ml-2">✨ Marge MatchMove variable par prestataire (35-50%)</strong>
+            <br />
+            <strong className="text-red-600">⚠️ Les prix sont recalculés avec les paramètres actuels - peuvent différer des prix originaux</strong>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -345,67 +350,114 @@ const QuotesTab = () => {
       {/* Résultats des devis par client */}
       {Object.keys(quotesByClient).length > 0 ? (
         <div className="space-y-6">
-          {Object.entries(quotesByClient).map(([clientId, quotes]) => (
-            <Card key={clientId}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-green-600" />
-                  {quotes[0].client_name}
-                  <Badge variant="outline" className="ml-2">
-                    {quotes[0].departure_city} → {quotes[0].arrival_city}
-                  </Badge>
-                </CardTitle>
-                <CardDescription>
-                  Volume: {quotes[0].estimated_volume}m³ • Date: {format(new Date(quotes[0].desired_date), 'dd/MM/yyyy', { locale: fr })}
-                  {quotes[0].client_email && ` • ${quotes[0].client_email}`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  {quotes.map((quote) => (
-                    <div key={quote.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            {getRankBadge(quote.rank)}
-                            <h4 className="font-semibold">{quote.supplier_company}</h4>
-                            <span className="text-sm text-muted-foreground">{quote.supplier_name}</span>
-                          </div>
-                          
-                          <div className="text-2xl font-bold text-green-600 flex items-center gap-2">
-                            <Euro className="h-5 w-5" />
-                            {quote.calculated_price.toLocaleString()}€
-                            <span className="text-sm text-orange-600 font-normal">(marge MatchMove incluse)</span>
-                          </div>
+          {Object.entries(quotesByClient).map(([clientId, quotes]) => {
+            const hasOriginalQuote = quotes[0].original_quote_amount;
+            const originalAmount = quotes[0].original_quote_amount;
+            const bestCalculatedPrice = Math.min(...quotes.map(q => q.calculated_price));
+            const priceDifference = originalAmount && originalAmount - bestCalculatedPrice;
+            
+            return (
+              <Card key={clientId}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-green-600" />
+                    {quotes[0].client_name}
+                    <Badge variant="outline" className="ml-2">
+                      {quotes[0].departure_city} → {quotes[0].arrival_city}
+                    </Badge>
+                    
+                    {/* 🎯 AJOUT: Comparaison prix original vs calculé */}
+                    {hasOriginalQuote && (
+                      <div className="flex items-center gap-2 ml-auto">
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Prix original: </span>
+                          <span className="font-semibold text-blue-600">{originalAmount}€</span>
                         </div>
-                        
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRejectQuote(quote)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Meilleur prix: </span>
+                          <span className="font-semibold text-green-600">{bestCalculatedPrice}€</span>
+                        </div>
+                        {priceDifference && (
+                          <Badge 
+                            variant={priceDifference > 0 ? "destructive" : "default"}
+                            className="flex items-center gap-1"
                           >
-                            <X className="h-4 w-4 mr-1" />
-                            Rejeter
-                          </Button>
+                            <AlertTriangle className="h-3 w-3" />
+                            {priceDifference > 0 ? `-${priceDifference}€` : `+${Math.abs(priceDifference)}€`}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Volume: {quotes[0].estimated_volume}m³ • Date: {format(new Date(quotes[0].desired_date), 'dd/MM/yyyy', { locale: fr })}
+                    {quotes[0].client_email && ` • ${quotes[0].client_email}`}
+                    {hasOriginalQuote && priceDifference && (
+                      <div className="text-sm mt-1">
+                        <span className={`font-medium ${priceDifference > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {priceDifference > 0 
+                            ? `⚠️ Écart de ${priceDifference}€ - prix recalculé plus bas que l'original`
+                            : `✅ Prix recalculé cohérent avec l'original`
+                          }
+                        </span>
+                      </div>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4">
+                    {quotes.map((quote) => (
+                      <div key={quote.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              {getRankBadge(quote.rank)}
+                              <h4 className="font-semibold">{quote.supplier_company}</h4>
+                              <span className="text-sm text-muted-foreground">{quote.supplier_name}</span>
+                            </div>
+                            
+                            <div className="text-2xl font-bold text-green-600 flex items-center gap-2">
+                              <Euro className="h-5 w-5" />
+                              {quote.calculated_price.toLocaleString()}€
+                              <span className="text-sm text-orange-600 font-normal">(marge MatchMove incluse)</span>
+                              
+                              {/* 🎯 AJOUT: Indicateur de différence avec prix original */}
+                              {hasOriginalQuote && (
+                                <span className="text-sm text-muted-foreground font-normal">
+                                  vs {originalAmount}€ original
+                                </span>
+                              )}
+                            </div>
+                          </div>
                           
-                          <Button
-                            size="sm"
-                            onClick={() => handleAcceptQuote(quote)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Accepter
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRejectQuote(quote)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Rejeter
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              onClick={() => handleAcceptQuote(quote)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Accepter
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : isGenerating ? (
         <Card>
