@@ -51,11 +51,13 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
 
   const loadSuppliersData = async () => {
     try {
+      console.log('🔄 Chargement des données des prestataires...');
       const { data: suppliers, error } = await supabase
         .from('suppliers')
         .select('*');
 
       if (error) throw error;
+      console.log('✅ Prestataires chargés:', suppliers?.length || 0);
       setSuppliersData(suppliers || []);
     } catch (error) {
       console.error('❌ Erreur chargement prestataires:', error);
@@ -163,7 +165,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
   };
 
   const getSupplierData = (supplierId: string) => {
-    return suppliersData.find(s => s.id === supplierId);
+    const supplier = suppliersData.find(s => s.id === supplierId);
+    console.log('🔍 Recherche prestataire:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
+    return supplier;
   };
 
   const getRankBadge = (rank: number) => {

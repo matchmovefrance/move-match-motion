@@ -41,8 +41,18 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
   const generatePDF = () => {
-    if (!client.quote_amount || !supplier) {
-      console.error('Données manquantes pour la génération du PDF');
+    console.log('🎯 Vérification des données pour PDF...');
+    console.log('Client:', client);
+    console.log('Supplier:', supplier);
+    console.log('Quote amount:', client.quote_amount);
+    
+    if (!client.quote_amount) {
+      console.error('❌ Montant du devis manquant');
+      return;
+    }
+
+    if (!supplier) {
+      console.error('❌ Informations prestataire manquantes');
       return;
     }
 
@@ -254,13 +264,21 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     console.log('✅ PDF personnalisé généré et téléchargé:', fileName);
   };
 
+  const isDisabled = !client.quote_amount || !supplier;
+  
+  console.log('📋 État bouton PDF:', {
+    hasQuoteAmount: !!client.quote_amount,
+    hasSupplier: !!supplier,
+    isDisabled
+  });
+
   return (
     <Button
       onClick={generatePDF}
       variant="outline"
       size="sm"
       className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-      disabled={!client.quote_amount || !supplier}
+      disabled={isDisabled}
       title={!client.quote_amount ? "Aucun montant de devis renseigné" : !supplier ? "Informations prestataire manquantes" : "Télécharger le devis personnalisé en PDF"}
     >
       <FileDown className="h-4 w-4" />
