@@ -41,13 +41,14 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
   const generatePDF = () => {
-    console.log('🎯 Vérification des données pour PDF...');
+    console.log('🎯 Génération PDF - Données complètes:');
     console.log('Client:', client);
     console.log('Supplier:', supplier);
     console.log('Quote amount:', client.quote_amount);
     console.log('Supplier Price:', supplierPrice);
     console.log('Match Move Margin:', matchMoveMargin);
     
+    // Validation des données essentielles
     if (!client.quote_amount) {
       console.error('❌ Montant du devis manquant');
       return;
@@ -58,7 +59,12 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
       return;
     }
 
-    console.log('🎯 Génération PDF personnalisé instantané...');
+    if (!supplier.company_name || !supplier.contact_name || !supplier.email) {
+      console.error('❌ Données prestataire incomplètes:', supplier);
+      return;
+    }
+
+    console.log('✅ Toutes les validations passées - Génération du PDF...');
     
     const doc = new jsPDF();
     
@@ -266,14 +272,37 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     console.log('✅ PDF personnalisé généré et téléchargé:', fileName);
   };
 
-  const isDisabled = !client.quote_amount || !supplier;
+  // Logique de validation simplifiée et plus claire
+  const hasRequiredClientData = !!(client.quote_amount && client.name);
+  const hasRequiredSupplierData = !!(supplier && supplier.company_name && supplier.contact_name && supplier.email && supplier.phone);
   
-  console.log('📋 État bouton PDF:', {
-    hasQuoteAmount: !!client.quote_amount,
-    hasSupplier: !!supplier,
-    supplierCompany: supplier?.company_name,
-    isDisabled
+  const isDisabled = !hasRequiredClientData || !hasRequiredSupplierData;
+  
+  // Debug détaillé pour comprendre le problème
+  console.log('🔍 QuoteGenerator - État détaillé:', {
+    clientQuoteAmount: client.quote_amount,
+    clientName: client.name,
+    hasRequiredClientData,
+    supplierExists: !!supplier,
+    supplierCompanyName: supplier?.company_name,
+    supplierContactName: supplier?.contact_name,
+    supplierEmail: supplier?.email,
+    supplierPhone: supplier?.phone,
+    hasRequiredSupplierData,
+    finalIsDisabled: isDisabled,
+    supplierDataStructure: supplier ? Object.keys(supplier) : 'NO_SUPPLIER'
   });
+
+  const getTooltipMessage = () => {
+    if (!client.quote_amount) return "Aucun montant de devis renseigné";
+    if (!client.name) return "Nom du client manquant";
+    if (!supplier) return "Informations prestataire manquantes";
+    if (!supplier.company_name) return "Nom de l'entreprise prestataire manquant";
+    if (!supplier.contact_name) return "Nom du contact prestataire manquant";
+    if (!supplier.email) return "Email du prestataire manquant";
+    if (!supplier.phone) return "Téléphone du prestataire manquant";
+    return "Télécharger le devis personnalisé en PDF";
+  };
 
   return (
     <Button
@@ -282,7 +311,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
       size="sm"
       className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
       disabled={isDisabled}
-      title={!client.quote_amount ? "Aucun montant de devis renseigné" : !supplier ? "Informations prestataire manquantes" : "Télécharger le devis personnalisé en PDF"}
+      title={getTooltipMessage()}
     >
       <FileDown className="h-4 w-4" />
     </Button>
