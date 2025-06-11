@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCache } from '@/hooks/useCache';
+import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import MatchFilters, { MatchFilterOptions } from './MatchFilters';
 
@@ -78,7 +79,7 @@ interface Match {
 
 interface ClientWithMatches {
   client: ClientRequest;
-  matches: Array<Match & { move: Move }>;
+  matches: Array<Match & { move: Move; realDistance?: number }>;
 }
 
 const MatchFinder = () => {
@@ -191,10 +192,25 @@ const MatchFinder = () => {
 
   const loading = clientsLoading || movesLoading || matchesLoading;
 
-  useEffect(() => {
-    console.log('MatchFinder useEffect - grouping matches by client');
+  // Function to calculate postal code distance (approximation)
+  const calculatePostalCodeDistance = (postalCode1: string, postalCode2: string): number => {
+    const dept1 = parseInt(postalCode1.substring(0, 2));
+    const dept2 = parseInt(postalCode2.substring(0, 2));
     
-    // Ensure matches is an array before processing
+    // Rough approximation: 50km per department difference
+    const deptDistance = Math.abs(dept1 - dept2) * 50;
+    
+    // Add some variation based on the last digits for more granularity
+    const num1 = parseInt(postalCode1.substring(2));
+    const num2 = parseInt(postalCode2.substring(2));
+    const granularDiff = Math.abs(num1 - num2) * 0.1;
+    
+    return Math.round(deptDistance + granularDiff);
+  };
+
+  useEffect(() => {
+    console.log('MatchFinder useEffect - grouping matches by client with distance prioritization');
+    
     if (!Array.isArray(matches)) {
       console.warn('matches is not an array:', matches);
       setGroupedMatches([]);
@@ -223,6 +239,12 @@ const MatchFinder = () => {
         }
       }
 
+      // Calculate distance from mover's departure to client's departure
+      const realDistance = calculatePostalCodeDistance(
+        move.departure_postal_code,
+        client.departure_postal_code
+      );
+
       if (!clientMap.has(client.id)) {
         clientMap.set(client.id, {
           client,
@@ -232,11 +254,40 @@ const MatchFinder = () => {
 
       clientMap.get(client.id)!.matches.push({
         ...match,
-        move
+        move,
+        realDistance
       });
     });
 
-    setGroupedMatches(Array.from(clientMap.values()));
+    // Sort matches within each client group by distance and limit to 5
+    const processedMatches = Array.from(clientMap.values()).map(group => {
+      // Sort by distance (closest first), then by match quality
+      const sortedMatches = group.matches.sort((a, b) => {
+        // Primary: distance to client departure point
+        const distanceDiff = (a.realDistance || 0) - (b.realDistance || 0);
+        if (distanceDiff !== 0) return distanceDiff;
+        
+        // Secondary: match type quality
+        const matchTypeScore = (match: any) => {
+          switch (match.match_type) {
+            case 'perfect': return 0;
+            case 'good': return 1;
+            case 'partial': return 2;
+            default: return 3;
+          }
+        };
+        
+        return matchTypeScore(a) - matchTypeScore(b);
+      });
+
+      // Limit to 5 best matches
+      return {
+        ...group,
+        matches: sortedMatches.slice(0, 5)
+      };
+    });
+
+    setGroupedMatches(processedMatches);
   }, [matches, currentFilters, clientRequests, moves]);
 
   const handleFiltersChange = useCallback((filters: MatchFilterOptions) => {
@@ -273,7 +324,7 @@ const MatchFinder = () => {
     }
   }, [user?.id, toast, refetchMatches]);
 
-  // Fonction simplifiée pour calculer si les dates sont compatibles
+  // Simplified date compatibility check
   const areDatesCompatible = (client: ClientRequest, moveDate: string) => {
     const move = new Date(moveDate);
     
@@ -289,24 +340,10 @@ const MatchFinder = () => {
     }
   };
 
-  // Fonction simplifiée pour calculer la distance (utilise une formule approximative)
-  const calculateApproximateDistance = (client: ClientRequest, move: Move): number => {
-    // Approximation simple basée sur les codes postaux
-    const clientDeptCode = parseInt(client.departure_postal_code.substring(0, 2));
-    const moveDeptCode = parseInt(move.departure_postal_code.substring(0, 2));
-    const clientArrCode = parseInt(client.arrival_postal_code.substring(0, 2));
-    const moveArrCode = parseInt(move.arrival_postal_code.substring(0, 2));
-    
-    const deptDistance = Math.abs(clientDeptCode - moveDeptCode) * 50; // 50km par département
-    const arrDistance = Math.abs(clientArrCode - moveArrCode) * 50;
-    
-    return Math.round((deptDistance + arrDistance) / 2);
-  };
-
   const findMatches = useCallback(async () => {
     try {
       setIsSearching(true);
-      console.log('🔍 Début de la recherche de matchs...');
+      console.log('🔍 Début de la recherche de matchs avec priorité distance...');
       
       // Clear old matches without actions first
       const { error: deleteError } = await supabase
@@ -320,14 +357,25 @@ const MatchFinder = () => {
 
       let newMatchesCount = 0;
 
-      // Process new matches with simplified logic
+      // Process matches with distance-based priority
       for (const client of clientRequests) {
+        const clientMatches: Array<{
+          move: Move;
+          distance: number;
+          match: any;
+        }> = [];
+
+        // Calculate all potential matches for this client
         for (const move of moves) {
           const datesCompatible = areDatesCompatible(client, move.departure_date);
           
           if (!datesCompatible) continue;
           
-          const distanceKm = calculateApproximateDistance(client, move);
+          const distanceKm = calculatePostalCodeDistance(
+            move.departure_postal_code,
+            client.departure_postal_code
+          );
+          
           const clientVolume = client.estimated_volume || 0;
           const availableVolume = move.available_volume || 0;
           const volumeOk = clientVolume <= availableVolume;
@@ -337,8 +385,10 @@ const MatchFinder = () => {
           const moveDate = new Date(move.departure_date);
           const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
           
-          const isValid = distanceKm <= 200 && dateDiffDays <= 15 && volumeOk;
+          const isValid = distanceKm <= 500 && dateDiffDays <= 15 && volumeOk;
           
+          if (!isValid) continue;
+
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
               client.arrival_city.toLowerCase() === move.arrival_city.toLowerCase()) {
@@ -351,24 +401,37 @@ const MatchFinder = () => {
             matchType = 'good';
           }
 
+          clientMatches.push({
+            move,
+            distance: distanceKm,
+            match: {
+              move_id: move.id,
+              client_request_id: client.id,
+              match_type: matchType,
+              distance_km: distanceKm,
+              date_diff_days: Math.round(dateDiffDays),
+              combined_volume: combinedVolume,
+              volume_ok: volumeOk,
+              is_valid: isValid
+            }
+          });
+        }
+
+        // Sort by distance and take only the 5 best matches
+        clientMatches.sort((a, b) => a.distance - b.distance);
+        const bestMatches = clientMatches.slice(0, 5);
+
+        // Insert the best matches
+        for (const { match } of bestMatches) {
           // Check if match already exists
           const existingMatch = matches.find(m => 
-            m.client_request_id === client.id && m.move_id === move.id
+            m.client_request_id === match.client_request_id && m.move_id === match.move_id
           );
 
-          if (!existingMatch && isValid) {
+          if (!existingMatch) {
             const { error } = await supabase
               .from('move_matches')
-              .insert({
-                move_id: move.id,
-                client_request_id: client.id,
-                match_type: matchType,
-                distance_km: distanceKm,
-                date_diff_days: Math.round(dateDiffDays),
-                combined_volume: combinedVolume,
-                volume_ok: volumeOk,
-                is_valid: isValid
-              });
+              .insert(match);
 
             if (error) {
               console.error('Error inserting match:', error);
@@ -379,11 +442,11 @@ const MatchFinder = () => {
         }
       }
 
-      console.log('✅ Recherche terminée,', newMatchesCount, 'nouveaux matchs créés');
+      console.log('✅ Recherche terminée,', newMatchesCount, 'nouveaux matchs créés (max 5 par client)');
       
       toast({
         title: "Recherche terminée",
-        description: `${newMatchesCount} nouveaux matchs trouvés`,
+        description: `${newMatchesCount} nouveaux matchs trouvés (max 5 par client)`,
       });
 
       // Refresh data
@@ -491,7 +554,7 @@ const MatchFinder = () => {
             <div className="flex items-center space-x-2">
               <Search className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-gray-600">Correspondances totales</p>
+                <p className="text-sm text-gray-600">Correspondances (max 5/client)</p>
                 <p className="text-2xl font-bold">{totalMatches}</p>
               </div>
             </div>
@@ -517,7 +580,7 @@ const MatchFinder = () => {
       {/* Liste des correspondances groupées par client */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">
-          Correspondances par client ({groupedMatches.length})
+          Correspondances par client ({groupedMatches.length}) - Maximum 5 matchs par client
         </h3>
         
         {groupedMatches.length === 0 ? (
@@ -572,96 +635,101 @@ const MatchFinder = () => {
                       )}
                     </div>
                     <Badge className="bg-blue-100 text-blue-800">
-                      {group.matches.length} match{group.matches.length > 1 ? 's' : ''}
+                      {group.matches.length}/5 match{group.matches.length > 1 ? 's' : ''}
                     </Badge>
                   </div>
                 </div>
 
                 {/* Liste des déménageurs correspondants */}
                 <div className="space-y-4">
-                  <h5 className="font-semibold text-gray-700">Déménageurs disponibles :</h5>
+                  <h5 className="font-semibold text-gray-700">
+                    Déménageurs disponibles (triés par proximité) :
+                  </h5>
                   <div className="grid gap-4">
-                    {group.matches.map((match) => {
-                      const isDistanceOk = match.distance_km <= 200;
-                      const isVolumeOk = match.volume_ok;
-                      const isDateOk = match.date_diff_days <= 15;
-                      const isCompatible = isDistanceOk && isVolumeOk && isDateOk;
-
-                      return (
-                        <div
-                          key={match.id}
-                          className={`p-4 rounded-lg border ${
-                            isCompatible ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
-                          } ${match.status === 'rejected' ? 'opacity-60' : ''}`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h6 className="font-semibold text-gray-800 flex items-center">
-                                  <Truck className="h-4 w-4 mr-2 text-green-600" />
-                                  {match.move.company_name || 'Déménageur non renseigné'}
-                                </h6>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  match.match_type === 'perfect' ? 'bg-green-100 text-green-800' :
-                                  match.match_type === 'good' ? 'bg-blue-100 text-blue-800' :
-                                  'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {match.match_type === 'perfect' ? '🎯 Parfait' :
-                                   match.match_type === 'good' ? '👍 Bon' : '⚡ Partiel'}
+                    {group.matches.map((match, index) => (
+                      <div
+                        key={match.id}
+                        className={`p-4 rounded-lg border ${
+                          match.volume_ok ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
+                        } ${match.status === 'rejected' ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h6 className="font-semibold text-gray-800 flex items-center">
+                                <Truck className="h-4 w-4 mr-2 text-green-600" />
+                                {match.move.company_name || 'Déménageur non renseigné'}
+                              </h6>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                index === 0 ? 'bg-gold-100 text-gold-800' :
+                                index <= 2 ? 'bg-green-100 text-green-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}>
+                                {index === 0 ? '🥇 Le plus proche' :
+                                 index === 1 ? '🥈 2ème choix' :
+                                 index === 2 ? '🥉 3ème choix' :
+                                 `${index + 1}ème choix`}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                match.match_type === 'perfect' ? 'bg-green-100 text-green-800' :
+                                match.match_type === 'good' ? 'bg-blue-100 text-blue-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {match.match_type === 'perfect' ? '🎯 Parfait' :
+                                 match.match_type === 'good' ? '👍 Bon' : '⚡ Partiel'}
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <span className="text-gray-500">Route:</span>
+                                <div className="font-medium">{match.move.departure_city} → {match.move.arrival_city}</div>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Date:</span>
+                                <div className="font-medium">{new Date(match.move.departure_date).toLocaleDateString('fr-FR')}</div>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Distance départ:</span>
+                                <span className="font-medium text-blue-600">
+                                  {match.realDistance || match.distance_km}km
                                 </span>
                               </div>
-                              
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                <div>
-                                  <span className="text-gray-500">Route:</span>
-                                  <div className="font-medium">{match.move.departure_city} → {match.move.arrival_city}</div>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Date:</span>
-                                  <div className="font-medium">{new Date(match.move.departure_date).toLocaleDateString('fr-FR')}</div>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Distance:</span>
-                                  <span className={`font-medium ${isDistanceOk ? 'text-green-600' : 'text-red-600'}`}>
-                                    {match.distance_km}km
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Volume dispo:</span>
-                                  <span className="font-medium">{match.move.available_volume}m³</span>
-                                </div>
+                              <div>
+                                <span className="text-gray-500">Volume dispo:</span>
+                                <span className="font-medium">{match.move.available_volume}m³</span>
                               </div>
                             </div>
+                          </div>
 
-                            <div className="flex flex-col items-end space-y-2">
-                              {getStatusBadge(match.status || 'pending')}
-                              
-                              {match.status === 'pending' && (
-                                <div className="flex space-x-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleMatchAction(match.id, 'accepted')}
-                                    className="bg-green-600 hover:bg-green-700"
-                                  >
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Accepter
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleMatchAction(match.id, 'rejected')}
-                                    className="text-red-600 hover:text-red-700"
-                                  >
-                                    <X className="h-3 w-3 mr-1" />
-                                    Rejeter
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
+                          <div className="flex flex-col items-end space-y-2">
+                            {getStatusBadge(match.status || 'pending')}
+                            
+                            {match.status === 'pending' && (
+                              <div className="flex space-x-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleMatchAction(match.id, 'accepted')}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Accepter
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleMatchAction(match.id, 'rejected')}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <X className="h-3 w-3 mr-1" />
+                                  Rejeter
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </motion.div>
