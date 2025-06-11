@@ -93,6 +93,14 @@ const SuppliersTab = () => {
     setShowPricingDialog(true);
   };
 
+  const handleEditSupplier = (supplier: Supplier) => {
+    // TODO: Implémenter la modification des informations fournisseur
+    toast({
+      title: "Fonction en développement",
+      description: "La modification des informations fournisseur sera bientôt disponible.",
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -270,7 +278,11 @@ const SuppliersTab = () => {
                     <Link className="h-3 w-3 mr-1" />
                     Lien
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleEditSupplier(supplier)}
+                  >
                     <Edit className="h-3 w-3" />
                   </Button>
                 </div>
