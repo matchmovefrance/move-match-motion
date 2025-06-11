@@ -11,6 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import SupplierPricingDialog from './SupplierPricingDialog';
+import SupplierLinkDialog from './SupplierLinkDialog';
 
 type Supplier = Tables<'suppliers'>;
 
@@ -20,8 +22,15 @@ const SuppliersTab = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_at');
+  
+  // States pour les dialogs
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
-  const { data: suppliers, isLoading } = useQuery({
+  const { data: suppliers, isLoading, refetch } = useQuery({
     queryKey: ['suppliers', searchTerm, activeFilter, sortBy],
     queryFn: async () => {
       let query = supabase
@@ -47,14 +56,14 @@ const SuppliersTab = () => {
     refetchInterval: 15000,
   });
 
-  const generateSupplierLink = async (supplierId: string) => {
+  const generateSupplierLink = async (supplier: Supplier) => {
     const linkToken = crypto.randomUUID();
     const password = Math.random().toString(36).substring(2, 10);
 
     const { data, error } = await supabase
       .from('supplier_links')
       .insert({
-        supplier_id: supplierId,
+        supplier_id: supplier.id,
         link_token: linkToken,
         password: password,
         created_by: user?.id || ''
@@ -73,17 +82,15 @@ const SuppliersTab = () => {
     }
 
     const link = `${window.location.origin}/supplier-portal/${data.link_token}`;
-    navigator.clipboard.writeText(link);
-    toast({
-      title: "Lien copié !",
-      description: `Le lien a été copié dans le presse-papier. Mot de passe: ${password}`,
-    });
+    setGeneratedLink(link);
+    setGeneratedPassword(password);
+    setSelectedSupplier(supplier);
+    setShowLinkDialog(true);
   };
 
-  // Fonction pour configurer le modèle de prix d'un fournisseur
   const configurePricingModel = (supplier: Supplier) => {
-    // Cette fonction sera implémentée plus tard avec un modal
-    console.log("Configuration du modèle de prix pour:", supplier.company_name);
+    setSelectedSupplier(supplier);
+    setShowPricingDialog(true);
   };
 
   if (isLoading) {
@@ -208,10 +215,11 @@ const SuppliersTab = () => {
                         {(supplier.pricing_model as any).basePrice && (
                           <div>Prix de base: {(supplier.pricing_model as any).basePrice}€</div>
                         )}
-                        {(supplier.pricing_model as any).distanceCost && (
-                          <div className="truncate">
-                            Formule distance: {JSON.stringify((supplier.pricing_model as any).distanceCost).substring(0, 30)}...
-                          </div>
+                        {(supplier.pricing_model as any).distanceRate && (
+                          <div>Distance: {(supplier.pricing_model as any).distanceRate}€/km</div>
+                        )}
+                        {(supplier.pricing_model as any).volumeRate && (
+                          <div>Volume: {(supplier.pricing_model as any).volumeRate}€/m³</div>
                         )}
                       </div>
                     ) : (
@@ -256,7 +264,7 @@ const SuppliersTab = () => {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => generateSupplierLink(supplier.id)}
+                    onClick={() => generateSupplierLink(supplier)}
                     className="flex-1"
                   >
                     <Link className="h-3 w-3 mr-1" />
@@ -289,6 +297,22 @@ const SuppliersTab = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialogs */}
+      <SupplierPricingDialog
+        open={showPricingDialog}
+        onOpenChange={setShowPricingDialog}
+        supplier={selectedSupplier}
+        onUpdate={refetch}
+      />
+
+      <SupplierLinkDialog
+        open={showLinkDialog}
+        onOpenChange={setShowLinkDialog}
+        link={generatedLink}
+        password={generatedPassword}
+        supplierName={selectedSupplier?.company_name || ''}
+      />
     </div>
   );
 };
