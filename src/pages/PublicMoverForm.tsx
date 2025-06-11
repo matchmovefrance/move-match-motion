@@ -35,8 +35,6 @@ const PublicMoverForm = () => {
     estimated_arrival_date: '',
     estimated_arrival_time: '',
     max_volume: '',
-    price_per_m3: '',
-    truck_identifier: '',
     truck_type: 'Semi-remorque',
     description: '',
     special_requirements: ''
@@ -102,11 +100,6 @@ const PublicMoverForm = () => {
     try {
       console.log('📝 Début de soumission du formulaire public');
       
-      // Utiliser l'auth service_role pour contourner les politiques RLS
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Créer le trajet directement dans confirmed_moves sans créer de mover/truck séparés
-      // car les politiques RLS bloquent les insertions pour les utilisateurs non authentifiés
       const moveData = {
         // Données obligatoires
         departure_city: formData.departure_city,
@@ -115,7 +108,7 @@ const PublicMoverForm = () => {
         arrival_city: formData.arrival_city,
         arrival_postal_code: formData.arrival_postal_code,
         max_volume: parseFloat(formData.max_volume),
-        price_per_m3: parseFloat(formData.price_per_m3),
+        price_per_m3: 0, // Valeur par défaut puisque supprimé du formulaire
         
         // Données du formulaire
         company_name: formData.company_name,
@@ -127,7 +120,7 @@ const PublicMoverForm = () => {
         departure_time: formData.departure_time || null,
         estimated_arrival_date: formData.estimated_arrival_date || null,
         estimated_arrival_time: formData.estimated_arrival_time || null,
-        truck_identifier: formData.truck_identifier,
+        truck_identifier: 'AUTO-GENERATED', // Valeur automatique puisque supprimé du formulaire
         truck_type: formData.truck_type,
         description: formData.description || '',
         special_requirements: formData.special_requirements || '',
@@ -177,8 +170,6 @@ const PublicMoverForm = () => {
         estimated_arrival_date: '',
         estimated_arrival_time: '',
         max_volume: '',
-        price_per_m3: '',
-        truck_identifier: '',
         truck_type: 'Semi-remorque',
         description: '',
         special_requirements: ''
@@ -434,16 +425,6 @@ const PublicMoverForm = () => {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="truck_identifier">Identifiant du camion *</Label>
-                    <Input
-                      id="truck_identifier"
-                      value={formData.truck_identifier}
-                      onChange={(e) => handleInputChange('truck_identifier', e.target.value)}
-                      placeholder="ex: CAM-001"
-                      required
-                    />
-                  </div>
-                  <div>
                     <Label htmlFor="truck_type">Type de camion</Label>
                     <select
                       id="truck_type"
@@ -464,17 +445,6 @@ const PublicMoverForm = () => {
                       step="0.1"
                       value={formData.max_volume}
                       onChange={(e) => handleInputChange('max_volume', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="price_per_m3">Prix par m³ (€) *</Label>
-                    <Input
-                      id="price_per_m3"
-                      type="number"
-                      step="0.01"
-                      value={formData.price_per_m3}
-                      onChange={(e) => handleInputChange('price_per_m3', e.target.value)}
                       required
                     />
                   </div>
