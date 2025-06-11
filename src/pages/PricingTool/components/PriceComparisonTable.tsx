@@ -126,7 +126,7 @@ const PriceComparisonTable = ({
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{quote.supplier.name}</span>
+                            <span className="font-medium">{quote.supplier.company_name}</span>
                             {priceVariant === 'best' && (
                               <Badge className="bg-green-100 text-green-800 text-xs">
                                 <Star className="h-3 w-3 mr-1" />

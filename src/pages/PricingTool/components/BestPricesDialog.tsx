@@ -100,7 +100,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
   const handleSendToClient = (quote: Quote) => {
     toast({
       title: "Devis envoyé",
-      description: `Le devis de ${quote.supplier.name} a été envoyé au client.`,
+      description: `Le devis de ${quote.supplier.company_name} a été envoyé au client.`,
     });
   };
 
@@ -161,7 +161,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
                     <div className="space-y-2 max-h-32 overflow-y-auto">
                       {quotes.slice(-3).map((quote) => (
                         <div key={quote.id} className="flex justify-between items-center bg-muted/50 p-2 rounded">
-                          <span className="text-sm">{quote.supplier.name}</span>
+                          <span className="text-sm">{quote.supplier.company_name}</span>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary">{quote.price.toLocaleString()}€</Badge>
                             <CheckCircle className="h-4 w-4 text-green-600" />
