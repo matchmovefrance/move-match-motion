@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Check, X, Star, TrendingUp, TrendingDown, Download, FileText, Mail, Phone } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Check, X, Star, TrendingUp, TrendingDown, Download, FileText, Mail, Phone, User } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
 
 type Supplier = Tables<'suppliers'>;
@@ -22,14 +23,17 @@ interface Quote {
   response_time: string;
   rating: number;
   notes?: string;
+  client_name?: string;
+  status: 'pending' | 'accepted' | 'rejected';
 }
 
 interface PriceComparisonTableProps {
   opportunity: PricingOpportunity;
   quotes: Quote[];
   onSelectQuote?: (quote: Quote) => void;
-  onExportPDF?: () => void;
-  onSendToClient?: (quote: Quote) => void;
+  onExportPDF?: (quote: Quote) => void;
+  onAcceptQuote?: (quote: Quote) => void;
+  onRejectQuote?: (quote: Quote) => void;
 }
 
 const PriceComparisonTable = ({ 
@@ -37,9 +41,12 @@ const PriceComparisonTable = ({
   quotes, 
   onSelectQuote, 
   onExportPDF, 
-  onSendToClient 
+  onAcceptQuote,
+  onRejectQuote
 }: PriceComparisonTableProps) => {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [detailQuote, setDetailQuote] = useState<Quote | null>(null);
 
   const getBestPrice = () => {
     return Math.min(...quotes.map(q => q.price));
@@ -71,6 +78,19 @@ const PriceComparisonTable = ({
     onSelectQuote?.(quote);
   };
 
+  const handleShowDetails = (quote: Quote) => {
+    setDetailQuote(quote);
+    setShowDetailDialog(true);
+  };
+
+  const handleAccept = (quote: Quote) => {
+    onAcceptQuote?.(quote);
+  };
+
+  const handleReject = (quote: Quote) => {
+    onRejectQuote?.(quote);
+  };
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -79,15 +99,9 @@ const PriceComparisonTable = ({
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Comparaison des devis - {opportunity.title}</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={onExportPDF}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export PDF
-                </Button>
-                <Badge variant="secondary" className="text-sm">
-                  {quotes.length} devis reçus
-                </Badge>
-              </div>
+              <Badge variant="secondary" className="text-sm">
+                {quotes.length} devis en attente
+              </Badge>
             </CardTitle>
             <CardDescription>
               {opportunity.departure_city} → {opportunity.arrival_city} • {opportunity.estimated_volume}m³
@@ -102,10 +116,10 @@ const PriceComparisonTable = ({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[200px]">Fournisseur</TableHead>
+                  <TableHead className="text-center">Client</TableHead>
                   <TableHead className="text-center">Prix total</TableHead>
                   <TableHead className="text-center">Durée</TableHead>
                   <TableHead className="text-center">Services inclus</TableHead>
-                  <TableHead className="text-center">Note</TableHead>
                   <TableHead className="text-center">Délai réponse</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
@@ -143,6 +157,13 @@ const PriceComparisonTable = ({
                               {quote.supplier.phone}
                             </div>
                           )}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{quote.client_name}</span>
                         </div>
                       </TableCell>
                       
@@ -200,64 +221,74 @@ const PriceComparisonTable = ({
                       </TableCell>
                       
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star 
-                              key={i} 
-                              className={`h-4 w-4 ${
-                                i < quote.rating 
-                                  ? 'text-yellow-400 fill-current' 
-                                  : 'text-gray-300'
-                              }`} 
-                            />
-                          ))}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {quote.rating}/5
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="text-center">
                         <span className="text-sm">{quote.response_time}</span>
                       </TableCell>
                       
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSendToClient?.(quote);
-                                }}
-                              >
-                                <Mail className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Envoyer au client</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Handle view details
-                                }}
-                              >
-                                <FileText className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Voir détails</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <div className="flex gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleShowDetails(quote);
+                                  }}
+                                >
+                                  <FileText className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Voir détails</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onExportPDF?.(quote);
+                                  }}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Télécharger PDF</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReject(quote);
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                            
+                            <Button 
+                              variant="default" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAccept(quote);
+                              }}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -297,18 +328,103 @@ const PriceComparisonTable = ({
                 </div>
                 
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <h4 className="font-medium text-purple-800 mb-2">Meilleure note</h4>
+                  <h4 className="font-medium text-purple-800 mb-2">Clients concernés</h4>
                   <p className="text-2xl font-bold text-purple-600">
-                    {Math.max(...quotes.map(q => q.rating))}/5
+                    {new Set(quotes.map(q => q.client_name)).size}
                   </p>
                   <p className="text-sm text-purple-700 mt-1">
-                    Qualité de service
+                    Clients différents
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
+
+        {/* Details Dialog */}
+        <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Détails du devis - {detailQuote?.supplier.company_name}</DialogTitle>
+              <DialogDescription>
+                Client: {detailQuote?.client_name}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {detailQuote && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Informations générales</h4>
+                    <div className="text-sm space-y-1">
+                      <div>Prix: <span className="font-bold">{detailQuote.price.toLocaleString()}€</span></div>
+                      <div>Durée estimée: {detailQuote.estimated_duration}</div>
+                      <div>Temps de réponse: {detailQuote.response_time}</div>
+                      <div>Note: {detailQuote.rating}/5 ⭐</div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Services inclus</h4>
+                    <div className="text-sm space-y-1">
+                      <div className={detailQuote.includes_packing ? 'text-green-600' : 'text-red-600'}>
+                        {detailQuote.includes_packing ? '✓' : '✗'} Emballage
+                      </div>
+                      <div className={detailQuote.includes_insurance ? 'text-green-600' : 'text-red-600'}>
+                        {detailQuote.includes_insurance ? '✓' : '✗'} Assurance
+                      </div>
+                      <div className={detailQuote.includes_storage ? 'text-green-600' : 'text-red-600'}>
+                        {detailQuote.includes_storage ? '✓' : '✗'} Stockage
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium">Contact fournisseur</h4>
+                  <div className="text-sm space-y-1">
+                    <div>Email: {detailQuote.supplier.email}</div>
+                    <div>Téléphone: {detailQuote.supplier.phone}</div>
+                    <div>Adresse: {detailQuote.supplier.address}, {detailQuote.supplier.city}</div>
+                  </div>
+                </div>
+
+                {detailQuote.notes && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Notes</h4>
+                    <p className="text-sm bg-muted p-3 rounded">{detailQuote.notes}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    variant="outline"
+                    onClick={() => onExportPDF?.(detailQuote)}
+                    className="flex-1"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Télécharger PDF
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => handleReject(detailQuote)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Refuser
+                  </Button>
+                  <Button 
+                    onClick={() => handleAccept(detailQuote)}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Accepter
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

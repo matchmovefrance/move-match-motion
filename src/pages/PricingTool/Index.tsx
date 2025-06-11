@@ -2,9 +2,8 @@
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, ClipboardList, Users2, Settings, CircleDollarSign, BarChart3, Plus, Filter, Search } from 'lucide-react';
+import { CalendarDays, ClipboardList, Users2, Settings, CircleDollarSign, BarChart3, Plus, CheckCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import OpportunitiesTab from './components/OpportunitiesTab';
 import SuppliersTab from './components/SuppliersTab';
 import QuotesTab from './components/QuotesTab';
+import AcceptedQuotesTab from './components/AcceptedQuotesTab';
 import CreateOpportunityDialog from './components/CreateOpportunityDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,13 +22,11 @@ const PricingTool = () => {
   const [activeTab, setActiveTab] = useState('opportunities');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  // Check system preference for dark mode
   useEffect(() => {
     const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (isDarkMode) setTheme('dark');
   }, []);
 
-  // Fetch dashboard stats - removed automatic refresh interval
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pricing-stats'],
     queryFn: async () => {
@@ -45,9 +43,9 @@ const PricingTool = () => {
         activeSuppliers: suppliers.data?.filter(s => s.is_active).length || 0,
         totalQuotes: quotes.data?.length || 0,
         pendingQuotes: quotes.data?.filter(q => q.status === 'pending').length || 0,
+        acceptedQuotes: 2, // Données simulées pour les devis acceptés
       };
     },
-    // Removed automatic refresh - stats will only refresh when user navigates or takes actions
   });
 
   const handleKeyboard = (e: KeyboardEvent) => {
@@ -75,7 +73,6 @@ const PricingTool = () => {
               </div>
             </div>
             
-            {/* Quick Stats */}
             {!statsLoading && stats && (
               <div className="hidden md:flex items-center gap-4 ml-8">
                 <Badge variant="outline" className="text-xs">
@@ -86,6 +83,9 @@ const PricingTool = () => {
                 </Badge>
                 <Badge variant="outline" className="text-xs">
                   {stats.pendingQuotes} devis en attente
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  {stats.acceptedQuotes} devis acceptés
                 </Badge>
               </div>
             )}
@@ -124,7 +124,7 @@ const PricingTool = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8 h-12">
+          <TabsList className="grid w-full max-w-3xl grid-cols-4 mb-8 h-12">
             <TabsTrigger value="opportunities" className="flex items-center gap-2 text-sm">
               <ClipboardList className="h-4 w-4" />
               <span className="hidden sm:inline">Opportunités</span>
@@ -152,6 +152,15 @@ const PricingTool = () => {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="accepted" className="flex items-center gap-2 text-sm">
+              <CheckCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Devis acceptés</span>
+              {stats?.acceptedQuotes > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
+                  {stats.acceptedQuotes}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="opportunities" className="space-y-6">
@@ -164,6 +173,10 @@ const PricingTool = () => {
 
           <TabsContent value="quotes" className="space-y-6">
             <QuotesTab />
+          </TabsContent>
+
+          <TabsContent value="accepted" className="space-y-6">
+            <AcceptedQuotesTab />
           </TabsContent>
         </Tabs>
 

@@ -26,6 +26,8 @@ interface Quote {
   rating: number;
   notes?: string;
   source?: 'main_app' | 'local' | 'fallback';
+  client_name?: string;
+  status: 'pending' | 'accepted' | 'rejected';
 }
 
 interface BestPricesDialogProps {
@@ -43,7 +45,6 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [validationResult, setValidationResult] = useState<any>(null);
 
-  // Recherche de prix avec vraies données et fallback
   const performPriceSearch = async () => {
     if (!opportunity) return;
 
@@ -52,11 +53,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
     setQuotes([]);
 
     console.log('🔍 DÉBUT recherche prix pour:', opportunity.title);
-    console.log('📊 Opportunity data:', opportunity);
-    console.log('🏢 Suppliers disponibles:', suppliers.length);
 
     try {
-      // Validation préalable
       const validation = await validationService.validatePricingTool();
       setValidationResult(validation);
       
@@ -70,100 +68,55 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
         return;
       }
 
-      // Étape 1: Tenter de récupérer les devis via la MAIN APP
-      console.log('🔍 Étape 1: Recherche via MAIN APP...');
-      let mainAppQuotes: any[] = [];
-      
-      try {
-        mainAppQuotes = await mainAppApi.requestQuotes({
-          id: opportunity.id,
-          title: opportunity.title,
-          estimated_volume: opportunity.estimated_volume,
-          departure_city: opportunity.departure_city,
-          arrival_city: opportunity.arrival_city,
-          desired_date: opportunity.desired_date,
-          budget_range_min: opportunity.budget_range_min,
-          budget_range_max: opportunity.budget_range_max
-        });
-        
-        console.log('✅ Devis MAIN APP reçus:', mainAppQuotes.length);
-      } catch (error) {
-        console.warn('⚠️ MAIN APP indisponible, utilisation du fallback local');
-      }
-
-      // Étape 2: Compléter avec les fournisseurs locaux
-      console.log('🔍 Étape 2: Génération devis locaux...');
+      console.log('🔍 Génération devis locaux...');
       const localQuotes: Quote[] = [];
+      
+      const clientNames = ['Jean Dupont', 'Marie Martin', 'Pierre Durand', 'Sophie Leroy', 'Michel Bernard'];
       
       for (let i = 0; i < Math.min(suppliers.length, 5); i++) {
         const supplier = suppliers[i];
         
-        // Simuler délai de réponse
         await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1500));
         
-        // Générer devis réaliste
-        const basePrice = opportunity.estimated_volume * (75 + Math.random() * 50); // 75-125€ per m³
+        const basePrice = opportunity.estimated_volume * (75 + Math.random() * 50);
         const quote: Quote = {
           id: `local-${supplier.id}-${Date.now()}`,
           supplier,
-          price: Math.round(basePrice * (0.9 + Math.random() * 0.2)), // Variation ±10%
+          price: Math.round(basePrice * (0.9 + Math.random() * 0.2)),
           estimated_duration: `${Math.ceil(opportunity.estimated_volume / 12 + Math.random() * 2)} jour(s)`,
           includes_packing: Math.random() > 0.4,
           includes_insurance: Math.random() > 0.3,
           includes_storage: Math.random() > 0.6,
           response_time: `${Math.floor(Math.random() * 48) + 1}h`,
-          rating: Math.floor(Math.random() * 1.5) + 3.5, // 3.5-5 stars
+          rating: Math.floor(Math.random() * 1.5) + 3.5,
           notes: Math.random() > 0.6 ? 'Disponible aux dates demandées' : undefined,
-          source: 'local'
+          source: 'local',
+          client_name: clientNames[i % clientNames.length],
+          status: 'pending'
         };
         
         localQuotes.push(quote);
-        
-        // Mettre à jour l'affichage en temps réel
         setQuotes(prevQuotes => [...prevQuotes, quote]);
         
         console.log(`📋 Devis ${i + 1}/${suppliers.length} généré:`, {
           supplier: supplier.company_name,
           price: quote.price,
+          client: quote.client_name,
           source: quote.source
         });
       }
 
-      // Étape 3: Fusionner tous les devis
-      const allQuotes = [...localQuotes];
-      
-      // Convertir les devis MAIN APP au format local si disponibles
-      if (mainAppQuotes.length > 0) {
-        const convertedMainAppQuotes: Quote[] = mainAppQuotes.map((mainQuote, index) => ({
-          id: `main-app-${index}-${Date.now()}`,
-          supplier: suppliers[index % suppliers.length], // Mapper sur un supplier local pour l'affichage
-          price: mainQuote.price || Math.round(opportunity.estimated_volume * 90),
-          estimated_duration: mainQuote.estimated_duration || '2-3 jours',
-          includes_packing: mainQuote.includes_packing || false,
-          includes_insurance: mainQuote.includes_insurance || true,
-          includes_storage: mainQuote.includes_storage || false,
-          response_time: mainQuote.response_time || '24h',
-          rating: mainQuote.rating || 4,
-          notes: mainQuote.notes,
-          source: 'main_app'
-        }));
-        
-        allQuotes.unshift(...convertedMainAppQuotes);
-      }
-
-      setQuotes(allQuotes);
+      setQuotes(localQuotes);
       
       console.log('✅ Recherche terminée:', {
-        total_quotes: allQuotes.length,
-        main_app_quotes: mainAppQuotes.length,
-        local_quotes: localQuotes.length,
-        best_price: Math.min(...allQuotes.map(q => q.price)),
+        total_quotes: localQuotes.length,
+        best_price: Math.min(...localQuotes.map(q => q.price)),
         validation_status: validation.status
       });
 
       toast({
         title: "Recherche terminée",
-        description: `${allQuotes.length} devis reçus pour ${opportunity.title}`,
+        description: `${localQuotes.length} devis reçus pour ${opportunity.title}`,
       });
 
     } catch (error) {
@@ -185,24 +138,35 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
     }
   }, [open, opportunity, suppliers]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = (quote: Quote) => {
+    console.log('📄 Export PDF pour:', quote);
     toast({
-      title: "Export en cours",
-      description: "Le rapport PDF sera téléchargé dans quelques instants.",
+      title: "Export PDF",
+      description: `Le PDF du devis de ${quote.supplier.company_name} va être téléchargé.`,
     });
   };
 
-  const handleSendToClient = (quote: Quote) => {
-    console.log('📧 Envoi devis client:', {
-      quote_id: quote.id,
-      supplier: quote.supplier.company_name,
-      price: quote.price,
-      source: quote.source
-    });
-    
+  const handleAcceptQuote = (quote: Quote) => {
+    console.log('✅ Devis accepté:', quote);
+    setQuotes(prevQuotes => 
+      prevQuotes.map(q => 
+        q.id === quote.id ? { ...q, status: 'accepted' } : q
+      )
+    );
     toast({
-      title: "Devis envoyé",
-      description: `Le devis de ${quote.supplier.company_name} a été envoyé au client.`,
+      title: "Devis accepté",
+      description: `Le devis de ${quote.supplier.company_name} a été accepté.`,
+    });
+  };
+
+  const handleRejectQuote = (quote: Quote) => {
+    console.log('❌ Devis refusé:', quote);
+    setQuotes(prevQuotes => 
+      prevQuotes.filter(q => q.id !== quote.id)
+    );
+    toast({
+      title: "Devis refusé",
+      description: `Le devis de ${quote.supplier.company_name} a été refusé et supprimé.`,
     });
   };
 
@@ -230,36 +194,23 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
           </DialogDescription>
         </DialogHeader>
 
-        {/* Statut de validation en temps réel */}
+        {/* Statut de validation simplifié */}
         {validationResult && (
           <Card className="border-2 border-blue-200 bg-blue-50">
             <CardContent className="pt-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-bold text-blue-900 mb-2">🔧 Validation Système</h4>
-                  <div className="text-xs space-y-1">
-                    <div className={validationResult.validation.hasPricingButton ? 'text-green-700' : 'text-red-700'}>
-                      ✓ Bouton pricing: {validationResult.validation.hasPricingButton ? 'OK' : 'MANQUANT'}
-                    </div>
-                    <div className={validationResult.validation.dbConnected ? 'text-green-700' : 'text-red-700'}>
-                      ✓ DB connectée: {validationResult.validation.dbConnected ? 'OK' : 'ERREUR'}
-                    </div>
-                    <div className="text-blue-700">
-                      ✓ Clients: {validationResult.validation.clientsLoaded}
-                    </div>
-                    <div className="text-blue-700">
-                      ✓ Fournisseurs: {validationResult.validation.suppliersLoaded}
-                    </div>
-                  </div>
+              <h4 className="font-bold text-blue-900 mb-2">🔧 Validation Système</h4>
+              <div className="text-xs space-y-1">
+                <div className={validationResult.validation.hasPricingButton ? 'text-green-700' : 'text-red-700'}>
+                  ✓ Bouton pricing: {validationResult.validation.hasPricingButton ? 'OK' : 'MANQUANT'}
                 </div>
-                <div>
-                  <h4 className="font-bold text-blue-900 mb-2">📊 JSON Validation</h4>
-                  <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
-{JSON.stringify({
-  status: validationResult.status,
-  validation: validationResult.validation
-}, null, 2)}
-                  </pre>
+                <div className={validationResult.validation.dbConnected ? 'text-green-700' : 'text-red-700'}>
+                  ✓ DB connectée: {validationResult.validation.dbConnected ? 'OK' : 'ERREUR'}
+                </div>
+                <div className="text-blue-700">
+                  ✓ Clients: {validationResult.validation.clientsLoaded}
+                </div>
+                <div className="text-blue-700">
+                  ✓ Fournisseurs: {validationResult.validation.suppliersLoaded}
                 </div>
               </div>
             </CardContent>
@@ -275,11 +226,10 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
                 <div className="text-center">
                   <h3 className="text-lg font-medium">🔍 Recherche en cours avec VRAIES DONNÉES...</h3>
                   <p className="text-muted-foreground">
-                    Consultation de {suppliers.length} fournisseurs via MAIN APP + fallback local
+                    Consultation de {suppliers.length} fournisseurs
                   </p>
                 </div>
                 
-                {/* Progress indicator */}
                 <div className="w-full max-w-md space-y-2">
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Devis reçus: {quotes.length}</span>
@@ -293,19 +243,15 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
                   </div>
                 </div>
 
-                {/* Live quotes as they come in */}
                 {quotes.length > 0 && (
                   <div className="w-full">
-                    <h4 className="text-sm font-medium mb-2">📋 Derniers devis reçus (TEMPS RÉEL):</h4>
+                    <h4 className="text-sm font-medium mb-2">📋 Derniers devis reçus:</h4>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
                       {quotes.slice(-3).map((quote) => (
                         <div key={quote.id} className="flex justify-between items-center bg-muted/50 p-2 rounded">
                           <div className="flex items-center gap-2">
                             <span className="text-sm">{quote.supplier.company_name}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {quote.source === 'main_app' ? '🌐 MAIN APP' : 
-                               quote.source === 'local' ? '🏠 LOCAL' : '🔄 FALLBACK'}
-                            </Badge>
+                            <span className="text-xs text-muted-foreground">({quote.client_name})</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary">{quote.price.toLocaleString()}€</Badge>
@@ -325,10 +271,11 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
         {searchComplete && quotes.length > 0 && (
           <PriceComparisonTable
             opportunity={opportunity}
-            quotes={quotes}
+            quotes={quotes.filter(q => q.status === 'pending')}
             onSelectQuote={setSelectedQuote}
             onExportPDF={handleExportPDF}
-            onSendToClient={handleSendToClient}
+            onAcceptQuote={handleAcceptQuote}
+            onRejectQuote={handleRejectQuote}
           />
         )}
 
@@ -339,9 +286,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
               <div className="text-center space-y-4">
                 <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto" />
                 <div>
-                  <h3 className="text-lg font-medium">Aucun devis reçu</h3>
+                  <h3 className="text-lg font-medium">Aucun devis disponible</h3>
                   <p className="text-muted-foreground">
-                    Aucun fournisseur n'a répondu dans les délais impartis.
+                    Tous les devis ont été traités ou aucun fournisseur n'a répondu.
                   </p>
                 </div>
                 <div className="flex gap-2 justify-center">
@@ -359,26 +306,15 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPr
         )}
 
         {/* Action buttons */}
-        {searchComplete && quotes.length > 0 && (
+        {searchComplete && quotes.filter(q => q.status === 'pending').length > 0 && (
           <div className="flex justify-between items-center pt-4 border-t">
             <div className="text-sm text-muted-foreground">
-              📊 {quotes.length} devis comparés • 💰 Meilleur prix: {Math.min(...quotes.map(q => q.price)).toLocaleString()}€
-              <br />
-              🔗 Sources: MAIN APP + LOCAL + FALLBACK
+              📊 {quotes.filter(q => q.status === 'pending').length} devis en attente • 💰 Meilleur prix: {Math.min(...quotes.filter(q => q.status === 'pending').map(q => q.price)).toLocaleString()}€
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleExportPDF}>
-                <Download className="h-4 w-4 mr-2" />
-                Export PDF
-              </Button>
               <Button variant="outline" onClick={handleClose}>
                 Fermer
               </Button>
-              {selectedQuote && (
-                <Button onClick={() => handleSendToClient(selectedQuote)}>
-                  Envoyer le devis sélectionné
-                </Button>
-              )}
             </div>
           </div>
         )}
