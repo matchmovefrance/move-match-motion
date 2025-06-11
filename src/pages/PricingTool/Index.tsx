@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,34 +26,47 @@ const PricingTool = () => {
     if (isDarkMode) setTheme('dark');
   }, []);
 
-  // Requête optimisée pour les statistiques - pas de rafraîchissement automatique
+  // Requête optimisée pour les statistiques sans doublons
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pricing-stats'],
     queryFn: async () => {
       console.log('📊 Chargement des statistiques...');
       
-      const [opportunities, suppliers, quotes] = await Promise.all([
-        supabase.from('pricing_opportunities').select('id, status'),
-        supabase.from('suppliers').select('id, is_active'),
-        supabase.from('quotes').select('id, status')
+      const [opportunities, suppliersRaw, quotes] = await Promise.all([
+        supabase.from('pricing_opportunities').select('id, status').eq('created_by', user?.id),
+        supabase.from('suppliers').select('id, email, is_active, company_name, contact_name').eq('created_by', user?.id),
+        supabase.from('quotes').select('id, status').eq('created_by', user?.id)
       ]);
+
+      // Filtrer les prestataires uniques (sans doublons et sans le demo)
+      const uniqueSuppliers = suppliersRaw.data?.filter((supplier, index, self) => {
+        // Exclure "Déménagements Express SARL" avec "Jean Dupont"
+        if (supplier.company_name === 'Déménagements Express SARL' && 
+            supplier.contact_name === 'Jean Dupont') {
+          return false;
+        }
+        
+        // Éviter les doublons par email
+        return index === self.findIndex(s => s.email === supplier.email);
+      }) || [];
 
       const stats = {
         totalOpportunities: opportunities.data?.length || 0,
         activeOpportunities: opportunities.data?.filter(o => o.status === 'active').length || 0,
-        totalSuppliers: suppliers.data?.length || 0,
-        activeSuppliers: suppliers.data?.filter(s => s.is_active).length || 0,
+        totalSuppliers: uniqueSuppliers.length,
+        activeSuppliers: uniqueSuppliers.filter(s => s.is_active).length,
         totalQuotes: quotes.data?.length || 0,
         pendingQuotes: quotes.data?.filter(q => q.status === 'pending').length || 0,
-        acceptedQuotes: 2,
+        acceptedQuotes: quotes.data?.filter(q => q.status === 'accepted').length || 0,
       };
 
-      console.log('✅ Statistiques chargées:', stats);
+      console.log('✅ Statistiques chargées (sans doublons):', stats);
       return stats;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes - pas de rafraîchissement automatique
+    staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: true,
+    enabled: !!user,
   });
 
   const handleKeyboard = (e: KeyboardEvent) => {
@@ -88,7 +100,7 @@ const PricingTool = () => {
                   {stats.activeOpportunities}/{stats.totalOpportunities} opportunités
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {stats.activeSuppliers} prestataires actifs
+                  {stats.activeSuppliers}/{stats.totalSuppliers} prestataires
                 </Badge>
                 <Badge variant="outline" className="text-xs">
                   {stats.pendingQuotes} devis en attente
