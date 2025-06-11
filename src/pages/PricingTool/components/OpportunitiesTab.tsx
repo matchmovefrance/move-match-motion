@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,8 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Users
+  Users,
+  Calculator
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -299,40 +299,45 @@ const OpportunitiesTab = () => {
                     )}
                   </div>
                   
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem 
-                        onClick={() => handleSearchPrices(opportunity)}
-                        className="text-blue-600"
-                      >
-                        <TrendingDown className="h-4 w-4 mr-2" />
-                        Rechercher prix
-                      </DropdownMenuItem>
-                      {(opportunity.status === 'pending' || opportunity.status === 'confirmed') && (
-                        <>
-                          <DropdownMenuItem 
-                            onClick={() => handleCloseOpportunity(Number(opportunity.id), 'completed')}
-                            className="text-green-600"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Trajet terminé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleCloseOpportunity(Number(opportunity.id), 'cancelled')}
-                            className="text-red-600"
-                          >
-                            <XCircle className="h-4 w-4 mr-2" />
-                            Annuler trajet
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleSearchPrices(opportunity)}
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Calculator className="h-4 w-4 mr-1" />
+                      Rechercher devis
+                    </Button>
+                    
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {(opportunity.status === 'pending' || opportunity.status === 'confirmed') && (
+                          <>
+                            <DropdownMenuItem 
+                              onClick={() => handleCloseOpportunity(Number(opportunity.id), 'completed')}
+                              className="text-green-600"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Trajet terminé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleCloseOpportunity(Number(opportunity.id), 'cancelled')}
+                              className="text-red-600"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Annuler trajet
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </CardHeader>
               

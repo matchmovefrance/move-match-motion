@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Calculator, Building, Mail, Phone, MapPin } from 'lucide-react';
+import { Plus, Edit, Trash2, Calculator, Building, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import CreateSupplierDialog from './CreateSupplierDialog';
 import SupplierPricingDialog from './SupplierPricingDialog';
+import SupplierBankDetailsDialog from './SupplierBankDetailsDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,7 @@ const SuppliersTab = () => {
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierFromMoves | null>(null);
 
   const { data: suppliers, isLoading } = useQuery({
@@ -140,6 +142,11 @@ const SuppliersTab = () => {
     setShowPricingDialog(true);
   };
 
+  const handleEditBankDetails = (supplier: SupplierFromMoves) => {
+    setSelectedSupplier(supplier);
+    setShowBankDetailsDialog(true);
+  };
+
   const handleCreateSuccess = () => {
     setShowCreateDialog(false);
     queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
@@ -148,6 +155,12 @@ const SuppliersTab = () => {
 
   const handlePricingUpdate = () => {
     setShowPricingDialog(false);
+    setSelectedSupplier(null);
+    queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
+  };
+
+  const handleBankDetailsUpdate = () => {
+    setShowBankDetailsDialog(false);
     setSelectedSupplier(null);
     queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
   };
@@ -225,21 +238,34 @@ const SuppliersTab = () => {
                   Modèle de tarification: {supplier.pricing_model && Object.keys(supplier.pricing_model as any).length > 0 ? 'Configuré' : 'Non configuré'}
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleEditPricing(supplier)}
-                    className="flex-1"
+                    className="text-xs"
                   >
                     <Calculator className="h-3 w-3 mr-1" />
                     Tarifs
                   </Button>
                   
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditBankDetails(supplier)}
+                    className="text-xs text-green-600 hover:text-green-700"
+                  >
+                    <CreditCard className="h-3 w-3 mr-1" />
+                    RIB
+                  </Button>
+                </div>
+                
+                <div className="flex justify-center mt-2">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                        <Trash2 className="h-3 w-3" />
+                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 text-xs">
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Supprimer
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -288,6 +314,13 @@ const SuppliersTab = () => {
         onOpenChange={setShowPricingDialog}
         supplier={selectedSupplier}
         onUpdate={handlePricingUpdate}
+      />
+
+      <SupplierBankDetailsDialog
+        open={showBankDetailsDialog}
+        onOpenChange={setShowBankDetailsDialog}
+        supplier={selectedSupplier}
+        onUpdate={handleBankDetailsUpdate}
       />
     </div>
   );

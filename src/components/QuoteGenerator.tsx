@@ -24,6 +24,20 @@ interface ClientRequest {
 
 interface QuoteGeneratorProps {
   client: ClientRequest;
+  supplier?: {
+    company_name: string;
+    contact_name: string;
+    email: string;
+    phone: string;
+    bank_details?: {
+      iban: string;
+      bic: string;
+      bank_name: string;
+      account_holder: string;
+    };
+  };
+  supplierPrice?: number;
+  matchMoveMargin?: number;
 }
 
 interface CompanySettingsData {
@@ -33,45 +47,29 @@ interface CompanySettingsData {
   company_address: string;
 }
 
-const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
-  const generatePDF = async () => {
-    // Récupérer les paramètres de l'entreprise depuis la base de données
-    let settings: CompanySettingsData = {
-      company_name: 'MatchMove',
-      company_email: 'contact@matchmove.fr',
-      company_phone: '+33 1 23 45 67 89',
-      company_address: 'France'
-    };
-
-    try {
-      const { data: companySettings, error } = await supabase
-        .from('company_settings')
-        .select('company_name, company_email, company_phone, company_address')
-        .limit(1)
-        .single();
-
-      if (!error && companySettings) {
-        settings = companySettings;
-      }
-    } catch (error) {
-      console.log('Utilisation des paramètres par défaut:', error);
+const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
+  const generatePDF = () => {
+    if (!client.quote_amount) {
+      console.error('Aucun montant de devis disponible');
+      return;
     }
 
+    console.log('🎯 Génération PDF instantanée...');
+    
     const doc = new jsPDF();
     
     // Couleurs vertes
-    const primaryColor = '#22c55e'; // vert
-    const secondaryColor = '#64748b'; // gris
+    const primaryColor = '#22c55e';
     
     // En-tête avec fond vert
-    doc.setFillColor(34, 197, 94); // vert
+    doc.setFillColor(34, 197, 94);
     doc.rect(0, 0, 210, 40, 'F');
     
     // Titre de l'entreprise
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text(settings.company_name, 20, 25);
+    doc.text('MatchMove', 20, 25);
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
@@ -83,16 +81,14 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     doc.setFont('helvetica', 'bold');
     doc.text('DEVIS DE DÉMÉNAGEMENT', 20, 60);
     
-    // Informations de la société (mise à jour avec les paramètres)
+    // Informations de la société
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(settings.company_name, 140, 60);
-    doc.text(`Email: ${settings.company_email}`, 140, 67);
-    doc.text(`Téléphone: ${settings.company_phone}`, 140, 74);
-    if (settings.company_address) {
-      doc.text(`Adresse: ${settings.company_address}`, 140, 81);
-    }
+    doc.text('MatchMove', 140, 60);
+    doc.text('Email: contact@matchmove.fr', 140, 67);
+    doc.text('Téléphone: +33 1 23 45 67 89', 140, 74);
+    doc.text('Adresse: France', 140, 81);
     
     // Ligne de séparation
     doc.setDrawColor(200, 200, 200);
@@ -124,8 +120,45 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
       yPos += 7;
     }
     
+    // Informations prestataire (si disponible)
+    if (supplier) {
+      yPos += 10;
+      doc.setTextColor(34, 197, 94);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PRESTATAIRE SÉLECTIONNÉ', 20, yPos);
+      
+      yPos += 10;
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      
+      doc.text(`Entreprise: ${supplier.company_name}`, 20, yPos);
+      yPos += 7;
+      doc.text(`Contact: ${supplier.contact_name}`, 20, yPos);
+      yPos += 7;
+      doc.text(`Email: ${supplier.email}`, 20, yPos);
+      yPos += 7;
+      doc.text(`Téléphone: ${supplier.phone}`, 20, yPos);
+      yPos += 7;
+      
+      // Coordonnées bancaires (si disponibles)
+      if (supplier.bank_details) {
+        yPos += 5;
+        doc.setTextColor(100, 116, 139);
+        doc.setFontSize(9);
+        doc.text(`IBAN: ${supplier.bank_details.iban}`, 20, yPos);
+        yPos += 4;
+        doc.text(`BIC: ${supplier.bank_details.bic}`, 20, yPos);
+        yPos += 4;
+        doc.text(`Banque: ${supplier.bank_details.bank_name}`, 20, yPos);
+        yPos += 4;
+        doc.text(`Titulaire: ${supplier.bank_details.account_holder}`, 20, yPos);
+      }
+    }
+    
     // Détails du déménagement
-    yPos += 10;
+    yPos += 15;
     doc.setTextColor(34, 197, 94);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
@@ -156,24 +189,48 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
       doc.text(`Volume estimé: ${client.estimated_volume} m³`, 20, yPos);
     }
     
-    // Prix
-    if (client.quote_amount) {
+    // Détail des prix (si disponible)
+    if (supplierPrice && matchMoveMargin !== undefined) {
       yPos += 20;
       
-      // Encadré pour le prix avec fond vert clair
-      doc.setFillColor(240, 253, 244);
-      doc.rect(20, yPos - 5, 170, 25, 'F');
+      // Encadré pour le détail des prix
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, yPos - 5, 170, 35, 'F');
       doc.setDrawColor(34, 197, 94);
-      doc.rect(20, yPos - 5, 170, 25);
+      doc.rect(20, yPos - 5, 170, 35);
       
       doc.setTextColor(34, 197, 94);
-      doc.setFontSize(16);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('MONTANT DU DEVIS', 25, yPos + 5);
+      doc.text('DÉTAIL DU PRIX', 25, yPos + 5);
       
-      doc.setFontSize(20);
-      doc.text(`${client.quote_amount.toFixed(2).replace('.', ',')} €`, 25, yPos + 15);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Prix prestataire: ${supplierPrice.toFixed(2).replace('.', ',')} €`, 25, yPos + 15);
+      
+      const marginAmount = (supplierPrice * matchMoveMargin) / 100;
+      doc.text(`Marge MatchMove (${matchMoveMargin}%): ${marginAmount.toFixed(2).replace('.', ',')} €`, 25, yPos + 22);
+      
+      yPos += 35;
     }
+    
+    // Prix total
+    yPos += 10;
+    
+    // Encadré pour le prix total avec fond vert clair
+    doc.setFillColor(240, 253, 244);
+    doc.rect(20, yPos - 5, 170, 25, 'F');
+    doc.setDrawColor(34, 197, 94);
+    doc.rect(20, yPos - 5, 170, 25);
+    
+    doc.setTextColor(34, 197, 94);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MONTANT TOTAL TTC', 25, yPos + 5);
+    
+    doc.setFontSize(20);
+    doc.text(`${client.quote_amount.toFixed(2).replace('.', ',')} €`, 25, yPos + 15);
     
     // Conditions
     yPos += 40;
@@ -192,11 +249,13 @@ const QuoteGenerator = ({ client }: QuoteGeneratorProps) => {
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
     doc.text(`Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, 20, 280);
-    doc.text(`${settings.company_name} - Solutions de déménagement professionnelles`, 20, 285);
+    doc.text('MatchMove - Solutions de déménagement professionnelles', 20, 285);
     
-    // Télécharger le PDF
-    const fileName = `devis_${client.name?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    // Télécharger le PDF instantanément
+    const fileName = `devis_${client.name?.replace(/\s+/g, '_') || 'client'}_${supplier?.company_name?.replace(/\s+/g, '_') || 'prestataire'}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
+    
+    console.log('✅ PDF généré et téléchargé:', fileName);
   };
 
   return (
