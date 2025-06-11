@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Truck, Mail, Phone, Building, Edit, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Truck, Mail, Phone, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,10 +29,11 @@ interface Mover {
   email: string;
   phone: string;
   created_at: string;
+  created_by: string;
 }
 
 const MoverList = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [movers, setMovers] = useState<Mover[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -48,38 +49,34 @@ const MoverList = () => {
 
   useEffect(() => {
     fetchMovers();
-  }, []);
-
-  useEffect(() => {
-    if (editingMover) {
-      setNewMover({
-        name: editingMover.name,
-        company_name: editingMover.company_name,
-        email: editingMover.email,
-        phone: editingMover.phone
-      });
-    } else {
-      resetForm();
-    }
-  }, [editingMover]);
+  }, [user, profile]);
 
   const fetchMovers = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching movers from database...');
+      console.log('🔄 Fetching movers - User:', user?.email, 'Role:', profile?.role);
       
-      const { data, error } = await supabase
-        .from('movers')
-        .select('*')
-        .eq('created_by', user?.id)
-        .order('created_at', { ascending: false });
+      // Admin et agents peuvent voir tous les déménageurs
+      const isAdminOrAgent = profile?.role === 'admin' || 
+                            user?.email === 'contact@matchmove.fr' || 
+                            user?.email === 'pierre@matchmove.fr' ||
+                            profile?.role === 'agent';
+
+      let query = supabase.from('movers').select('*');
+      
+      if (!isAdminOrAgent) {
+        // Les autres utilisateurs ne voient que leurs propres déménageurs
+        query = query.eq('created_by', user?.id);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error('❌ Error fetching movers:', error);
         throw error;
       }
       
-      console.log('✅ Movers fetched from DB:', data?.length || 0);
+      console.log('✅ Movers fetched:', data?.length || 0, 'movers');
       setMovers(data || []);
     } catch (error) {
       console.error('Error fetching movers:', error);
@@ -167,7 +164,6 @@ const MoverList = () => {
       setLoading(true);
       console.log('📝 Adding mover:', newMover);
       
-      // Vérifier les doublons
       const isDuplicate = await checkForDuplicateMover(newMover.email);
       
       if (isDuplicate) {
@@ -429,6 +425,7 @@ const MoverList = () => {
         <div className="flex items-center space-x-3">
           <Truck className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Déménageurs</h2>
+          <span className="text-sm text-gray-500">({movers.length})</span>
         </div>
         <div className="flex space-x-2">
           <Button
@@ -449,42 +446,110 @@ const MoverList = () => {
         </div>
       </div>
 
-      <ListView
-        items={movers}
-        searchFields={['name', 'company_name', 'email', 'phone']}
-        renderCard={(mover: Mover) => (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-800 mb-2">{mover.name}</h3>
-                <p className="text-gray-600 mb-3">{mover.company_name}</p>
+      {movers.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">Aucun déménageur trouvé</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Commencez par ajouter un déménageur
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <ListView
+          items={movers}
+          searchFields={['name', 'company_name', 'email', 'phone']}
+          renderCard={(mover: Mover) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-xl p-6 shadow-lg border border-gray-100"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-800 mb-2">{mover.name}</h3>
+                  <p className="text-gray-600 mb-3">{mover.company_name}</p>
+                  
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center space-x-2">
+                      <Mail className="h-4 w-4 text-blue-600" />
+                      <span>{mover.email}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Phone className="h-4 w-4 text-blue-600" />
+                      <span>{mover.phone}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-3">
+                      Créé le {new Date(mover.created_at).toLocaleDateString('fr-FR')}
+                    </div>
+                  </div>
+                </div>
                 
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-blue-600" />
-                    <span>{mover.email}</span>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingMover(mover)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
+                          Cette action est irréversible.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteMover(mover.id)}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Supprimer
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          renderListItem={(mover: Mover) => (
+            <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex-1">
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <h4 className="font-medium text-gray-800">{mover.name}</h4>
+                    <p className="text-sm text-gray-600">{mover.company_name}</p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-blue-600" />
-                    <span>{mover.phone}</span>
+                  <div className="text-sm text-gray-500">
+                    <span>{mover.email}</span> • <span>{mover.phone}</span>
                   </div>
-                  <div className="text-xs text-gray-400 mt-3">
-                    Créé le {new Date(mover.created_at).toLocaleDateString('fr-FR')}
+                  <div className="text-xs text-gray-400">
+                    {new Date(mover.created_at).toLocaleDateString('fr-FR')}
                   </div>
                 </div>
               </div>
-              
               <div className="flex space-x-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setEditingMover(mover)}
                 >
-                  <Edit className="h-4 w-4" />
+                  <Edit className="h-3 w-3" />
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -493,7 +558,7 @@ const MoverList = () => {
                       size="sm"
                       className="text-red-600 hover:text-red-700"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -517,69 +582,13 @@ const MoverList = () => {
                 </AlertDialog>
               </div>
             </div>
-          </motion.div>
-        )}
-        renderListItem={(mover: Mover) => (
-          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex-1">
-              <div className="flex items-center space-x-4">
-                <div>
-                  <h4 className="font-medium text-gray-800">{mover.name}</h4>
-                  <p className="text-sm text-gray-600">{mover.company_name}</p>
-                </div>
-                <div className="text-sm text-gray-500">
-                  <span>{mover.email}</span> • <span>{mover.phone}</span>
-                </div>
-                <div className="text-xs text-gray-400">
-                  {new Date(mover.created_at).toLocaleDateString('fr-FR')}
-                </div>
-              </div>
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditingMover(mover)}
-              >
-                <Edit className="h-3 w-3" />
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Supprimer le déménageur</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Êtes-vous sûr de vouloir supprimer le déménageur {mover.name} de {mover.company_name} ? 
-                      Cette action est irréversible.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteMover(mover.id)}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Supprimer
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </div>
-        )}
-        searchPlaceholder="Rechercher par nom, entreprise, email ou téléphone..."
-        emptyStateMessage="Aucun déménageur trouvé"
-        emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
-        itemsPerPage={10}
-      />
+          )}
+          searchPlaceholder="Rechercher par nom, entreprise, email ou téléphone..."
+          emptyStateMessage="Aucun déménageur trouvé"
+          emptyStateIcon={<Truck className="h-12 w-12 text-gray-400 mx-auto" />}
+          itemsPerPage={10}
+        />
+      )}
 
       <SyncStatusDialog
         isOpen={showSyncDialog}

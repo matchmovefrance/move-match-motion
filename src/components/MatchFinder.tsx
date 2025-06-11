@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import MatchFilters, { MatchFilterOptions } from './MatchFilters';
 
 interface ClientRequest {
   id: number;
@@ -78,8 +79,15 @@ const MatchFinder = () => {
   const [clientRequests, setClientRequests] = useState<ClientRequest[]>([]);
   const [moves, setMoves] = useState<Move[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [filteredMatches, setFilteredMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [currentFilters, setCurrentFilters] = useState<MatchFilterOptions>({
+    pending: true,
+    accepted: false,
+    rejected: false,
+    showAll: false
+  });
 
   // Mémoriser la fonction fetchData pour éviter les re-rendus inutiles
   const fetchData = useCallback(async () => {
@@ -160,6 +168,37 @@ const MatchFinder = () => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    // Appliquer les filtres
+    let filtered = matches.filter(match => {
+      const { client, move } = getMatchDetails(match);
+      
+      if (!client || !move) return false;
+      if (move.status_custom === 'termine') return false;
+      if (client.status === 'completed') return false;
+      
+      return true;
+    });
+
+    if (!currentFilters.showAll) {
+      filtered = filtered.filter(match => {
+        const status = match.status || 'pending';
+        
+        if (currentFilters.pending && status === 'pending') return true;
+        if (currentFilters.accepted && status === 'accepted') return true;
+        if (currentFilters.rejected && status === 'rejected') return true;
+        
+        return false;
+      });
+    }
+
+    setFilteredMatches(filtered);
+  }, [matches, currentFilters]);
+
+  const handleFiltersChange = useCallback((filters: MatchFilterOptions) => {
+    setCurrentFilters(filters);
+  }, []);
+
   const handleMatchAction = useCallback(async (matchId: number, actionType: 'accepted' | 'rejected') => {
     try {
       const { error } = await supabase
@@ -179,7 +218,6 @@ const MatchFinder = () => {
         description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
       });
 
-      // Rafraîchir les données
       fetchData();
     } catch (error: any) {
       console.error('Error processing match action:', error);
@@ -460,32 +498,6 @@ const MatchFinder = () => {
     }
   };
 
-  // Filtrer les matches pour n'afficher que ceux pertinents
-  const displayMatches = matches.filter(match => {
-    const { client, move } = getMatchDetails(match);
-    
-    // Ne pas afficher si le client ou le déménagement n'existe plus
-    if (!client || !move) return false;
-    
-    // Ne pas afficher les trajets terminés
-    if (move.status_custom === 'termine') return false;
-    
-    // Ne pas afficher les demandes clients terminées
-    if (client.status === 'completed') return false;
-    
-    return true;
-  });
-
-  // Calculer le total des correspondances (TOUS les matches créés)
-  const getTotalMatches = () => {
-    // Compter TOUS les matches qui existent dans la base de données
-    // Cela inclut : en attente, acceptés, rejetés, même ceux avec des trajets/demandes terminés
-    console.log(`Total des matches en base: ${matches.length}`);
-    console.log('Détail des matches:', matches.map(m => ({ id: m.id, status: m.status, distance: m.distance_km })));
-    
-    return matches.length;
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -510,7 +522,6 @@ const MatchFinder = () => {
             <Search className="h-4 w-4 mr-2" />
             Trouver un match
             
-            {/* Animation radar */}
             {isSearching && (
               <div className="absolute inset-0 bg-blue-600">
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -558,8 +569,8 @@ const MatchFinder = () => {
             <div className="flex items-center space-x-2">
               <Search className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-gray-600">Correspondances</p>
-                <p className="text-2xl font-bold">{getTotalMatches()}</p>
+                <p className="text-sm text-gray-600">Correspondances totales</p>
+                <p className="text-2xl font-bold">{matches.length}</p>
               </div>
             </div>
           </CardContent>
@@ -570,31 +581,39 @@ const MatchFinder = () => {
             <div className="flex items-center space-x-2">
               <Check className="h-5 w-5 text-orange-600" />
               <div>
-                <p className="text-sm text-gray-600">Correspondances valides</p>
-                <p className="text-2xl font-bold">{displayMatches.filter(m => m.is_valid).length}</p>
+                <p className="text-sm text-gray-600">Filtrées</p>
+                <p className="text-2xl font-bold">{filteredMatches.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Filtres */}
+      <MatchFilters onFiltersChange={handleFiltersChange} />
+
       {/* Liste des correspondances */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Correspondances trouvées</h3>
+        <h3 className="text-lg font-semibold">
+          Correspondances ({filteredMatches.length})
+        </h3>
         
-        {displayMatches.length === 0 ? (
+        {filteredMatches.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">Aucune correspondance trouvée</p>
               <p className="text-sm text-gray-500 mt-2">
-                Cliquez sur "Trouver un match" pour commencer
+                {matches.length === 0 ? 
+                  'Cliquez sur "Trouver un match" pour commencer' :
+                  'Ajustez les filtres pour voir plus de résultats'
+                }
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
-            {displayMatches.map((match) => {
+            {filteredMatches.map((match) => {
               const { client, move } = getMatchDetails(match);
               
               if (!client || !move) return null;
@@ -634,9 +653,7 @@ const MatchFinder = () => {
                             <span>{new Date(client.desired_date).toLocaleDateString('fr-FR')}</span>
                             {client.flexible_dates && (
                               <Badge variant="outline" className="text-xs">
-                                Flexible ({client.date_range_start && client.date_range_end ? 
-                                  `${new Date(client.date_range_start).toLocaleDateString('fr-FR')} - ${new Date(client.date_range_end).toLocaleDateString('fr-FR')}` : 
-                                  '±15 jours'})
+                                Flexible
                               </Badge>
                             )}
                           </div>
@@ -671,11 +688,6 @@ const MatchFinder = () => {
                           </div>
                           {move.price_per_m3 && (
                             <div className="text-green-600">{move.price_per_m3}€/m³</div>
-                          )}
-                          {move.route_type && (
-                            <Badge variant="outline" className="text-xs">
-                              {move.route_type === 'flexible' ? 'Trajet flexible' : 'Trajet fixe'}
-                            </Badge>
                           )}
                         </div>
                       </div>
@@ -717,19 +729,16 @@ const MatchFinder = () => {
                     </div>
                   </div>
 
-                  {/* Détails du match avec vraies distances Google Maps */}
+                  {/* Détails du match */}
                   <div className="border-t pt-3 mt-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Distance Google Maps:</span>
+                        <span className="text-gray-500">Distance:</span>
                         <span className={`ml-2 font-medium ${
                           isDistanceOk ? 'text-green-600' : 'text-red-600'
                         }`}>
                           {match.distance_km}km
                         </span>
-                        <div className="text-xs text-gray-400 mt-1">
-                          API Google Directions
-                        </div>
                       </div>
                       <div>
                         <span className="text-gray-500">Diff. dates:</span>
@@ -737,27 +746,19 @@ const MatchFinder = () => {
                           isDateOk ? 'text-green-600' : 'text-red-600'
                         }`}>
                           {match.date_diff_days} jours
-                          {client.flexible_dates && match.date_diff_days === 0 && ' (dans la plage)'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Volume combiné:</span>
+                        <span className="text-gray-500">Volume:</span>
                         <span className="ml-2 font-medium">{match.combined_volume}m³</span>
                       </div>
                       <div>
                         <span className="text-gray-500">Compatible:</span>
-                        <div className="ml-2">
-                          <span className={`font-medium ${
-                            isCompatible ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {isCompatible ? 'Oui' : 'Non'}
-                          </span>
-                          {!isCompatible && !isVolumeOk && (
-                            <div className="text-xs text-red-600 mt-1">
-                              Volume utilisé sur camion déjà rempli, vérifiez avec le prestataire.
-                            </div>
-                          )}
-                        </div>
+                        <span className={`ml-2 font-medium ${
+                          isCompatible ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {isCompatible ? 'Oui' : 'Non'}
+                        </span>
                       </div>
                     </div>
                   </div>
