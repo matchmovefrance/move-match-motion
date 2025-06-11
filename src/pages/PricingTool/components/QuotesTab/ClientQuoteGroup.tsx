@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
 
       if (error) throw error;
       console.log('✅ Prestataires chargés pour ClientQuoteGroup:', suppliers?.length || 0);
+      console.log('📋 Données prestataires:', suppliers);
       setSuppliersData(suppliers || []);
     } catch (error) {
       console.error('❌ Erreur chargement prestataires ClientQuoteGroup:', error);
@@ -59,6 +61,9 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
   const getSupplierData = (supplierId: string) => {
     const supplier = suppliersData.find(s => s.id === supplierId);
     console.log('🔍 Recherche prestataire ClientQuoteGroup:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
+    if (supplier) {
+      console.log('📋 Données prestataire trouvé:', supplier);
+    }
     return supplier;
   };
 
@@ -140,6 +145,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
         <div className="grid gap-4">
           {quotes.map((quote) => {
             const supplierData = getSupplierData(quote.supplier_id);
+            console.log('🎯 Quote PDF pour:', quote.supplier_company, 'Données prestataire:', supplierData ? 'DISPONIBLES' : 'MANQUANTES');
             
             return (
               <div key={quote.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -200,7 +206,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
                         contact_name: supplierData.contact_name,
                         email: supplierData.email,
                         phone: supplierData.phone,
-                        bank_details: supplierData.bank_details
+                        bank_details: supplierData.pricing_model?.bank_details
                       } : undefined}
                       supplierPrice={quote.supplier_price}
                       matchMoveMargin={quote.pricing_breakdown?.marginPercentage || 0}

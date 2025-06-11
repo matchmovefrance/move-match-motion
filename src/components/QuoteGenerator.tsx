@@ -45,6 +45,8 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     console.log('Client:', client);
     console.log('Supplier:', supplier);
     console.log('Quote amount:', client.quote_amount);
+    console.log('Supplier Price:', supplierPrice);
+    console.log('Match Move Margin:', matchMoveMargin);
     
     if (!client.quote_amount) {
       console.error('❌ Montant du devis manquant');
@@ -269,6 +271,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
   console.log('📋 État bouton PDF:', {
     hasQuoteAmount: !!client.quote_amount,
     hasSupplier: !!supplier,
+    supplierCompany: supplier?.company_name,
     isDisabled
   });
 
