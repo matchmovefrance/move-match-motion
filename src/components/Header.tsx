@@ -1,5 +1,5 @@
 
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, CircleDollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -46,6 +46,10 @@ const Header = () => {
     return roleMap[role] || role;
   };
 
+  const openPricingTool = () => {
+    window.open('/pricing-tool', '_blank');
+  };
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -70,6 +74,16 @@ const Header = () => {
         </div>
 
         <div className="flex items-center space-x-4">
+          <Button 
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 border-blue-500 text-blue-500 hover:bg-blue-50 hover:text-blue-600"
+            onClick={openPricingTool}
+          >
+            <CircleDollarSign className="h-4 w-4" />
+            <span>Pricing Tool</span>
+          </Button>
+          
           <div className="text-right">
             <p className="text-sm font-medium text-gray-900">
               {user?.email}
