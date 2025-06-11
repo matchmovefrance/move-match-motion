@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Link, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
@@ -140,7 +139,7 @@ const PublicLinkManager = () => {
   };
 
   const getPublicUrl = (token: string) => {
-    return `${window.location.origin}/public/${token}`;
+    return `${window.location.origin}/public-mover/${token}`;
   };
 
   if (loading) {
