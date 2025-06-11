@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -134,18 +135,21 @@ const HistoryTab = () => {
 
   const handleDeleteHistoryItem = async (itemId: string | number, itemType: 'client_request' | 'quote') => {
     try {
+      // Convert itemId to string to ensure consistency with UUID format
+      const id = String(itemId);
+      
       if (itemType === 'client_request') {
         const { error } = await supabase
           .from('client_requests')
           .delete()
-          .eq('id', itemId);
+          .eq('id', id);
 
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('quotes')
           .delete()
-          .eq('id', itemId);
+          .eq('id', id);
 
         if (error) throw error;
       }
