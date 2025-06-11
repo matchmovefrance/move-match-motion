@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, Volume2, Edit, Trash2, Euro, Eye, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ListView } from '@/components/ui/list-view';
 import {
   AlertDialog,
@@ -53,10 +52,11 @@ interface ClientRequest {
   match_status: string | null;
   created_at: string;
   client_id: number;
+  created_by: string;
 }
 
 const ClientList = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [clients, setClients] = useState<ClientRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -73,13 +73,17 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching clients from database...');
+      console.log('🔄 Fetching clients from database...', { userRole: profile?.role });
       
-      const { data, error } = await supabase
-        .from('client_requests')
-        .select('*')
-        .eq('created_by', user?.id)
-        .order('created_at', { ascending: false });
+      let query = supabase.from('client_requests').select('*');
+      
+      // Pour les admins et agents, voir toutes les données
+      // Pour les autres rôles, voir seulement leurs propres données
+      if (profile?.role !== 'admin' && user?.email !== 'contact@matchmove.fr' && user?.email !== 'pierre@matchmove.fr') {
+        query = query.eq('created_by', user?.id);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error('❌ Error fetching clients:', error);
@@ -117,8 +121,12 @@ const ClientList = () => {
       let query = supabase
         .from('clients')
         .select('id')
-        .eq('email', email.toLowerCase())
-        .eq('created_by', user.id);
+        .eq('email', email.toLowerCase());
+      
+      // Les admins peuvent voir tous les doublons, les autres seulement les leurs
+      if (profile?.role !== 'admin' && user?.email !== 'contact@matchmove.fr' && user?.email !== 'pierre@matchmove.fr') {
+        query = query.eq('created_by', user.id);
+      }
       
       if (excludeId) {
         query = query.neq('id', excludeId);
@@ -180,7 +188,6 @@ const ClientList = () => {
       setLoading(true);
       console.log('📝 Form submission started:', { isEditing: !!editingClient, formData });
 
-      // Validation des champs obligatoires
       const missingFields = validateRequiredFields(formData);
       if (missingFields.length > 0) {
         toast({
@@ -191,7 +198,6 @@ const ClientList = () => {
         return;
       }
 
-      // Validation email
       if (formData.email && !validateEmail(formData.email)) {
         toast({
           title: "Erreur",
@@ -201,7 +207,6 @@ const ClientList = () => {
         return;
       }
 
-      // Vérifier les doublons
       const isDuplicate = await checkForDuplicateClient(
         formData.email, 
         editingClient?.client_id
@@ -216,14 +221,12 @@ const ClientList = () => {
         return;
       }
 
-      // Nettoyer les données
       const processedData = cleanAndProcessFormData(formData);
       console.log('🧹 Processed data:', processedData);
 
       if (editingClient) {
         console.log('✏️ Updating existing client:', editingClient.id);
         
-        // Mode édition - Mettre à jour le client et la demande
         const { error: clientError } = await supabase
           .from('clients')
           .update({
@@ -231,26 +234,17 @@ const ClientList = () => {
             email: processedData.email,
             phone: processedData.phone,
           })
-          .eq('id', editingClient.client_id)
-          .eq('created_by', user.id);
+          .eq('id', editingClient.client_id);
 
-        if (clientError) {
-          console.error('❌ Client update error:', clientError);
-          throw clientError;
-        }
+        if (clientError) throw clientError;
 
         const { error: requestError } = await supabase
           .from('client_requests')
           .update(processedData)
-          .eq('id', editingClient.id)
-          .eq('created_by', user.id);
+          .eq('id', editingClient.id);
 
-        if (requestError) {
-          console.error('❌ Client request update error:', requestError);
-          throw requestError;
-        }
+        if (requestError) throw requestError;
 
-        console.log('✅ Client updated successfully');
         toast({
           title: "Succès",
           description: "Demande client mise à jour avec succès",
@@ -258,7 +252,6 @@ const ClientList = () => {
       } else {
         console.log('➕ Creating new client');
         
-        // Mode création - Créer client puis demande
         const { data: clientData, error: clientError } = await supabase
           .from('clients')
           .insert({
@@ -270,10 +263,7 @@ const ClientList = () => {
           .select('id')
           .single();
 
-        if (clientError) {
-          console.error('❌ Client creation error:', clientError);
-          throw clientError;
-        }
+        if (clientError) throw clientError;
 
         const { error: requestError } = await supabase
           .from('client_requests')
@@ -284,19 +274,14 @@ const ClientList = () => {
             estimated_volume_backup: processedData.estimated_volume
           });
 
-        if (requestError) {
-          console.error('❌ Client request creation error:', requestError);
-          throw requestError;
-        }
+        if (requestError) throw requestError;
 
-        console.log('✅ Client created successfully');
         toast({
           title: "Succès",
           description: "Demande client ajoutée avec succès",
         });
       }
 
-      // Fermer les formulaires et recharger les données
       setShowAddForm(false);
       setEditingClient(null);
       await fetchClients();
@@ -327,33 +312,20 @@ const ClientList = () => {
     try {
       console.log('🗑️ Deleting client:', { requestId, clientId });
       
-      // Supprimer d'abord la demande client
       const { error: requestError } = await supabase
         .from('client_requests')
         .delete()
-        .eq('id', requestId)
-        .eq('created_by', user.id);
+        .eq('id', requestId);
 
-      if (requestError) {
-        console.error('❌ Error deleting client request:', requestError);
-        throw requestError;
-      }
+      if (requestError) throw requestError;
 
-      // Supprimer ensuite le client
       const { error: clientError } = await supabase
         .from('clients')
         .delete()
-        .eq('id', clientId)
-        .eq('created_by', user.id);
+        .eq('id', clientId);
 
-      if (clientError) {
-        console.error('❌ Error deleting client:', clientError);
-        throw clientError;
-      }
+      if (clientError) throw clientError;
 
-      console.log('✅ Client deleted successfully');
-      
-      // Mettre à jour l'état local immédiatement
       setClients(prevClients => prevClients.filter(c => c.id !== requestId));
 
       toast({
@@ -441,6 +413,7 @@ const ClientList = () => {
         <div className="flex items-center space-x-3">
           <Users className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Demandes clients</h2>
+          <span className="text-sm text-gray-500">({clients.length} demandes)</span>
         </div>
         <div className="flex space-x-2">
           <Button

@@ -51,7 +51,7 @@ const Index = () => {
       case 'management': 
         return (
           <div className="space-y-8">
-            {profile?.role === 'admin' && (
+            {(profile?.role === 'admin' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr') && (
               <>
                 <div>
                   <h2 className="text-2xl font-bold mb-6">Gestion des Utilisateurs</h2>
@@ -69,8 +69,10 @@ const Index = () => {
     }
   };
 
-  // Define tabs based on user role
   const getTabs = () => {
+    // Admin users (hardcoded emails + admin role)
+    const isAdmin = profile?.role === 'admin' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr';
+    
     if (profile?.role === 'demenageur') {
       // Déménageur users only see the calendar
       return [
@@ -90,7 +92,7 @@ const Index = () => {
     ];
 
     // Add management and admin tabs for admin users
-    if (profile?.role === 'admin' || user?.email === 'contact@matchmove.fr') {
+    if (isAdmin) {
       baseTabs.push(
         { id: 'management', label: 'Gestion', icon: Settings },
         { id: 'admin-actions', label: 'Admin', icon: Shield }
@@ -108,11 +110,11 @@ const Index = () => {
       
       <div className="container mx-auto py-8">
         {/* Navigation */}
-        <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm">
+        <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              className={`group flex items-center space-x-2 px-4 py-3 rounded-md text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`group flex items-center space-x-2 px-4 py-3 rounded-md text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-nowrap ${
                 activeTab === tab.id 
                   ? 'bg-blue-50 text-blue-700 shadow-sm' 
                   : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'

@@ -11,6 +11,7 @@ import MoverList from './MoverList';
 import DatabaseTestPanel from './DatabaseTestPanel';
 import MatchAnalytics from './MatchAnalytics';
 import AdminActions from './AdminActions';
+import RoleDebugPanel from './RoleDebugPanel';
 
 const Dashboard = () => {
   return (
@@ -18,6 +19,8 @@ const Dashboard = () => {
       <h1 className="text-3xl font-bold text-gray-800 mb-8">
         Tableau de bord - Gestion de déménagements
       </h1>
+      
+      <RoleDebugPanel />
       
       <Tabs defaultValue="test-db" className="w-full">
         <TabsList className="grid w-full grid-cols-10">

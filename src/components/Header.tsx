@@ -28,10 +28,27 @@ const Header = () => {
     return email.substring(0, 2).toUpperCase();
   };
 
+  const getRoleDisplay = (role: string, email: string) => {
+    // Emails admin hardcodés
+    if (email === 'contact@matchmove.fr' || email === 'pierre@matchmove.fr') {
+      return 'Administrateur';
+    }
+    
+    // Mapping des rôles
+    const roleMap: { [key: string]: string } = {
+      'admin': 'Administrateur',
+      'agent': 'Agent',
+      'client': 'Client',
+      'demenageur': 'Déménageur',
+      'service_provider': 'Prestataire'
+    };
+    
+    return roleMap[role] || role;
+  };
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
-        {/* Logo */}
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-3">
             <img 
@@ -45,7 +62,6 @@ const Header = () => {
             </div>
           </div>
           
-          {/* Trustpilot Badge */}
           <img 
             src="https://cdn.shopify.com/s/files/1/2412/8291/files/Trustpilot-for-mobile.png?v=1660896135" 
             alt="Trustpilot" 
@@ -53,13 +69,14 @@ const Header = () => {
           />
         </div>
 
-        {/* User Profile */}
         <div className="flex items-center space-x-4">
           <div className="text-right">
             <p className="text-sm font-medium text-gray-900">
               {user?.email}
             </p>
-            <p className="text-xs text-gray-500 capitalize">{profile?.role || 'Utilisateur'}</p>
+            <p className="text-xs text-gray-500">
+              {profile?.role ? getRoleDisplay(profile.role, user?.email || '') : 'Chargement...'}
+            </p>
           </div>
           
           <DropdownMenu>

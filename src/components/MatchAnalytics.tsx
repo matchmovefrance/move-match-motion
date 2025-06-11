@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,8 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Activity, CheckCircle, XCircle, Filter, Calendar, Search, Trash2, Check, X } from 'lucide-react';
+import { TrendingUp, Activity, CheckCircle, XCircle, Filter, Calendar, Search, Trash2, Check, X, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -73,7 +75,8 @@ const MatchAnalytics = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [matches, setMatches] = useState<MatchWithDetails[]>([]);
-  const [filteredMatches, setFilteredMatches] = useState<MatchWithDetails[]>([]);
+  const [pendingMatches, setPendingMatches] = useState<MatchWithDetails[]>([]);
+  const [completedMatches, setCompletedMatches] = useState<MatchWithDetails[]>([]);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
     totalMatches: 0,
     acceptedMatches: 0,
@@ -92,15 +95,10 @@ const MatchAnalytics = () => {
     fetchMatchesData();
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [matches, statusFilter, searchTerm]);
-
   const fetchMatchesData = async () => {
     try {
       setLoading(true);
       
-      // Récupérer tous les matchs avec les détails
       const { data: matchesData, error: matchesError } = await supabase
         .from('move_matches')
         .select('*')
@@ -111,7 +109,6 @@ const MatchAnalytics = () => {
         return;
       }
 
-      // Récupérer les actions pour chaque match
       const { data: actionsData, error: actionsError } = await supabase
         .from('match_actions')
         .select('*')
@@ -121,7 +118,6 @@ const MatchAnalytics = () => {
         console.error('Erreur lors de la récupération des actions:', actionsError);
       }
 
-      // Récupérer les détails des demandes clients
       const { data: clientRequests, error: clientError } = await supabase
         .from('client_requests')
         .select(`
@@ -140,7 +136,6 @@ const MatchAnalytics = () => {
         console.error('Erreur lors de la récupération des demandes clients:', clientError);
       }
 
-      // Récupérer les détails des déménagements confirmés
       const { data: confirmedMoves, error: movesError } = await supabase
         .from('confirmed_moves')
         .select(`
@@ -159,13 +154,11 @@ const MatchAnalytics = () => {
         console.error('Erreur lors de la récupération des déménagements:', movesError);
       }
 
-      // Combiner toutes les données
       const enrichedMatches: MatchWithDetails[] = (matchesData || []).map(match => {
         const clientRequest = clientRequests?.find(cr => cr.id === match.client_request_id);
         const confirmedMove = confirmedMoves?.find(cm => cm.id === match.move_id);
         const matchActions = actionsData?.filter(action => action.match_id === match.id) || [];
         
-        // Déterminer le statut basé sur les actions
         let status = 'pending';
         const latestAction = matchActions[0];
         if (latestAction) {
@@ -191,6 +184,14 @@ const MatchAnalytics = () => {
       });
 
       setMatches(enrichedMatches);
+      
+      // Séparer les matches en attente des matches terminés
+      const pending = enrichedMatches.filter(match => match.status === 'pending');
+      const completed = enrichedMatches.filter(match => match.status !== 'pending');
+      
+      setPendingMatches(pending);
+      setCompletedMatches(completed);
+      
       calculateAnalytics(enrichedMatches);
 
     } catch (error) {
@@ -228,30 +229,6 @@ const MatchAnalytics = () => {
     });
   };
 
-  const applyFilters = () => {
-    let filtered = [...matches];
-
-    // Filtre par statut
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(match => match.status === statusFilter);
-    }
-
-    // Filtre par recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(match => 
-        match.client_name?.toLowerCase().includes(searchLower) ||
-        match.client_email?.toLowerCase().includes(searchLower) ||
-        match.departure_city?.toLowerCase().includes(searchLower) ||
-        match.arrival_city?.toLowerCase().includes(searchLower) ||
-        match.mover_name?.toLowerCase().includes(searchLower) ||
-        match.company_name?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    setFilteredMatches(filtered);
-  };
-
   const handleMatchAction = async (matchId: number, actionType: 'accepted' | 'rejected') => {
     try {
       const { error } = await supabase
@@ -271,7 +248,6 @@ const MatchAnalytics = () => {
         description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
       });
 
-      // Rafraîchir les données
       fetchMatchesData();
     } catch (error: any) {
       console.error('Error processing match action:', error);
@@ -310,13 +286,11 @@ const MatchAnalytics = () => {
 
   const deleteMatch = async (matchId: number) => {
     try {
-      // Supprimer d'abord les actions liées
       await supabase
         .from('match_actions')
         .delete()
         .eq('match_id', matchId);
 
-      // Puis supprimer le match
       const { error } = await supabase
         .from('move_matches')
         .delete()
@@ -366,6 +340,127 @@ const MatchAnalytics = () => {
     return <Badge className={typeInfo.color}>{typeInfo.label}</Badge>;
   };
 
+  const renderMatchTable = (matchesList: MatchWithDetails[], showActions: boolean = false) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>ID</TableHead>
+          <TableHead>Client</TableHead>
+          <TableHead>Trajet</TableHead>
+          <TableHead>Déménageur</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>Distance</TableHead>
+          <TableHead>Volume</TableHead>
+          <TableHead>Statut</TableHead>
+          <TableHead>Date</TableHead>
+          <TableHead>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {matchesList.map((match) => (
+          <TableRow key={match.id}>
+            <TableCell className="font-medium">#{match.id}</TableCell>
+            <TableCell>
+              <div>
+                <div className="font-medium">{match.client_name || 'Non défini'}</div>
+                <div className="text-sm text-gray-500">{match.client_email}</div>
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className="text-sm">
+                <div>{match.departure_city} → {match.arrival_city}</div>
+                {match.desired_date && (
+                  <div className="text-gray-500 flex items-center space-x-1">
+                    <span>{new Date(match.desired_date).toLocaleDateString('fr-FR')}</span>
+                    {match.flexible_dates && (
+                      <Badge variant="outline" className="text-xs">Flexible</Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TableCell>
+            <TableCell>
+              <div>
+                <div className="font-medium">{match.mover_name || 'Non défini'}</div>
+                <div className="text-sm text-gray-500">{match.company_name}</div>
+                {match.route_type && (
+                  <Badge variant="outline" className="text-xs mt-1">
+                    {match.route_type === 'flexible' ? 'Flexible' : 'Fixe'}
+                  </Badge>
+                )}
+              </div>
+            </TableCell>
+            <TableCell>{getMatchTypeBadge(match.match_type)}</TableCell>
+            <TableCell>{match.distance_km?.toFixed(0)} km</TableCell>
+            <TableCell>{match.combined_volume?.toFixed(1)} m³</TableCell>
+            <TableCell>
+              <div className="flex flex-col space-y-1">
+                {getStatusBadge(match.status || 'pending')}
+                {showActions && match.status === 'pending' && (
+                  <div className="flex space-x-1">
+                    <Button
+                      size="sm"
+                      onClick={() => handleMatchAction(match.id, 'accepted')}
+                      className="bg-green-600 hover:bg-green-700 h-6 text-xs"
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleMatchAction(match.id, 'rejected')}
+                      className="text-red-600 hover:text-red-700 h-6 text-xs"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </TableCell>
+            <TableCell>
+              {new Date(match.created_at).toLocaleDateString('fr-FR', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </TableCell>
+            <TableCell>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer le match</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteMatch(match.id)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Supprimer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -380,7 +475,7 @@ const MatchAnalytics = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Historique des Matchs</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Système de Matching</h2>
         <button 
           onClick={fetchMatchesData}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -391,6 +486,17 @@ const MatchAnalytics = () => {
 
       {/* Métriques principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Matches en attente</CardTitle>
+            <Clock className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{pendingMatches.length}</div>
+            <p className="text-xs text-muted-foreground">À traiter</p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Matchs</CardTitle>
@@ -427,273 +533,133 @@ const MatchAnalytics = () => {
             <p className="text-xs text-muted-foreground">Distance des trajets</p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Volume Moyen</CardTitle>
-            <Activity className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{analyticsData.averageVolume.toFixed(1)} m³</div>
-            <p className="text-xs text-muted-foreground">Volume combiné</p>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Filtres */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filtres</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Filtre par statut */}
-            <div>
-              <Label>Statut</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tous les statuts" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="accepted">Acceptés</SelectItem>
-                  <SelectItem value="rejected">Rejetés</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Onglets pour séparer matches en attente et historique */}
+      <Tabs defaultValue="pending" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="pending" className="flex items-center space-x-2">
+            <Clock className="h-4 w-4" />
+            <span>Matches en attente ({pendingMatches.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center space-x-2">
+            <Activity className="h-4 w-4" />
+            <span>Historique ({completedMatches.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex items-center space-x-2">
+            <TrendingUp className="h-4 w-4" />
+            <span>Analytics</span>
+          </TabsTrigger>
+        </TabsList>
 
-            {/* Recherche */}
-            <div>
-              <Label>Recherche</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Client, ville, déménageur..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Filtre par date */}
-            <div className="md:col-span-1">
-              <DateFilter
-                data={matches}
-                onFilter={setFilteredMatches}
-                dateField="created_at"
-                label="Filtrer par date de création"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Graphiques */}
-      {analyticsData.matchTypeDistribution.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Distribution par type de match */}
+        <TabsContent value="pending" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Distribution par Type</CardTitle>
-              <CardDescription>Répartition des types de matchs</CardDescription>
+              <CardTitle className="flex items-center space-x-2">
+                <Clock className="h-5 w-5 text-orange-600" />
+                <span>Matches en attente de traitement</span>
+              </CardTitle>
+              <CardDescription>
+                Ces matches nécessitent une action (accepter ou refuser)
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={analyticsData.matchTypeDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ type, count }) => `${type}: ${count}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="count"
-                  >
-                    {analyticsData.matchTypeDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                {pendingMatches.length > 0 ? (
+                  renderMatchTable(pendingMatches, true)
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Aucun match en attente</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          {/* Statuts des matchs */}
+        <TabsContent value="history" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Statuts des Matchs</CardTitle>
-              <CardDescription>Répartition par statut</CardDescription>
+              <CardTitle className="flex items-center space-x-2">
+                <Activity className="h-5 w-5" />
+                <span>Historique des matches</span>
+              </CardTitle>
+              <CardDescription>
+                Matches acceptés et rejetés avec leur statut
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={[
-                  { name: 'Acceptés', count: analyticsData.acceptedMatches, fill: '#10B981' },
-                  { name: 'Rejetés', count: analyticsData.rejectedMatches, fill: '#EF4444' },
-                  { name: 'En attente', count: analyticsData.pendingMatches, fill: '#F59E0B' }
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                {completedMatches.length > 0 ? (
+                  renderMatchTable(completedMatches, false)
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Aucun match dans l'historique</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        </TabsContent>
 
-      {/* Tableau des matchs */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Liste des Matchs ({filteredMatches.length})</CardTitle>
-          <CardDescription>Historique détaillé des matchs avec leurs informations</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Trajet</TableHead>
-                  <TableHead>Déménageur</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Distance</TableHead>
-                  <TableHead>Volume</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Statut Trajet</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMatches.map((match) => (
-                  <TableRow key={match.id}>
-                    <TableCell className="font-medium">#{match.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{match.client_name || 'Non défini'}</div>
-                        <div className="text-sm text-gray-500">{match.client_email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{match.departure_city} → {match.arrival_city}</div>
-                        {match.desired_date && (
-                          <div className="text-gray-500 flex items-center space-x-1">
-                            <span>{new Date(match.desired_date).toLocaleDateString('fr-FR')}</span>
-                            {match.flexible_dates && (
-                              <Badge variant="outline" className="text-xs">Flexible</Badge>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{match.mover_name || 'Non défini'}</div>
-                        <div className="text-sm text-gray-500">{match.company_name}</div>
-                        {match.route_type && (
-                          <Badge variant="outline" className="text-xs mt-1">
-                            {match.route_type === 'flexible' ? 'Flexible' : 'Fixe'}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getMatchTypeBadge(match.match_type)}</TableCell>
-                    <TableCell>{match.distance_km?.toFixed(0)} km</TableCell>
-                    <TableCell>{match.combined_volume?.toFixed(1)} m³</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col space-y-1">
-                        {getStatusBadge(match.status || 'pending')}
-                        {match.status === 'pending' && (
-                          <div className="flex space-x-1">
-                            <Button
-                              size="sm"
-                              onClick={() => handleMatchAction(match.id, 'accepted')}
-                              className="bg-green-600 hover:bg-green-700 h-6 text-xs"
-                            >
-                              <Check className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleMatchAction(match.id, 'rejected')}
-                              className="text-red-600 hover:text-red-700 h-6 text-xs"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <StatusToggle
-                        status={match.move_status_custom || 'en_cours'}
-                        onStatusChange={(newStatus) => handleStatusChange(match.move_id, newStatus)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {new Date(match.created_at).toLocaleDateString('fr-FR', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Supprimer le match</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Êtes-vous sûr de vouloir supprimer ce match ? Cette action est irréversible.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteMatch(match.id)}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              Supprimer
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            
-            {filteredMatches.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Aucun match trouvé</p>
-                <p className="text-sm">Essayez de modifier vos filtres</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        <TabsContent value="analytics" className="space-y-4">
+          {analyticsData.matchTypeDistribution.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Distribution par Type</CardTitle>
+                  <CardDescription>Répartition des types de matchs</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={analyticsData.matchTypeDistribution}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ type, count }) => `${type}: ${count}`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="count"
+                      >
+                        {analyticsData.matchTypeDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Statuts des Matchs</CardTitle>
+                  <CardDescription>Répartition par statut</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={[
+                      { name: 'Acceptés', count: analyticsData.acceptedMatches, fill: '#10B981' },
+                      { name: 'Rejetés', count: analyticsData.rejectedMatches, fill: '#EF4444' },
+                      { name: 'En attente', count: analyticsData.pendingMatches, fill: '#F59E0B' }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
