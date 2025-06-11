@@ -98,7 +98,7 @@ const OpportunitiesTab = () => {
     setShowCreateClientDialog(true);
   };
 
-  const handleCloseOpportunity = async (opportunityId: string, action: 'completed' | 'cancelled') => {
+  const handleCloseOpportunity = async (opportunityId: number, action: 'completed' | 'cancelled') => {
     try {
       console.log(`🔄 ${action === 'completed' ? 'Finalisation' : 'Annulation'} de l'opportunité:`, opportunityId);
       
@@ -316,14 +316,14 @@ const OpportunitiesTab = () => {
                       {(opportunity.status === 'pending' || opportunity.status === 'confirmed') && (
                         <>
                           <DropdownMenuItem 
-                            onClick={() => handleCloseOpportunity(opportunity.id, 'completed')}
+                            onClick={() => handleCloseOpportunity(Number(opportunity.id), 'completed')}
                             className="text-green-600"
                           >
                             <CheckCircle className="h-4 w-4 mr-2" />
                             Trajet terminé
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => handleCloseOpportunity(opportunity.id, 'cancelled')}
+                            onClick={() => handleCloseOpportunity(Number(opportunity.id), 'cancelled')}
                             className="text-red-600"
                           >
                             <XCircle className="h-4 w-4 mr-2" />
