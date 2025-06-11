@@ -1,26 +1,16 @@
 
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileDown, Mail, Star, Clock, MapPin, Euro } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Tables } from '@/integrations/supabase/types';
-import QuoteGenerator from '@/components/QuoteGenerator';
-import EmailQuoteButton from '@/components/EmailQuoteButton';
+import { jsPDF } from 'jspdf';
+import { useToast } from '@/hooks/use-toast';
+import { DownloadIcon, Mail, CheckCircle, FileText, BarChart3 } from 'lucide-react';
 
-type Supplier = Tables<'suppliers'>;
 type PricingOpportunity = Tables<'pricing_opportunities'>;
-
-interface BestPriceOffer {
-  supplier: Supplier;
-  calculatedPrice: number;
-  distance: number;
-  responseTime: number;
-  rating: number;
-  savings: number;
-  isRecommended: boolean;
-}
+type Supplier = Tables<'suppliers'>;
 
 interface BestPricesDialogProps {
   open: boolean;
@@ -29,186 +19,246 @@ interface BestPricesDialogProps {
   suppliers: Supplier[];
 }
 
-const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPricesDialogProps) => {
-  const [selectedOffer, setSelectedOffer] = useState<BestPriceOffer | null>(null);
+interface CalculatedOffer {
+  supplier: Supplier;
+  price: number;
+  formula: string;
+}
 
-  // Early return if no opportunity
-  if (!opportunity) {
-    return null;
-  }
-
-  // Simulation du calcul des meilleurs prix
-  const calculateBestOffers = (): BestPriceOffer[] => {
-    const offers: BestPriceOffer[] = suppliers.map((supplier, index) => {
-      const basePrice = (supplier.pricing_model as any)?.basePrice || 500;
-      const distanceRate = (supplier.pricing_model as any)?.distanceRate || 1.5;
-      const volumeRate = (supplier.pricing_model as any)?.volumeRate || 50;
+const calculateBestOffers = (opportunity: PricingOpportunity | null, suppliers: Supplier[]): CalculatedOffer[] => {
+  if (!opportunity) return [];
+  
+  return suppliers
+    .filter(supplier => supplier.is_active && supplier.pricing_model)
+    .map(supplier => {
+      const pricingModel = supplier.pricing_model as any;
+      let price = 0;
+      let formula = '';
       
-      // Simulation de distance (en réalité, on utiliserait l'API Google Maps)
-      const distance = Math.random() * 100;
-      const calculatedPrice = basePrice + (distance * distanceRate) + (opportunity.estimated_volume * volumeRate);
+      if (pricingModel) {
+        const basePrice = pricingModel.basePrice || 0;
+        const volumeRate = pricingModel.volumeRate || 0;
+        const volume = opportunity.estimated_volume || 0;
+        const estimatedDistance = opportunity.estimated_distance || 0;
+        const distanceRate = volume > 20 && pricingModel.distanceRateHighVolume ? 
+          pricingModel.distanceRateHighVolume : (pricingModel.distanceRate || 0);
+        
+        // Calcul de base
+        price = basePrice + (volume * volumeRate) + (estimatedDistance * distanceRate);
+        formula = `Base (${basePrice}€) + Volume (${volume} × ${volumeRate}€) + Distance (${estimatedDistance} × ${distanceRate}€)`;
+        
+        // Supplément volume
+        if (volume > (pricingModel.volumeSupplementThreshold1 || 20)) {
+          price += pricingModel.volumeSupplementFee1 || 0;
+          formula += ` + Supp. vol 1 (${pricingModel.volumeSupplementFee1 || 0}€)`;
+        }
+        
+        if (volume > (pricingModel.volumeSupplementThreshold2 || 29)) {
+          price += pricingModel.volumeSupplementFee2 || 0;
+          formula += ` + Supp. vol 2 (${pricingModel.volumeSupplementFee2 || 0}€)`;
+        }
+        
+        // Multiplicateur de temps
+        if (pricingModel.timeMultiplier && pricingModel.timeMultiplier !== 1) {
+          price = price * pricingModel.timeMultiplier;
+          formula += ` × Multiplicateur (${pricingModel.timeMultiplier})`;
+        }
+        
+        // Prix minimum
+        if (pricingModel.minimumPrice && price < pricingModel.minimumPrice) {
+          formula += ` → Prix minimum: ${pricingModel.minimumPrice}€`;
+          price = pricingModel.minimumPrice;
+        }
+      }
       
       return {
         supplier,
-        calculatedPrice: Math.round(calculatedPrice),
-        distance: Math.round(distance),
-        responseTime: Math.round(Math.random() * 24),
-        rating: 3.5 + Math.random() * 1.5,
-        savings: 0,
-        isRecommended: false
+        price,
+        formula
       };
-    });
+    })
+    .sort((a, b) => a.price - b.price);
+};
 
-    // Trier par prix
-    offers.sort((a, b) => a.calculatedPrice - b.calculatedPrice);
+const BestPricesDialog = ({ open, onOpenChange, opportunity, suppliers }: BestPricesDialogProps) => {
+  const { toast } = useToast();
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  
+  const calculatedOffers = useMemo(() => {
+    return calculateBestOffers(opportunity, suppliers);
+  }, [opportunity, suppliers]);
+  
+  // Prendre les 4 meilleures offres
+  const bestOffers = calculatedOffers.slice(0, 4);
+  
+  const handleDownloadPdf = () => {
+    if (!opportunity) return;
     
-    // Calculer les économies par rapport au plus cher
-    const maxPrice = Math.max(...offers.map(o => o.calculatedPrice));
-    offers.forEach(offer => {
-      offer.savings = maxPrice - offer.calculatedPrice;
-    });
-
-    // Marquer le meilleur comme recommandé
-    if (offers.length > 0) {
-      offers[0].isRecommended = true;
+    try {
+      setIsPdfGenerating(true);
+      
+      // Créer un nouveau document PDF
+      const doc = new jsPDF();
+      
+      // Entête
+      doc.setFontSize(20);
+      doc.text("Comparatif de prix", 105, 20, { align: "center" });
+      
+      // Informations sur l'opportunité
+      doc.setFontSize(12);
+      doc.text(`Opportunité: ${opportunity.title}`, 20, 40);
+      doc.text(`De: ${opportunity.departure_city}`, 20, 50);
+      doc.text(`À: ${opportunity.arrival_city}`, 20, 60);
+      doc.text(`Volume estimé: ${opportunity.estimated_volume} m³`, 20, 70);
+      doc.text(`Distance estimée: ${opportunity.estimated_distance} km`, 20, 80);
+      
+      // Tableau des meilleures offres
+      doc.text("Les meilleures offres:", 20, 100);
+      
+      let yPosition = 110;
+      bestOffers.forEach((offer, index) => {
+        doc.text(`${index + 1}. ${offer.supplier.company_name}: ${offer.price.toLocaleString('fr-FR')} €`, 30, yPosition);
+        yPosition += 10;
+        doc.setFontSize(9);
+        const formulas = doc.splitTextToSize(`   Formule: ${offer.formula}`, 160);
+        formulas.forEach(line => {
+          doc.text(line, 30, yPosition);
+          yPosition += 7;
+        });
+        doc.setFontSize(12);
+        yPosition += 5;
+      });
+      
+      // Footer
+      doc.setFontSize(10);
+      const currentDate = new Date().toLocaleDateString('fr-FR');
+      doc.text(`Document généré le ${currentDate}`, 105, 280, { align: "center" });
+      
+      // Sauvegarder le PDF
+      doc.save(`comparatif-prix-${opportunity.title.replace(/\s+/g, '-')}.pdf`);
+      
+      toast({
+        title: "Succès",
+        description: "Le PDF a été généré avec succès",
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPdfGenerating(false);
     }
-
-    return offers.slice(0, 4); // Top 4 offres
   };
-
-  const bestOffers = calculateBestOffers();
-
-  const handleSelectOffer = (offer: BestPriceOffer) => {
-    setSelectedOffer(offer);
-  };
-
-  const mockClientRequest = {
-    id: 1,
-    name: 'Client Test',
-    email: 'client@test.com',
-    phone: '+33 1 23 45 67 89',
-    departure_address: opportunity.departure_address,
-    departure_city: opportunity.departure_city,
-    departure_postal_code: opportunity.departure_postal_code,
-    departure_country: opportunity.departure_country,
-    arrival_address: opportunity.arrival_address,
-    arrival_city: opportunity.arrival_city,
-    arrival_postal_code: opportunity.arrival_postal_code,
-    arrival_country: opportunity.arrival_country,
-    desired_date: opportunity.desired_date,
-    estimated_volume: opportunity.estimated_volume,
-    quote_amount: selectedOffer?.calculatedPrice || bestOffers[0]?.calculatedPrice || 0
-  };
-
+  
+  if (!opportunity) return null;
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-yellow-500" />
-            Meilleures offres pour "{opportunity.title}"
+            <BarChart3 className="h-5 w-5" />
+            Meilleures offres de prix
           </DialogTitle>
           <DialogDescription>
-            Comparaison des 4 meilleures offres de nos partenaires
+            Comparaison des meilleures offres pour {opportunity.title}
           </DialogDescription>
         </DialogHeader>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {bestOffers.map((offer, index) => (
-            <Card 
-              key={offer.supplier.id} 
-              className={`relative cursor-pointer transition-all ${
-                selectedOffer?.supplier.id === offer.supplier.id 
-                  ? 'ring-2 ring-blue-500 bg-blue-50' 
-                  : 'hover:shadow-md'
-              }`}
-              onClick={() => handleSelectOffer(offer)}
-            >
-              {offer.isRecommended && (
-                <div className="absolute -top-2 -right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                  RECOMMANDÉ
-                </div>
-              )}
-              
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg">{offer.supplier.company_name}</CardTitle>
-                    <p className="text-sm text-gray-600">{offer.supplier.contact_name}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-green-600 flex items-center gap-1">
-                      <Euro className="h-5 w-5" />
-                      {offer.calculatedPrice.toLocaleString()}
-                    </div>
-                    {offer.savings > 0 && (
-                      <p className="text-xs text-green-600">
-                        Économie de {offer.savings.toLocaleString()}€
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <MapPin className="h-3 w-3 mx-auto mb-1" />
-                    <div className="font-medium">{offer.distance}km</div>
-                    <div className="text-gray-500">Distance</div>
-                  </div>
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <Clock className="h-3 w-3 mx-auto mb-1" />
-                    <div className="font-medium">{offer.responseTime}h</div>
-                    <div className="text-gray-500">Réponse</div>
-                  </div>
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <Star className="h-3 w-3 mx-auto mb-1" />
-                    <div className="font-medium">{offer.rating.toFixed(1)}</div>
-                    <div className="text-gray-500">Note</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Badge variant={index === 0 ? "default" : "secondary"}>
-                    #{index + 1} meilleur prix
-                  </Badge>
-                  {offer.supplier.priority_level === 1 && (
-                    <Badge variant="outline">Partenaire premium</Badge>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {selectedOffer && (
-          <div className="border-t pt-4 mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">
-                Offre sélectionnée : {selectedOffer.supplier.company_name}
-              </h3>
-              <div className="text-2xl font-bold text-green-600">
-                {selectedOffer.calculatedPrice.toLocaleString()}€
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <QuoteGenerator client={mockClientRequest} />
-              <EmailQuoteButton client={mockClientRequest} />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="space-y-2">
+            <h3 className="font-semibold">Détails de l'opportunité</h3>
+            <p className="text-sm text-muted-foreground">Départ: {opportunity.departure_city}</p>
+            <p className="text-sm text-muted-foreground">Arrivée: {opportunity.arrival_city}</p>
+            <p className="text-sm text-muted-foreground">Volume: {opportunity.estimated_volume} m³</p>
+            <p className="text-sm text-muted-foreground">Distance: {opportunity.estimated_distance} km</p>
+            {opportunity.budget_range_min && opportunity.budget_range_max && (
+              <p className="text-sm text-muted-foreground">
+                Budget client: {opportunity.budget_range_min} - {opportunity.budget_range_max}€
+              </p>
+            )}
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="font-semibold">{bestOffers.length} offres trouvées</h3>
+            <p className="text-sm text-muted-foreground">
+              Basées sur {calculatedOffers.length} fournisseurs actifs avec modèle de prix
+            </p>
+            <div className="flex space-x-2 mt-2">
               <Button 
-                variant="default" 
+                size="sm" 
+                onClick={handleDownloadPdf} 
+                disabled={isPdfGenerating || bestOffers.length === 0}
                 className="flex items-center gap-2"
-                onClick={() => {
-                  // Ici on pourrait confirmer la sélection
-                  console.log('Offre confirmée:', selectedOffer);
-                }}
               >
-                Confirmer cette offre
+                <DownloadIcon className="h-4 w-4" />
+                {isPdfGenerating ? 'Génération...' : 'Télécharger en PDF'}
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="flex items-center gap-2"
+                disabled={bestOffers.length === 0}
+              >
+                <Mail className="h-4 w-4" />
+                Envoyer par email
               </Button>
             </div>
           </div>
+        </div>
+        
+        {bestOffers.length > 0 ? (
+          <div className="space-y-4">
+            {bestOffers.map((offer, index) => (
+              <Card key={index} className={`p-4 ${index === 0 ? 'bg-blue-50 border-blue-200' : ''}`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-lg">{offer.supplier.company_name}</h3>
+                      {index === 0 && (
+                        <Badge className="bg-green-600">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Meilleure offre
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{offer.supplier.city}, {offer.supplier.postal_code}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold">{offer.price.toLocaleString('fr-FR')} €</div>
+                    {opportunity.budget_range_max && (
+                      <Badge variant={offer.price <= opportunity.budget_range_max ? "outline" : "destructive"} className="mt-1">
+                        {offer.price <= opportunity.budget_range_max ? 'Dans le budget' : 'Hors budget'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-3 text-xs bg-gray-50 p-2 rounded text-gray-600">
+                  <div className="flex items-start gap-1">
+                    <FileText className="h-3 w-3 mt-0.5" />
+                    <div>{offer.formula}</div>
+                  </div>
+                </div>
+                
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button variant="outline" size="sm">Contact</Button>
+                  <Button variant="outline" size="sm">Voir détails</Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">
+              Aucune offre disponible. Vérifiez que vos fournisseurs ont des modèles de prix configurés.
+            </p>
+          </div>
         )}
+
       </DialogContent>
     </Dialog>
   );

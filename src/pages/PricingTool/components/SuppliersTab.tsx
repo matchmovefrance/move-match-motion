@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import SupplierPricingDialog from './SupplierPricingDialog';
 import SupplierLinkDialog from './SupplierLinkDialog';
+import AddSupplierDialog from './AddSupplierDialog';
 
 type Supplier = Tables<'suppliers'>;
+type ServiceProvider = Tables<'service_providers'>;
 
 const SuppliersTab = () => {
   const { user } = useAuth();
@@ -27,6 +29,7 @@ const SuppliersTab = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [showPricingDialog, setShowPricingDialog] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
@@ -55,6 +58,66 @@ const SuppliersTab = () => {
     },
     refetchInterval: 15000,
   });
+
+  const { data: serviceProviders } = useQuery({
+    queryKey: ['service-providers'],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('service_providers')
+        .select('*')
+        .eq('created_by', user.id);
+      
+      if (error) throw error;
+      return data as ServiceProvider[];
+    },
+  });
+
+  // Effet pour synchroniser les fournisseurs depuis service_providers
+  useEffect(() => {
+    if (serviceProviders && serviceProviders.length > 0) {
+      syncServiceProvidersToSuppliers();
+    }
+  }, [serviceProviders]);
+
+  const syncServiceProvidersToSuppliers = async () => {
+    if (!serviceProviders || !user) return;
+    
+    try {
+      // Pour chaque service_provider, vérifier s'il existe déjà dans suppliers
+      for (const provider of serviceProviders) {
+        const { data } = await supabase
+          .from('suppliers')
+          .select('id')
+          .eq('email', provider.email.toLowerCase())
+          .limit(1);
+        
+        // S'il n'existe pas encore, l'ajouter
+        if (!data || data.length === 0) {
+          await supabase
+            .from('suppliers')
+            .insert({
+              company_name: provider.company_name,
+              contact_name: provider.name,
+              email: provider.email.toLowerCase(),
+              phone: provider.phone,
+              address: provider.address,
+              city: provider.city,
+              postal_code: provider.postal_code,
+              is_active: true,
+              created_by: user.id
+            });
+        }
+      }
+      
+      // Actualiser la liste après synchronisation
+      refetch();
+      
+    } catch (error) {
+      console.error('Error syncing suppliers:', error);
+    }
+  };
 
   const generateSupplierLink = async (supplier: Supplier) => {
     const linkToken = crypto.randomUUID();
@@ -94,11 +157,8 @@ const SuppliersTab = () => {
   };
 
   const handleEditSupplier = (supplier: Supplier) => {
-    // TODO: Implémenter la modification des informations fournisseur
-    toast({
-      title: "Fonction en développement",
-      description: "La modification des informations fournisseur sera bientôt disponible.",
-    });
+    setSelectedSupplier(supplier);
+    setShowAddDialog(true);
   };
 
   if (isLoading) {
@@ -132,7 +192,10 @@ const SuppliersTab = () => {
               <Filter className="h-5 w-5" />
               Gestion des fournisseurs
             </CardTitle>
-            <Button className="flex items-center gap-2">
+            <Button 
+              className="flex items-center gap-2"
+              onClick={() => setShowAddDialog(true)}
+            >
               <Plus className="h-4 w-4" />
               Ajouter un fournisseur
             </Button>
@@ -223,11 +286,11 @@ const SuppliersTab = () => {
                         {(supplier.pricing_model as any).basePrice && (
                           <div>Prix de base: {(supplier.pricing_model as any).basePrice}€</div>
                         )}
-                        {(supplier.pricing_model as any).distanceRate && (
-                          <div>Distance: {(supplier.pricing_model as any).distanceRate}€/km</div>
-                        )}
                         {(supplier.pricing_model as any).volumeRate && (
                           <div>Volume: {(supplier.pricing_model as any).volumeRate}€/m³</div>
+                        )}
+                        {(supplier.pricing_model as any).distanceRate && (
+                          <div>Distance: {(supplier.pricing_model as any).distanceRate}€/km</div>
                         )}
                       </div>
                     ) : (
@@ -302,7 +365,7 @@ const SuppliersTab = () => {
                   : 'Commencez par ajouter votre premier fournisseur.'}
               </p>
             </div>
-            <Button>
+            <Button onClick={() => setShowAddDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Ajouter un fournisseur
             </Button>
@@ -324,6 +387,13 @@ const SuppliersTab = () => {
         link={generatedLink}
         password={generatedPassword}
         supplierName={selectedSupplier?.company_name || ''}
+      />
+
+      <AddSupplierDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        supplier={selectedSupplier}
+        onSuccess={refetch}
       />
     </div>
   );
