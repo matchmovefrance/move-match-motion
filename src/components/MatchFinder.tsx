@@ -152,7 +152,7 @@ const MatchFinder = () => {
 
   // Use cache for all data
   const { 
-    data: clientRequests = [], 
+    data: clientRequestsData, 
     loading: clientsLoading,
     refetch: refetchClients
   } = useCache(fetchClientRequests, {
@@ -161,7 +161,7 @@ const MatchFinder = () => {
   });
 
   const { 
-    data: moves = [], 
+    data: movesData, 
     loading: movesLoading,
     refetch: refetchMoves
   } = useCache(fetchMoves, {
@@ -170,7 +170,7 @@ const MatchFinder = () => {
   });
 
   const { 
-    data: matches = [], 
+    data: matchesData, 
     loading: matchesLoading,
     refetch: refetchMatches
   } = useCache(fetchMatchesWithActions, {
@@ -178,9 +178,23 @@ const MatchFinder = () => {
     ttl: 1 * 60 * 1000 // 1 minute
   });
 
+  // Ensure we always have arrays, never null
+  const clientRequests = clientRequestsData || [];
+  const moves = movesData || [];
+  const matches = matchesData || [];
+
   const loading = clientsLoading || movesLoading || matchesLoading;
 
   useEffect(() => {
+    console.log('MatchFinder useEffect - matches:', matches, 'type:', typeof matches);
+    
+    // Ensure matches is an array before filtering
+    if (!Array.isArray(matches)) {
+      console.warn('matches is not an array:', matches);
+      setFilteredMatches([]);
+      return;
+    }
+
     // Appliquer les filtres
     let filtered = matches.filter(match => {
       const { client, move } = getMatchDetails(match);
@@ -205,7 +219,7 @@ const MatchFinder = () => {
     }
 
     setFilteredMatches(filtered);
-  }, [matches, currentFilters]);
+  }, [matches, currentFilters, clientRequests, moves]);
 
   const handleFiltersChange = useCallback((filters: MatchFilterOptions) => {
     setCurrentFilters(filters);
