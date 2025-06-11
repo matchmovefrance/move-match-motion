@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface AcceptedQuoteWithDetails {
   id: string;
@@ -32,6 +32,8 @@ interface AcceptedQuoteWithDetails {
 
 const AcceptedQuotesTab = () => {
   const { toast } = useToast();
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [selectedQuote, setSelectedQuote] = useState<AcceptedQuoteWithDetails | null>(null);
 
   const { data: acceptedQuotes, isLoading, refetch } = useQuery({
     queryKey: ['accepted-quotes'],
@@ -90,13 +92,20 @@ const AcceptedQuotesTab = () => {
     }
   };
 
-  const handleMarkAsCompleted = async (quoteId: string, quoteBidAmount: number, supplierName: string) => {
+  const handleShowCompleteDialog = (quote: AcceptedQuoteWithDetails) => {
+    setSelectedQuote(quote);
+    setShowCompleteDialog(true);
+  };
+
+  const handleConfirmComplete = async () => {
+    if (!selectedQuote) return;
+
     try {
       // Marquer le devis comme terminé
       const { error: quoteError } = await supabase
         .from('quotes')
         .update({ status: 'completed' })
-        .eq('id', quoteId);
+        .eq('id', selectedQuote.id);
 
       if (quoteError) throw quoteError;
 
@@ -107,7 +116,7 @@ const AcceptedQuotesTab = () => {
           opportunity_id,
           opportunity:pricing_opportunities(client_request_id)
         `)
-        .eq('id', quoteId)
+        .eq('id', selectedQuote.id)
         .single();
 
       if (fetchError) throw fetchError;
@@ -118,7 +127,7 @@ const AcceptedQuotesTab = () => {
           .from('client_requests')
           .update({ 
             status: 'completed',
-            quote_amount: quoteBidAmount
+            quote_amount: selectedQuote.bid_amount
           })
           .eq('id', quote.opportunity.client_request_id);
 
@@ -135,9 +144,11 @@ const AcceptedQuotesTab = () => {
 
       toast({
         title: "Trajet terminé",
-        description: `Le trajet avec ${supplierName} a été marqué comme terminé et déplacé vers l'historique.`,
+        description: `Le trajet avec ${selectedQuote.supplier?.company_name} a été marqué comme terminé et déplacé vers l'historique.`,
       });
 
+      setShowCompleteDialog(false);
+      setSelectedQuote(null);
       refetch();
     } catch (error) {
       console.error('❌ Erreur marquage terminé:', error);
@@ -287,7 +298,7 @@ const AcceptedQuotesTab = () => {
                         {quote.status === 'validated_by_client' && (
                           <Button
                             size="sm"
-                            onClick={() => handleMarkAsCompleted(quote.id, quote.bid_amount, quote.supplier?.company_name || 'Fournisseur')}
+                            onClick={() => handleShowCompleteDialog(quote)}
                             className="bg-blue-600 hover:bg-blue-700"
                           >
                             <Archive className="h-4 w-4 mr-1" />
@@ -315,6 +326,17 @@ const AcceptedQuotesTab = () => {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={showCompleteDialog}
+        onOpenChange={setShowCompleteDialog}
+        title="Confirmer la fin du trajet"
+        description={`Êtes-vous sûr de vouloir marquer le trajet avec ${selectedQuote?.supplier?.company_name} comme terminé ? Cette action est définitive et déplacera le trajet vers l'historique.`}
+        confirmText="Trajet terminé"
+        cancelText="Annuler"
+        onConfirm={handleConfirmComplete}
+        variant="default"
+      />
     </div>
   );
 };

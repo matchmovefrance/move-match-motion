@@ -30,6 +30,7 @@ import CreateOpportunityDialog from './CreateOpportunityDialog';
 import BestPricesDialog from './BestPricesDialog';
 import CreateClientDialog from './CreateClientDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const OpportunitiesTab = () => {
   const { toast } = useToast();
@@ -41,6 +42,11 @@ const OpportunitiesTab = () => {
   const [editingOpportunity, setEditingOpportunity] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('active');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // États pour les dialogues de confirmation
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [opportunityToUpdate, setOpportunityToUpdate] = useState<any>(null);
 
   // Charger les clients depuis les demandes client requests (opportunités)
   const { data: opportunities, isLoading, error, refetch } = useQuery({
@@ -98,32 +104,81 @@ const OpportunitiesTab = () => {
     setShowCreateClientDialog(true);
   };
 
-  const handleCloseOpportunity = async (opportunityId: number, action: 'completed' | 'cancelled') => {
+  const handleShowCompleteDialog = (opportunity: any) => {
+    setOpportunityToUpdate(opportunity);
+    setShowCompleteDialog(true);
+  };
+
+  const handleShowCancelDialog = (opportunity: any) => {
+    setOpportunityToUpdate(opportunity);
+    setShowCancelDialog(true);
+  };
+
+  const handleConfirmComplete = async () => {
+    if (!opportunityToUpdate) return;
+
     try {
-      console.log(`🔄 ${action === 'completed' ? 'Finalisation' : 'Annulation'} de l'opportunité:`, opportunityId);
+      console.log('🔄 Finalisation de l\'opportunité:', opportunityToUpdate.id);
       
       const { error } = await supabase
         .from('client_requests')
         .update({ 
-          status: action,
-          status_custom: action === 'completed' ? 'termine' : 'annule'
+          status: 'completed',
+          status_custom: 'termine'
         })
-        .eq('id', opportunityId);
+        .eq('id', opportunityToUpdate.id);
 
       if (error) throw error;
 
       toast({
-        title: action === 'completed' ? "Trajet terminé" : "Trajet annulé",
-        description: `L'opportunité a été ${action === 'completed' ? 'finalisée' : 'annulée'} avec succès`,
+        title: "Trajet terminé",
+        description: "L'opportunité a été finalisée avec succès",
       });
 
+      setShowCompleteDialog(false);
+      setOpportunityToUpdate(null);
       queryClient.invalidateQueries({ queryKey: ['client-opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour:', error);
+      console.error('❌ Erreur lors de la finalisation:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de ${action === 'completed' ? 'finaliser' : 'annuler'} l'opportunité`,
+        description: "Impossible de finaliser l'opportunité",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!opportunityToUpdate) return;
+
+    try {
+      console.log('🔄 Annulation de l\'opportunité:', opportunityToUpdate.id);
+      
+      const { error } = await supabase
+        .from('client_requests')
+        .update({ 
+          status: 'cancelled',
+          status_custom: 'annule'
+        })
+        .eq('id', opportunityToUpdate.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Trajet annulé",
+        description: "L'opportunité a été annulée avec succès",
+      });
+
+      setShowCancelDialog(false);
+      setOpportunityToUpdate(null);
+      queryClient.invalidateQueries({ queryKey: ['client-opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'annulation:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'annuler l'opportunité",
         variant: "destructive",
       });
     }
@@ -320,14 +375,14 @@ const OpportunitiesTab = () => {
                         {(opportunity.status === 'pending' || opportunity.status === 'confirmed') && (
                           <>
                             <DropdownMenuItem 
-                              onClick={() => handleCloseOpportunity(Number(opportunity.id), 'completed')}
+                              onClick={() => handleShowCompleteDialog(opportunity)}
                               className="text-green-600"
                             >
                               <CheckCircle className="h-4 w-4 mr-2" />
                               Trajet terminé
                             </DropdownMenuItem>
                             <DropdownMenuItem 
-                              onClick={() => handleCloseOpportunity(Number(opportunity.id), 'cancelled')}
+                              onClick={() => handleShowCancelDialog(opportunity)}
                               className="text-red-600"
                             >
                               <XCircle className="h-4 w-4 mr-2" />
@@ -413,6 +468,29 @@ const OpportunitiesTab = () => {
         open={showBestPricesDialog}
         onOpenChange={setShowBestPricesDialog}
         opportunity={selectedOpportunity}
+      />
+
+      {/* Dialogues de confirmation */}
+      <ConfirmDialog
+        open={showCompleteDialog}
+        onOpenChange={setShowCompleteDialog}
+        title="Confirmer la fin du trajet"
+        description={`Êtes-vous sûr de vouloir marquer le trajet de ${opportunityToUpdate?.name || 'ce client'} comme terminé ? Cette action est définitive et ne peut pas être annulée.`}
+        confirmText="Trajet terminé"
+        cancelText="Annuler"
+        onConfirm={handleConfirmComplete}
+        variant="default"
+      />
+
+      <ConfirmDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        title="Confirmer l'annulation du trajet"
+        description={`Êtes-vous sûr de vouloir annuler le trajet de ${opportunityToUpdate?.name || 'ce client'} ? Cette action est définitive et ne peut pas être annulée.`}
+        confirmText="Annuler le trajet"
+        cancelText="Retour"
+        onConfirm={handleConfirmCancel}
+        variant="destructive"
       />
     </div>
   );
