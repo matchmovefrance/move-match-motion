@@ -27,10 +27,10 @@ const Auth = () => {
     );
   }
 
-  // If user is authenticated and has profile, redirect to dashboard
+  // If user is authenticated and has profile, redirect to main dashboard
   if (user && profile) {
-    console.log('✅ User authenticated, redirecting to dashboard');
-    return <Navigate to="/dashboard" replace />;
+    console.log('✅ User authenticated, redirecting to main dashboard');
+    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,8 +41,8 @@ const Auth = () => {
       console.log('🔐 Attempting login for:', email);
       const { error } = await signIn(email, password);
       if (!error) {
-        console.log('✅ Login successful, navigating to dashboard');
-        navigate('/dashboard', { replace: true });
+        console.log('✅ Login successful, navigating to main dashboard');
+        navigate('/', { replace: true });
       }
     } catch (error) {
       console.error('❌ Auth error:', error);

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from './contexts/AuthContext';
@@ -31,6 +31,8 @@ function App() {
           <React.Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Loading...</div>}>
             <Routes>
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              {/* Redirect /dashboard to / for compatibility */}
+              <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/public-mover/:token" element={<PublicMoverForm />} />
               <Route path="/pricing-tool" element={<ProtectedRoute><PricingTool /></ProtectedRoute>} />
