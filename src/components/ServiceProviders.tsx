@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Settings, MapPin, Phone, Mail, Edit, Trash2, Building, RefreshCw } from 'lucide-react';
@@ -23,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import SyncStatusDialog from './SyncStatusDialog';
 import { useQuery } from '@tanstack/react-query';
-import Badge from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 
 interface ServiceProvider {
   id: number;
@@ -774,3 +773,5 @@ const ServiceProviders = () => {
 };
 
 export default ServiceProviders;
+
+```
