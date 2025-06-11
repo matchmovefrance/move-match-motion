@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,21 +40,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
-    let loadingTimeout: NodeJS.Timeout;
 
     const initializeAuth = async () => {
       try {
         console.log('🔄 Initializing auth...');
         
-        // Set a maximum loading time to prevent infinite loading
-        loadingTimeout = setTimeout(() => {
-          if (mounted) {
-            console.log('⏰ Auth initialization timeout, stopping loading');
-            setLoading(false);
-          }
-        }, 8000); // 8 seconds max
-
-        // Get initial session
+        // Get initial session with shorter timeout
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error && !error.message?.includes('session')) {
           console.error('❌ Error getting session:', error);
@@ -68,23 +58,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            await loadUserProfile(session.user);
+            // Load profile in background without blocking
+            loadUserProfile(session.user);
           } else {
             setProfile(null);
           }
           
-          // Clear timeout since we're done loading
-          if (loadingTimeout) {
-            clearTimeout(loadingTimeout);
-          }
+          // Set loading to false immediately after session check
           setLoading(false);
         }
       } catch (error) {
         console.error('❌ Auth initialization error:', error);
         if (mounted) {
-          if (loadingTimeout) {
-            clearTimeout(loadingTimeout);
-          }
           setLoading(false);
         }
       }
@@ -101,11 +86,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user && event !== 'TOKEN_REFRESHED') {
-          await loadUserProfile(session.user);
+          loadUserProfile(session.user);
         } else if (!session) {
           setProfile(null);
         }
         
+        // Always stop loading on auth state change (except token refresh)
         if (event !== 'TOKEN_REFRESHED') {
           setLoading(false);
         }
@@ -116,9 +102,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false;
-      if (loadingTimeout) {
-        clearTimeout(loadingTimeout);
-      }
       subscription.unsubscribe();
     };
   }, []);
@@ -127,8 +110,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('👤 Loading profile for:', user.email);
       
-      // Special handling for admin
-      if (user.email === 'contact@matchmove.fr') {
+      // Special handling for admin users
+      if (user.email === 'contact@matchmove.fr' || user.email === 'pierre@matchmove.fr') {
         console.log('👑 Admin user detected');
         const adminProfile: Profile = {
           id: user.id,
@@ -155,18 +138,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // For other users, try to fetch from database with a shorter timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
-
+      // For other users, try to fetch from database with timeout
       try {
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        clearTimeout(timeoutId);
+        const { data: profileData, error } = await Promise.race([
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 2000)
+          )
+        ]) as any;
 
         if (error) {
           console.error('❌ Error fetching profile:', error);
@@ -188,12 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await createDefaultProfile(user);
         }
       } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        if (fetchError.name === 'AbortError') {
-          console.log('⏰ Profile fetch aborted due to timeout, using fallback');
-        } else {
-          console.error('❌ Profile fetch error:', fetchError);
-        }
+        console.log('⏰ Profile fetch failed/timeout, using fallback');
         await createDefaultProfile(user);
       }
     } catch (error) {
@@ -213,30 +191,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         company_name: undefined
       };
 
-      // Try to insert into database, but don't block on it
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            email: user.email,
-            role: 'agent',
-            company_name: null
-          }, { 
-            onConflict: 'id',
-            ignoreDuplicates: false 
-          });
+      // Try to insert into database without blocking
+      supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          role: 'agent',
+          company_name: null
+        }, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error('❌ Error upserting profile in DB:', error);
+          } else {
+            console.log('✅ Default profile upserted in DB successfully');
+          }
+        });
 
-        if (error) {
-          console.error('❌ Error upserting profile in DB:', error);
-        } else {
-          console.log('✅ Default profile upserted in DB successfully');
-        }
-      } catch (dbError) {
-        console.error('❌ Database error creating profile:', dbError);
-      }
-
-      // Always set the profile locally regardless of DB success
+      // Always set the profile locally immediately
       setProfile(defaultProfile);
       console.log('✅ Default profile set locally:', defaultProfile);
     } catch (error) {
@@ -272,6 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     console.log('✅ Sign in successful');
+    // Loading will be set to false by auth state change
     return { error: null };
   };
 
