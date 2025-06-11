@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Search, Loader2, RefreshCw } from 'lucide-react';
+import { BarChart3, Search, Loader2, TrendingUp } from 'lucide-react';
 import { pricingEngine } from './PricingEngine';
 import { ClientQuoteGroup } from './QuotesTab/ClientQuoteGroup';
 import { useQuotes } from './QuotesTab/useQuotes';
@@ -71,8 +71,8 @@ const QuotesTab = () => {
                 </>
               ) : (
                 <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  {generatedQuotes.length > 0 ? 'Recalculer avec Google Maps' : 'Générer avec Google Maps'}
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Comparer les prix
                 </>
               )}
             </Button>
@@ -105,11 +105,11 @@ const QuotesTab = () => {
         <Card>
           <CardContent className="text-center py-8">
             <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Prêt à générer des devis avec Google Maps</h3>
+            <h3 className="text-lg font-medium mb-2">Prêt à comparer les prix</h3>
             <p className="text-muted-foreground mb-4">
               {!activeClients?.length 
                 ? 'Aucun client actif trouvé'
-                : 'Cliquez sur "Générer avec Google Maps" pour utiliser les distances exactes'
+                : 'Cliquez sur "Comparer les prix" pour obtenir les meilleurs tarifs'
               }
             </p>
           </CardContent>
