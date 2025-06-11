@@ -6,73 +6,91 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle, User, Building, Euro, Calendar, Download, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-interface AcceptedQuote {
+interface AcceptedQuoteWithDetails {
   id: string;
+  bid_amount: number;
+  status: string;
+  notes: string | null;
+  submitted_at: string;
   supplier: {
     company_name: string;
     contact_name: string;
     email: string;
     phone: string;
   };
-  client_name: string;
-  price: number;
-  accepted_at: string;
-  status: 'pending_client_validation' | 'validated_by_client';
-  opportunity_title: string;
+  opportunity: {
+    title: string;
+    departure_city: string;
+    arrival_city: string;
+  };
 }
 
 const AcceptedQuotesTab = () => {
   const { toast } = useToast();
-  
-  // Données de démonstration
-  const [acceptedQuotes, setAcceptedQuotes] = useState<AcceptedQuote[]>([
-    {
-      id: '1',
-      supplier: {
-        company_name: 'Transport Express',
-        contact_name: 'Jean Dupont',
-        email: 'jean@transport-express.fr',
-        phone: '+33 1 23 45 67 89'
-      },
-      client_name: 'Marie Martin',
-      price: 1850,
-      accepted_at: '2024-01-15T10:30:00',
-      status: 'pending_client_validation',
-      opportunity_title: 'Déménagement Paris → Lyon'
-    },
-    {
-      id: '2',
-      supplier: {
-        company_name: 'Logistics Pro',
-        contact_name: 'Pierre Durand',
-        email: 'pierre@logistics-pro.fr',
-        phone: '+33 1 98 76 54 32'
-      },
-      client_name: 'Sophie Leroy',
-      price: 2200,
-      accepted_at: '2024-01-14T14:20:00',
-      status: 'validated_by_client',
-      opportunity_title: 'Déménagement Marseille → Toulouse'
-    }
-  ]);
 
-  const handleMarkAsValidated = (quoteId: string) => {
-    setAcceptedQuotes(prevQuotes =>
-      prevQuotes.map(quote =>
-        quote.id === quoteId
-          ? { ...quote, status: 'validated_by_client' }
-          : quote
-      )
-    );
-    
-    toast({
-      title: "Devis validé",
-      description: "Le devis a été marqué comme validé par le client.",
-    });
+  const { data: acceptedQuotes, isLoading, refetch } = useQuery({
+    queryKey: ['accepted-quotes'],
+    queryFn: async () => {
+      console.log('📋 Chargement des devis acceptés...');
+      
+      const { data, error } = await supabase
+        .from('quotes')
+        .select(`
+          *,
+          supplier:suppliers(company_name, contact_name, email, phone),
+          opportunity:pricing_opportunities(title, departure_city, arrival_city)
+        `)
+        .eq('status', 'accepted');
+
+      if (error) throw error;
+      
+      // Filtrer les devis avec des prestataires demo ou invalides
+      const filteredData = (data as AcceptedQuoteWithDetails[])?.filter(quote => {
+        const supplierName = quote.supplier?.company_name?.toLowerCase() || '';
+        const isDemo = supplierName.includes('demo') || 
+                      supplierName.includes('test') || 
+                      supplierName.includes('exemple') ||
+                      supplierName.includes('sample');
+        return !isDemo && quote.supplier && quote.opportunity;
+      }) || [];
+
+      console.log('✅ Devis acceptés chargés (sans demo):', filteredData.length);
+      return filteredData;
+    },
+    refetchInterval: 5000,
+  });
+
+  const handleMarkAsValidated = async (quoteId: string) => {
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({ status: 'validated_by_client' })
+        .eq('id', quoteId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Devis validé",
+        description: "Le devis a été marqué comme validé par le client.",
+      });
+
+      refetch();
+    } catch (error) {
+      console.error('❌ Erreur validation devis:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de valider le devis",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDownloadPDF = (quote: AcceptedQuote) => {
+  const handleDownloadPDF = (quote: AcceptedQuoteWithDetails) => {
     toast({
       title: "Téléchargement PDF",
       description: `Le PDF du devis de ${quote.supplier.company_name} va être téléchargé.`,
@@ -81,7 +99,7 @@ const AcceptedQuotesTab = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending_client_validation':
+      case 'accepted':
         return <Badge variant="secondary">En attente validation client</Badge>;
       case 'validated_by_client':
         return <Badge className="bg-green-100 text-green-800">Validé par le client</Badge>;
@@ -89,6 +107,24 @@ const AcceptedQuotesTab = () => {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-6">
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -104,14 +140,13 @@ const AcceptedQuotesTab = () => {
         </CardHeader>
       </Card>
 
-      {acceptedQuotes.length > 0 ? (
+      {acceptedQuotes && acceptedQuotes.length > 0 ? (
         <Card>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Opportunité</TableHead>
-                  <TableHead>Client</TableHead>
                   <TableHead>Fournisseur</TableHead>
                   <TableHead className="text-center">Prix</TableHead>
                   <TableHead className="text-center">Date d'acceptation</TableHead>
@@ -123,13 +158,13 @@ const AcceptedQuotesTab = () => {
                 {acceptedQuotes.map((quote) => (
                   <TableRow key={quote.id}>
                     <TableCell>
-                      <div className="font-medium">{quote.opportunity_title}</div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{quote.client_name}</span>
+                      <div className="space-y-1">
+                        <div className="font-medium">{quote.opportunity?.title || 'Opportunité supprimée'}</div>
+                        {quote.opportunity && (
+                          <div className="text-sm text-muted-foreground">
+                            {quote.opportunity.departure_city} → {quote.opportunity.arrival_city}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     
@@ -137,13 +172,13 @@ const AcceptedQuotesTab = () => {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <Building className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{quote.supplier.company_name}</span>
+                          <span className="font-medium">{quote.supplier?.company_name || 'Fournisseur supprimé'}</span>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {quote.supplier.contact_name}
+                          {quote.supplier?.contact_name}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {quote.supplier.email}
+                          {quote.supplier?.email}
                         </div>
                       </div>
                     </TableCell>
@@ -151,7 +186,7 @@ const AcceptedQuotesTab = () => {
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Euro className="h-4 w-4 text-green-600" />
-                        <span className="font-bold text-lg">{quote.price.toLocaleString()}€</span>
+                        <span className="font-bold text-lg">{quote.bid_amount.toLocaleString()}€</span>
                       </div>
                     </TableCell>
                     
@@ -159,13 +194,7 @@ const AcceptedQuotesTab = () => {
                       <div className="flex items-center justify-center gap-1">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">
-                          {new Date(quote.accepted_at).toLocaleDateString('fr-FR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          {format(new Date(quote.submitted_at), 'dd/MM/yyyy à HH:mm', { locale: fr })}
                         </span>
                       </div>
                     </TableCell>
@@ -185,7 +214,7 @@ const AcceptedQuotesTab = () => {
                           PDF
                         </Button>
                         
-                        {quote.status === 'pending_client_validation' && (
+                        {quote.status === 'accepted' && (
                           <Button
                             size="sm"
                             onClick={() => handleMarkAsValidated(quote.id)}
