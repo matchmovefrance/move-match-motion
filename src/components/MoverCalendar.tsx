@@ -49,14 +49,14 @@ const MoverCalendar = () => {
         .select('*')
         .order('departure_date', { ascending: true });
 
-      // Pour les déménageurs, filtrer par email dans contact_email
-      // Pour les agents et admins, afficher tous les trajets
+      // Appliquer le filtrage selon le rôle
       if (profile?.role === 'demenageur') {
         console.log('👤 Déménageur - filtering by contact_email:', user?.email);
+        // Pour les déménageurs, on filtre par contact_email
         query = query.eq('contact_email', user?.email);
       } else {
         console.log('👨‍💼 Agent/Admin - showing all moves');
-        // Pas de filtre supplémentaire pour les agents et admins
+        // Pour les agents et admins, on affiche tous les trajets (pas de filtre supplémentaire)
       }
 
       const { data, error } = await query;
@@ -66,7 +66,22 @@ const MoverCalendar = () => {
         throw error;
       }
       
-      console.log('✅ Moves fetched:', data?.length || 0, 'moves');
+      console.log('✅ Raw moves data:', data);
+      console.log('✅ Number of moves found:', data?.length || 0);
+      
+      // Log détaillé de chaque trajet pour debug
+      if (data && data.length > 0) {
+        data.forEach((move, index) => {
+          console.log(`Move ${index + 1}:`, {
+            id: move.id,
+            departure_city: move.departure_city,
+            arrival_city: move.arrival_city,
+            contact_email: move.contact_email,
+            departure_date: move.departure_date
+          });
+        });
+      }
+      
       setMoves(data || []);
     } catch (error) {
       console.error('Error fetching moves:', error);
@@ -102,7 +117,6 @@ const MoverCalendar = () => {
         description: "Trajet ajouté avec succès",
       });
 
-      // ... keep existing code (reset form and refetch)
       setNewMove({
         departure_date: '',
         departure_postal_code: '',
@@ -174,6 +188,14 @@ const MoverCalendar = () => {
         </Button>
       </div>
 
+      {/* Informations de debug pour aider à comprendre le problème */}
+      <div className="bg-gray-100 p-4 rounded-lg text-sm">
+        <p><strong>Debug Info:</strong></p>
+        <p>Utilisateur: {user?.email}</p>
+        <p>Rôle: {profile?.role}</p>
+        <p>Nombre de trajets trouvés: {moves.length}</p>
+      </div>
+
       {showAddMove && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -215,7 +237,51 @@ const MoverCalendar = () => {
             />
           </div>
           <div className="flex space-x-2 mt-4">
-            <Button onClick={addMove}>Ajouter</Button>
+            <Button onClick={() => {
+              // Implémentation de addMove simplifiée pour le debug
+              const addMove = async () => {
+                if (!user) return;
+
+                try {
+                  const { error } = await supabase
+                    .from('confirmed_moves')
+                    .insert({
+                      ...newMove,
+                      mover_id: 1,
+                      truck_id: 1,
+                      created_by: user.id,
+                      status_custom: 'en_cours',
+                      contact_email: user.email
+                    });
+
+                  if (error) throw error;
+
+                  toast({
+                    title: "Succès",
+                    description: "Trajet ajouté avec succès",
+                  });
+
+                  setNewMove({
+                    departure_date: '',
+                    departure_postal_code: '',
+                    departure_city: '',
+                    arrival_postal_code: '',
+                    arrival_city: '',
+                    used_volume: 0
+                  });
+                  setShowAddMove(false);
+                  fetchMoves();
+                } catch (error: any) {
+                  console.error('Error adding move:', error);
+                  toast({
+                    title: "Erreur",
+                    description: "Impossible d'ajouter le trajet",
+                    variant: "destructive",
+                  });
+                }
+              };
+              addMove();
+            }}>Ajouter</Button>
             <Button variant="outline" onClick={() => setShowAddMove(false)}>
               Annuler
             </Button>
@@ -231,6 +297,9 @@ const MoverCalendar = () => {
               {profile?.role === 'demenageur' 
                 ? 'Aucun trajet assigné pour le moment' 
                 : 'Aucun trajet disponible'}
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              Vérifiez les logs de la console pour plus d'informations
             </p>
           </div>
         ) : (
