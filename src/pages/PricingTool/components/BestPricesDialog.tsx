@@ -21,10 +21,12 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
   const [searchResults, setSearchResults] = useState<any>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Charger les vraies données des clients depuis la base
+  // Charger les vraies données des clients depuis la base - optimisé
   const { data: realClients } = useQuery({
     queryKey: ['real-clients'],
     queryFn: async () => {
+      console.log('👥 Chargement des clients...');
+      
       const { data, error } = await supabase
         .from('clients')
         .select('*')
@@ -35,15 +37,20 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         return [];
       }
       
-      console.log('📋 Vrais clients chargés:', data);
+      console.log('✅ Clients chargés:', data?.length || 0);
       return data || [];
     },
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    enabled: open, // Charger seulement quand le dialog est ouvert
   });
 
-  // Charger les vraies données des fournisseurs
+  // Charger les vraies données des fournisseurs - optimisé
   const { data: realSuppliers } = useQuery({
-    queryKey: ['real-suppliers'],
+    queryKey: ['real-suppliers-pricing'],
     queryFn: async () => {
+      console.log('🏢 Chargement des fournisseurs pour pricing...');
+      
       const { data, error } = await supabase
         .from('suppliers')
         .select('*')
@@ -54,12 +61,24 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         return [];
       }
       
-      console.log('🏢 Vrais fournisseurs chargés:', data);
+      console.log('✅ Fournisseurs pricing chargés:', data?.length || 0);
       return data || [];
     },
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    enabled: open, // Charger seulement quand le dialog est ouvert
   });
 
   const performPriceSearch = async () => {
+    if (!opportunity) {
+      toast({
+        title: "Erreur",
+        description: "Aucune opportunité sélectionnée",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSearching(true);
     
     try {
@@ -69,13 +88,14 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
       const validation = await validationService.validatePricingTool();
       console.log('✅ Validation terminée:', validation);
 
-      // Utiliser les vraies données au lieu des données démo
+      // Utiliser les vraies données
       const clients = realClients || [];
       const suppliers = realSuppliers || [];
       
-      console.log('📊 Données réelles utilisées:', {
+      console.log('📊 Données utilisées:', {
         clients: clients.length,
-        suppliers: suppliers.length
+        suppliers: suppliers.length,
+        opportunity: opportunity.title
       });
 
       // Générer des devis basés sur les vrais fournisseurs
@@ -85,7 +105,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         const finalPrice = Math.round(basePrice * (1 + variation));
         
         // Sélectionner un client aléatoire parmi les vrais clients
-        const randomClient = clients[Math.floor(Math.random() * clients.length)];
+        const randomClient = clients.length > 0 ? clients[Math.floor(Math.random() * clients.length)] : null;
         
         return {
           id: `quote-${supplier.id}-${index}`,
@@ -99,11 +119,11 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
           response_time: ['2h', '4h', '6h', '24h'][Math.floor(Math.random() * 4)],
           client_name: randomClient ? randomClient.name : 'Client Non Assigné',
           status: 'pending',
-          notes: `Devis généré automatiquement pour ${opportunity.title}`
+          notes: `Devis généré pour ${opportunity.title}`
         };
       });
 
-      console.log('📋 Devis générés avec vraies données:', quotes);
+      console.log('📋 Devis générés:', quotes.length);
 
       const results = {
         total_quotes: quotes.length,
@@ -116,7 +136,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
       
       toast({
         title: "Recherche terminée",
-        description: `${quotes.length} devis trouvés avec les vraies données`,
+        description: `${quotes.length} devis générés avec succès`,
       });
 
     } catch (error) {
@@ -133,9 +153,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
 
   const handleAcceptQuote = async (quote: any) => {
     try {
-      console.log('✅ Acceptation devis:', quote);
+      console.log('✅ Acceptation devis:', quote.id);
       
-      // Marquer le devis comme accepté dans les résultats locaux
       setSearchResults(prev => ({
         ...prev,
         quotes: prev.quotes.map(q => 
@@ -161,9 +180,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
 
   const handleRejectQuote = async (quote: any) => {
     try {
-      console.log('❌ Rejet devis:', quote);
+      console.log('❌ Rejet devis:', quote.id);
       
-      // Retirer le devis rejeté des résultats
       setSearchResults(prev => ({
         ...prev,
         quotes: prev.quotes.filter(q => q.id !== quote.id),
@@ -185,7 +203,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
   };
 
   const handleExportPDF = (quote: any) => {
-    console.log('📄 Export PDF pour:', quote);
+    console.log('📄 Export PDF pour:', quote.id);
     toast({
       title: "PDF en cours de génération",
       description: `Téléchargement du devis de ${quote.supplier.company_name}`,
@@ -198,10 +216,10 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TrendingDown className="h-5 w-5 text-blue-600" />
-            Recherche des meilleurs prix - DONNÉES RÉELLES
+            Recherche des meilleurs prix - Pricing Tool
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Comparaison automatique des tarifs pour: {opportunity.title}
+            Comparaison automatique des tarifs pour: {opportunity?.title || 'Opportunité non sélectionnée'}
           </p>
         </DialogHeader>
 
@@ -212,14 +230,14 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                 <AlertCircle className="h-12 w-12 text-blue-500 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Prêt à rechercher les meilleurs prix</h3>
                 <p className="text-muted-foreground mb-4">
-                  Utilisation des vraies données: {realClients?.length || 0} clients et {realSuppliers?.length || 0} fournisseurs
+                  Données disponibles: {realClients?.length || 0} clients et {realSuppliers?.length || 0} fournisseurs
                 </p>
               </div>
               
               <Button
                 onClick={performPriceSearch}
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={!realSuppliers?.length}
+                disabled={!realSuppliers?.length || !opportunity}
               >
                 {!realSuppliers?.length ? 'Aucun fournisseur disponible' : 'LANCER LA RECHERCHE'}
               </Button>
@@ -230,7 +248,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
               <h3 className="text-lg font-semibold mb-2">Recherche en cours...</h3>
-              <p className="text-muted-foreground">Analyse des données réelles et génération des devis</p>
+              <p className="text-muted-foreground">Génération des devis avec les données réelles</p>
             </div>
           )}
 
@@ -256,9 +274,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-5 w-5 text-purple-600" />
-                    <span className="font-semibold text-purple-800">Source</span>
+                    <span className="font-semibold text-purple-800">Statut</span>
                   </div>
-                  <Badge variant="outline" className="mt-1">Données Réelles</Badge>
+                  <Badge variant="outline" className="mt-1">Pricing Tool Actif</Badge>
                 </div>
               </div>
 

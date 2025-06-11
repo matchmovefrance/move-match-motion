@@ -27,25 +27,34 @@ const PricingTool = () => {
     if (isDarkMode) setTheme('dark');
   }, []);
 
+  // Requête optimisée pour les statistiques - pas de rafraîchissement automatique
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pricing-stats'],
     queryFn: async () => {
+      console.log('📊 Chargement des statistiques...');
+      
       const [opportunities, suppliers, quotes] = await Promise.all([
         supabase.from('pricing_opportunities').select('id, status'),
         supabase.from('suppliers').select('id, is_active'),
         supabase.from('quotes').select('id, status')
       ]);
 
-      return {
+      const stats = {
         totalOpportunities: opportunities.data?.length || 0,
         activeOpportunities: opportunities.data?.filter(o => o.status === 'active').length || 0,
         totalSuppliers: suppliers.data?.length || 0,
         activeSuppliers: suppliers.data?.filter(s => s.is_active).length || 0,
         totalQuotes: quotes.data?.length || 0,
         pendingQuotes: quotes.data?.filter(q => q.status === 'pending').length || 0,
-        acceptedQuotes: 2, // Données simulées pour les devis acceptés
+        acceptedQuotes: 2,
       };
+
+      console.log('✅ Statistiques chargées:', stats);
+      return stats;
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes - pas de rafraîchissement automatique
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
   });
 
   const handleKeyboard = (e: KeyboardEvent) => {

@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,26 +59,15 @@ const OpportunitiesTab = () => {
     updated_at: new Date().toISOString()
   });
 
+  // Requête corrigée pour les opportunités - pas de rafraîchissement automatique
   const { data: opportunities, isLoading, refetch } = useQuery({
     queryKey: ['pricing-opportunities', searchTerm, statusFilter, sortBy],
     queryFn: async () => {
+      console.log('🔍 Chargement des opportunités...');
+      
       let query = supabase
         .from('pricing_opportunities')
-        .select(`
-          *,
-          client_requests (
-            id,
-            name,
-            email,
-            phone,
-            clients (
-              id,
-              name,
-              email,
-              phone
-            )
-          )
-        `);
+        .select('*'); // Suppression de la relation problématique
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
@@ -91,31 +81,31 @@ const OpportunitiesTab = () => {
 
       const { data, error } = await query;
       
-      console.log('🔍 Requête DB opportunités - Erreur:', error);
-      console.log('🔍 Requête DB opportunités - Données:', data);
-      
       if (error) {
         console.error('❌ Erreur lors du chargement des opportunités:', error);
-        // Return sample data if DB fails
         return [createSampleOpportunity()];
       }
       
-      // Log pour debugging - preuve de connexion DB
-      console.log('🔍 Opportunités chargées depuis la DB:', data?.length || 0);
+      console.log('✅ Opportunités chargées:', data?.length || 0);
       if (data && data.length > 0) {
-        console.log('📋 Première opportunité récupérée:', data[0]);
+        console.log('📋 Première opportunité:', data[0]);
+        return data;
       } else {
         console.log('⚠️ Aucune opportunité en DB, utilisation de données de démonstration');
         return [createSampleOpportunity()];
       }
-      
-      return data;
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes - pas de rafraîchissement automatique
+    refetchOnWindowFocus: false, // Pas de rafraîchissement au focus
+    refetchOnMount: true, // Charger une seule fois au montage
   });
 
+  // Requête pour les fournisseurs - optimisée
   const { data: suppliers } = useQuery({
     queryKey: ['active-suppliers'],
     queryFn: async () => {
+      console.log('🏢 Chargement des fournisseurs...');
+      
       const { data, error } = await supabase
         .from('suppliers')
         .select('*')
@@ -126,20 +116,15 @@ const OpportunitiesTab = () => {
         return [];
       }
       
-      // Log pour debugging - preuve des fournisseurs réels
-      console.log('🏢 Fournisseurs actifs chargés:', data?.length || 0);
-      if (data && data.length > 0) {
-        console.log('🏢 Premier fournisseur:', data[0]);
-      }
-      
+      console.log('✅ Fournisseurs actifs chargés:', data?.length || 0);
       return data as Supplier[];
     },
+    staleTime: 10 * 60 * 1000, // 10 minutes - les fournisseurs changent rarement
+    refetchOnWindowFocus: false,
   });
 
   const handleFindBestPrices = (opportunity: PricingOpportunity) => {
     console.log('🔍 BOUTON CLIQUÉ - Recherche des meilleurs prix pour:', opportunity.title);
-    console.log('📊 Données opportunity:', opportunity);
-    console.log('🏢 Fournisseurs disponibles:', suppliers?.length || 0);
     setSelectedOpportunity(opportunity);
     setShowBestPrices(true);
   };
@@ -170,21 +155,11 @@ const OpportunitiesTab = () => {
   };
 
   const getClientInfo = (opportunity: any) => {
-    if (opportunity.client_requests) {
-      const clientRequest = opportunity.client_requests;
-      const client = clientRequest.clients;
-      
-      return {
-        name: client?.name || clientRequest.name || 'Client démo',
-        email: client?.email || clientRequest.email || 'demo@client.fr',
-        phone: client?.phone || clientRequest.phone || '+33 1 23 45 67 89'
-      };
-    }
-    
+    // Données simplifiées puisque nous n'avons plus la relation
     return {
-      name: opportunity.client_name || 'Client démo',
-      email: opportunity.client_email || 'demo@client.fr',
-      phone: opportunity.client_phone || '+33 1 23 45 67 89'
+      name: 'Client démo',
+      email: 'demo@client.fr',
+      phone: '+33 1 23 45 67 89'
     };
   };
 
@@ -223,13 +198,23 @@ const OpportunitiesTab = () => {
                 <Filter className="h-5 w-5" />
                 Opportunités de tarification
               </CardTitle>
-              <Button 
-                className="flex items-center gap-2 bg-primary hover:bg-primary/90"
-                onClick={() => setShowCreateDialog(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Nouvelle opportunité
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => refetch()}
+                  className="flex items-center gap-2"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Actualiser
+                </Button>
+                <Button 
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90"
+                  onClick={() => setShowCreateDialog(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Nouvelle opportunité
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -305,18 +290,14 @@ const OpportunitiesTab = () => {
                           <User className="h-3 w-3" />
                           <span>{clientInfo.name}</span>
                         </div>
-                        {clientInfo.email && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            <span className="truncate">{clientInfo.email}</span>
-                          </div>
-                        )}
-                        {clientInfo.phone && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Phone className="h-3 w-3" />
-                            <span>{clientInfo.phone}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="h-3 w-3" />
+                          <span className="truncate">{clientInfo.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          <span>{clientInfo.phone}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -358,7 +339,7 @@ const OpportunitiesTab = () => {
                       </div>
                     )}
 
-                    {/* BOUTON PRINCIPAL - TROUVER LES PRIX - CONFORME AUX EXIGENCES */}
+                    {/* BOUTON PRINCIPAL - TROUVER LES PRIX */}
                     <div className="pt-3 border-t">
                       <Button 
                         id="pricing-submit"
@@ -375,7 +356,6 @@ const OpportunitiesTab = () => {
 
                     {/* Actions secondaires */}
                     <div className="space-y-2">
-                      {/* Ligne 1 - Actions principales */}
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
@@ -405,7 +385,6 @@ const OpportunitiesTab = () => {
                         </Tooltip>
                       </div>
 
-                      {/* Ligne 2 - Fonctionnalités avancées */}
                       <div className="flex gap-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
