@@ -51,17 +51,19 @@ const Index = () => {
       case 'management': 
         return (
           <div className="space-y-8">
-            {(profile?.role === 'admin' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr') && (
-              <>
-                <div>
-                  <h2 className="text-2xl font-bold mb-6">Gestion des Utilisateurs</h2>
-                  <UserManagement />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold mb-6">Liens Publics</h2>
-                  <PublicLinkManager />
-                </div>
-              </>
+            {/* Seuls les admins (emails hardcodés) voient la gestion des utilisateurs */}
+            {(user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr') && (
+              <div>
+                <h2 className="text-2xl font-bold mb-6">Gestion des Utilisateurs</h2>
+                <UserManagement />
+              </div>
+            )}
+            {/* Admins et agents voient les liens publics */}
+            {(profile?.role === 'admin' || profile?.role === 'agent' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr') && (
+              <div>
+                <h2 className="text-2xl font-bold mb-6">Liens Publics</h2>
+                <PublicLinkManager />
+              </div>
             )}
           </div>
         );
@@ -70,8 +72,8 @@ const Index = () => {
   };
 
   const getTabs = () => {
-    // Admin users (hardcoded emails + admin role)
-    const isAdmin = profile?.role === 'admin' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr';
+    // Admins complets (emails hardcodés uniquement)
+    const isFullAdmin = user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr';
     
     if (profile?.role === 'demenageur') {
       // Déménageur users only see the calendar
@@ -80,7 +82,7 @@ const Index = () => {
       ];
     }
 
-    // Default tabs for admin and agent users
+    // Tabs de base pour admin et agent
     const baseTabs = [
       { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
       { id: 'clients', label: 'Clients', icon: Users },
@@ -91,12 +93,14 @@ const Index = () => {
       { id: 'map', label: 'Carte', icon: Map },
     ];
 
-    // Add management and admin tabs for admin users
-    if (isAdmin) {
-      baseTabs.push(
-        { id: 'management', label: 'Gestion', icon: Settings },
-        { id: 'admin-actions', label: 'Admin', icon: Shield }
-      );
+    // Les agents et admins voient la gestion (mais contenu différent)
+    if (profile?.role === 'admin' || profile?.role === 'agent') {
+      baseTabs.push({ id: 'management', label: 'Gestion', icon: Settings });
+    }
+
+    // Seuls les admins complets voient les actions admin
+    if (isFullAdmin) {
+      baseTabs.push({ id: 'admin-actions', label: 'Admin', icon: Shield });
     }
 
     return baseTabs;

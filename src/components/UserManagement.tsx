@@ -57,23 +57,24 @@ const UserManagement = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const isAdmin = profile?.role === 'admin' || loggedInUser?.email === 'contact@matchmove.fr';
+  // Seuls les admins complets (emails hardcodés) peuvent gérer les utilisateurs
+  const isFullAdmin = loggedInUser?.email === 'contact@matchmove.fr' || loggedInUser?.email === 'pierre@matchmove.fr';
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isFullAdmin) {
       fetchUsers();
     } else {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isFullAdmin]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       console.log('🔄 Fetching users from database...');
       
-      if (!isAdmin) {
-        console.log('Not admin, skipping fetch');
+      if (!isFullAdmin) {
+        console.log('Not full admin, skipping fetch');
         setLoading(false);
         return;
       }
@@ -150,7 +151,7 @@ const UserManagement = () => {
   };
 
   const addUser = async () => {
-    if (!isAdmin) {
+    if (!isFullAdmin) {
       toast({
         title: "Erreur",
         description: "Accès refusé",
@@ -220,7 +221,7 @@ const UserManagement = () => {
   };
 
   const updateUser = async () => {
-    if (!editingUser || !isAdmin) {
+    if (!editingUser || !isFullAdmin) {
       toast({
         title: "Erreur",
         description: "Accès refusé",
@@ -270,7 +271,7 @@ const UserManagement = () => {
   };
 
   const resetUserPassword = async () => {
-    if (!resetPasswordUser || !isAdmin) {
+    if (!resetPasswordUser || !isFullAdmin) {
       toast({
         title: "Erreur",
         description: "Accès refusé",
@@ -318,7 +319,7 @@ const UserManagement = () => {
   };
 
   const deleteUser = async (userId: string) => {
-    if (!isAdmin) {
+    if (!isFullAdmin) {
       toast({
         title: "Erreur",
         description: "Accès refusé",
@@ -405,7 +406,7 @@ const UserManagement = () => {
           </div>
         </div>
         
-        {isAdmin && (
+        {isFullAdmin && (
           <div className="flex space-x-2">
             <Button
               variant="outline"
@@ -517,7 +518,7 @@ const UserManagement = () => {
           </div>
         </div>
       </div>
-      {isAdmin && (
+      {isFullAdmin && (
         <div className="flex space-x-2">
           <Button
             variant="outline"
@@ -621,13 +622,13 @@ const UserManagement = () => {
     );
   }
 
-  if (!isAdmin) {
+  if (!isFullAdmin) {
     return (
       <div className="flex flex-col items-center justify-center p-8">
         <Shield className="h-16 w-16 text-gray-400 mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">Accès refusé</h3>
         <p className="text-gray-600 text-center">
-          Vous devez être administrateur pour accéder à cette section.
+          Seuls les administrateurs complets peuvent gérer les utilisateurs.
         </p>
       </div>
     );
@@ -783,7 +784,7 @@ const UserManagement = () => {
                   </div>
                 </div>
                 
-                {isAdmin && (
+                {isFullAdmin && (
                   <div className="flex space-x-2">
                     <Button
                       variant="outline"
@@ -894,7 +895,7 @@ const UserManagement = () => {
                   </div>
                 </div>
               </div>
-              {isAdmin && (
+              {isFullAdmin && (
                 <div className="flex space-x-2">
                   <Button
                     variant="outline"
