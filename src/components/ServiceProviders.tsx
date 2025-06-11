@@ -21,6 +21,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import SyncStatusDialog from './SyncStatusDialog';
+import { useQuery } from '@tanstack/react-query';
+import Badge from '@/components/ui/badge';
 
 interface ServiceProvider {
   id: number;
@@ -54,6 +56,56 @@ const ServiceProviders = () => {
     address: '',
     city: '',
     postal_code: ''
+  });
+
+  // Récupérer les prestataires depuis les trajets confirmés
+  const { data: providersFromMoves } = useQuery({
+    queryKey: ['providers-from-confirmed-moves'],
+    queryFn: async () => {
+      console.log('🔍 Chargement des prestataires depuis les trajets confirmés...');
+      
+      const { data: moves, error } = await supabase
+        .from('confirmed_moves')
+        .select(`
+          mover_id,
+          mover_name,
+          company_name,
+          contact_email,
+          contact_phone
+        `)
+        .not('mover_id', 'is', null);
+
+      if (error) {
+        console.error('❌ Erreur lors du chargement des trajets:', error);
+        return [];
+      }
+
+      // Créer un Map pour éviter les doublons par mover_id
+      const uniqueProviders = new Map();
+      
+      moves?.forEach(move => {
+        if (move.mover_id && !uniqueProviders.has(move.mover_id)) {
+          uniqueProviders.set(move.mover_id, {
+            id: `move-${move.mover_id}`, // Préfixe pour éviter les conflits avec les IDs des service_providers
+            name: move.mover_name || 'Nom non défini',
+            company_name: move.company_name || 'Entreprise non définie',
+            email: move.contact_email || '',
+            phone: move.contact_phone || '',
+            address: '',
+            city: '',
+            postal_code: '',
+            coordinates: null,
+            created_at: new Date().toISOString(),
+            created_by: null,
+            source: 'moves' // Marqueur pour identifier la source
+          });
+        }
+      });
+
+      const providers = Array.from(uniqueProviders.values());
+      console.log('✅ Prestataires uniques depuis les trajets:', providers.length);
+      return providers;
+    },
   });
 
   useEffect(() => {
@@ -332,6 +384,12 @@ const ServiceProviders = () => {
     });
   };
 
+  // Combiner les prestataires de la DB avec ceux des trajets
+  const allProviders = [
+    ...(providers || []),
+    ...(providersFromMoves || [])
+  ];
+
   if (loading && !showAddForm && !editingProvider) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -502,7 +560,7 @@ const ServiceProviders = () => {
       </div>
 
       <ListView
-        items={providers}
+        items={allProviders}
         searchFields={['name', 'company_name', 'email', 'city']}
         renderCard={(provider: ServiceProvider) => (
           <motion.div
@@ -512,52 +570,158 @@ const ServiceProviders = () => {
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-800 mb-2">
-                  {provider.company_name}
-                </h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-gray-800">
+                    {provider.company_name}
+                  </h3>
+                  {provider.source === 'moves' && (
+                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                      Trajet
+                    </Badge>
+                  )}
+                </div>
                 
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="flex items-center space-x-2">
                     <Building className="h-4 w-4 text-blue-600" />
                     <span>{provider.name}</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-4 w-4 text-green-600" />
-                    <span>{provider.address}, {provider.postal_code} {provider.city}</span>
+                  {provider.address && (
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="h-4 w-4 text-green-600" />
+                      <span>{provider.address}, {provider.postal_code} {provider.city}</span>
+                    </div>
+                  )}
+                  {provider.email && (
+                    <div className="flex items-center space-x-2">
+                      <Mail className="h-4 w-4 text-purple-600" />
+                      <a 
+                        href={`mailto:${provider.email}`}
+                        className="text-blue-600 hover:underline"
+                        title="Envoyer un email"
+                      >
+                        {provider.email}
+                      </a>
+                    </div>
+                  )}
+                  {provider.phone && (
+                    <div className="flex items-center space-x-2">
+                      <Phone className="h-4 w-4 text-orange-600" />
+                      <a 
+                        href={`tel:${provider.phone}`}
+                        className="text-blue-600 hover:underline"
+                        title="Appeler ce numéro"
+                      >
+                        {provider.phone}
+                      </a>
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-400 mt-3">
+                    {provider.source === 'moves' 
+                      ? 'Depuis les trajets confirmés'
+                      : `Créé le ${new Date(provider.created_at).toLocaleDateString('fr-FR')}`
+                    }
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-purple-600" />
+                </div>
+              </div>
+              
+              {/* Actions uniquement pour les prestataires de la DB */}
+              {provider.source !== 'moves' && (
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingProvider(provider)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
+                          Cette action est irréversible.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteProvider(provider.id)}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Supprimer
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+        renderListItem={(provider: ServiceProvider) => (
+          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-gray-800">{provider.company_name}</h4>
+                    {provider.source === 'moves' && (
+                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                        Trajet
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600">{provider.name}</p>
+                </div>
+                {provider.city && (
+                  <div className="text-sm text-gray-500">
+                    <span>{provider.city}</span>
+                  </div>
+                )}
+                {provider.email && (
+                  <div className="text-sm text-blue-600">
                     <a 
                       href={`mailto:${provider.email}`}
-                      className="text-blue-600 hover:underline"
+                      className="hover:underline"
                       title="Envoyer un email"
                     >
                       {provider.email}
                     </a>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-orange-600" />
+                )}
+                {provider.phone && (
+                  <div className="text-sm text-blue-600">
                     <a 
                       href={`tel:${provider.phone}`}
-                      className="text-blue-600 hover:underline"
+                      className="hover:underline"
                       title="Appeler ce numéro"
                     >
                       {provider.phone}
                     </a>
                   </div>
-                  <div className="text-xs text-gray-400 mt-3">
-                    Créé le {new Date(provider.created_at).toLocaleDateString('fr-FR')}
-                  </div>
-                </div>
+                )}
               </div>
-              
+            </div>
+            {/* Actions uniquement pour les prestataires de la DB */}
+            {provider.source !== 'moves' && (
               <div className="flex space-x-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setEditingProvider(provider)}
                 >
-                  <Edit className="h-4 w-4" />
+                  <Edit className="h-3 w-3" />
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -566,7 +730,7 @@ const ServiceProviders = () => {
                       size="sm"
                       className="text-red-600 hover:text-red-700"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -589,78 +753,7 @@ const ServiceProviders = () => {
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
-            </div>
-          </motion.div>
-        )}
-        renderListItem={(provider: ServiceProvider) => (
-          <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex-1">
-              <div className="flex items-center space-x-4">
-                <div>
-                  <h4 className="font-medium text-gray-800">{provider.company_name}</h4>
-                  <p className="text-sm text-gray-600">{provider.name}</p>
-                </div>
-                <div className="text-sm text-gray-500">
-                  <span>{provider.city}</span>
-                </div>
-                <div className="text-sm text-blue-600">
-                  <a 
-                    href={`mailto:${provider.email}`}
-                    className="hover:underline"
-                    title="Envoyer un email"
-                  >
-                    {provider.email}
-                  </a>
-                </div>
-                <div className="text-sm text-blue-600">
-                  <a 
-                    href={`tel:${provider.phone}`}
-                    className="hover:underline"
-                    title="Appeler ce numéro"
-                  >
-                    {provider.phone}
-                  </a>
-                </div>
-              </div>
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditingProvider(provider)}
-              >
-                <Edit className="h-3 w-3" />
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Supprimer le prestataire</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Êtes-vous sûr de vouloir supprimer {provider.company_name} ? 
-                      Cette action est irréversible.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteProvider(provider.id)}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Supprimer
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
+            )}
           </div>
         )}
         searchPlaceholder="Rechercher par nom, entreprise, email ou ville..."
@@ -679,3 +772,5 @@ const ServiceProviders = () => {
 };
 
 export default ServiceProviders;
+
+}

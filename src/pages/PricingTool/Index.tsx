@@ -88,7 +88,7 @@ const PricingTool = () => {
                   {stats.activeOpportunities}/{stats.totalOpportunities} opportunités
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {stats.activeSuppliers} fournisseurs actifs
+                  {stats.activeSuppliers} prestataires actifs
                 </Badge>
                 <Badge variant="outline" className="text-xs">
                   {stats.pendingQuotes} devis en attente
@@ -128,7 +128,7 @@ const PricingTool = () => {
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-2">Tableau de bord des devis</h2>
           <p className="text-muted-foreground">
-            Générez des devis compétitifs, gérez vos fournisseurs et optimisez votre workflow de tarification.
+            Générez des devis compétitifs, gérez vos prestataires et optimisez votre workflow de tarification.
           </p>
         </div>
 
@@ -145,7 +145,7 @@ const PricingTool = () => {
             </TabsTrigger>
             <TabsTrigger value="suppliers" className="flex items-center gap-2 text-sm">
               <Users2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Fournisseurs</span>
+              <span className="hidden sm:inline">Prestataires</span>
               {stats?.activeSuppliers > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
                   {stats.activeSuppliers}
@@ -210,7 +210,7 @@ const PricingTool = () => {
             </div>
             <div className="flex items-start gap-2">
               <CalendarDays className="mt-0.5 h-4 w-4 text-green-500" />
-              <span className="text-sm">Portail fournisseur sécurisé</span>
+              <span className="text-sm">Portail prestataire sécurisé</span>
             </div>
             <div className="flex items-start gap-2">
               <CalendarDays className="mt-0.5 h-4 w-4 text-green-500" />
