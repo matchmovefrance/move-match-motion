@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Truck, MapPin, Calendar, Volume2, Edit, Trash2, User, Euro, RefreshCw } from 'lucide-react';
@@ -53,7 +52,7 @@ interface Move {
 }
 
 const MoveManagement = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [moves, setMoves] = useState<Move[]>([]);
   const [filteredMoves, setFilteredMoves] = useState<Move[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,13 +72,20 @@ const MoveManagement = () => {
   const fetchMoves = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching moves from database...');
+      console.log('🔄 Fetching moves from database... Role:', profile?.role);
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('confirmed_moves')
         .select('*')
-        .eq('created_by', user?.id)
         .order('created_at', { ascending: false });
+
+      // Les admins et agents voient tout, pas de filtre par created_by
+      // Seuls les utilisateurs non-admin/agent sont filtrés
+      if (profile?.role !== 'admin' && profile?.role !== 'agent') {
+        query = query.eq('created_by', user?.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('❌ Error fetching moves:', error);
@@ -93,6 +99,7 @@ const MoveManagement = () => {
       }));
       
       console.log('✅ Moves fetched from DB:', movesWithCalculatedVolume.length);
+      console.log('🔍 Query type:', profile?.role === 'admin' || profile?.role === 'agent' ? 'ALL moves' : 'Filtered by created_by');
       setMoves(movesWithCalculatedVolume);
     } catch (error) {
       console.error('Error fetching moves:', error);
@@ -405,6 +412,14 @@ const MoveManagement = () => {
             Ajouter un déménagement
           </Button>
         </div>
+      </div>
+
+      {/* Debug info avec informations sur la requête */}
+      <div className="bg-green-50 p-4 rounded-lg text-sm border border-green-200">
+        <p><strong>🔍 Debug MoveManagement:</strong></p>
+        <p>👤 Rôle: {profile?.role}</p>
+        <p>🔍 Type de requête: {profile?.role === 'admin' || profile?.role === 'agent' ? 'TOUS les déménagements' : 'Filtrés par created_by'}</p>
+        <p>📊 Déménagements trouvés: {moves.length}</p>
       </div>
 
       <DateFilter 

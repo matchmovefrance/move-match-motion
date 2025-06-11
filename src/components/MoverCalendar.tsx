@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, MapPin, Truck } from 'lucide-react';
@@ -48,11 +47,18 @@ const MoverCalendar = () => {
       
       setLoading(true);
 
-      // Récupérer TOUS les trajets - les politiques RLS gèrent maintenant les permissions
-      const { data, error } = await supabase
+      let query = supabase
         .from('confirmed_moves')
         .select('*')
         .order('departure_date', { ascending: true });
+
+      // Pour les déménageurs, filtrer par email de contact
+      if (profile?.role === 'demenageur') {
+        query = query.eq('contact_email', user?.email);
+      }
+      // Pour les admins et agents, pas de filtre - ils voient tout
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('❌ Error fetching moves:', error);
@@ -77,7 +83,7 @@ const MoverCalendar = () => {
           });
         });
       } else {
-        console.log('⚠️ No moves found - this could be due to RLS policies or empty table');
+        console.log('⚠️ No moves found for role:', profile?.role);
       }
       
       setMoves(data || []);
@@ -194,7 +200,7 @@ const MoverCalendar = () => {
         <p>📧 Utilisateur: {user?.email}</p>
         <p>👤 Rôle: {profile?.role}</p>
         <p>📊 Nombre de trajets trouvés: {moves.length}</p>
-        <p>🔐 Politiques RLS: Mises à jour - Agent/Admin voient tout, Déménageur voit ses trajets</p>
+        <p>🔐 Requête: {profile?.role === 'demenageur' ? 'Filtrée par email de contact' : 'Tous les trajets'}</p>
         <Button 
           onClick={fetchMoves} 
           variant="outline" 
@@ -264,10 +270,10 @@ const MoverCalendar = () => {
             <p className="text-sm text-gray-400 mt-2">
               {profile?.role === 'demenageur' 
                 ? 'Aucun trajet ne vous est assigné pour le moment'
-                : 'Aucun trajet dans la base de données ou problème de permissions'}
+                : 'Problème de requête ou de permissions RLS - Vérifiez les logs'}
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Consultez les logs de la console et vérifiez les politiques RLS
+              Rôle actuel: {profile?.role} | Base de données: 13 déménagements
             </p>
           </div>
         ) : (
