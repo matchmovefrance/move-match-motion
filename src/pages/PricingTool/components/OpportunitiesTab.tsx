@@ -1,10 +1,11 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail } from 'lucide-react';
+import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail, Clock, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -61,7 +62,6 @@ const OpportunitiesTab = () => {
       if (error) throw error;
       return data;
     },
-    // Removed automatic refresh interval - data will only refresh when user actions trigger it
   });
 
   const { data: suppliers } = useQuery({
@@ -309,8 +309,14 @@ const OpportunitiesTab = () => {
                     >
                       <Edit className="h-3 w-3" />
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" title="Fonctionnalité à venir">
                       <BarChart3 className="h-3 w-3" />
+                    </Button>
+                    <Button variant="outline" size="sm" title="Fonctionnalité à venir">
+                      <Clock className="h-3 w-3" />
+                    </Button>
+                    <Button variant="outline" size="sm" title="Fonctionnalité à venir">
+                      <FileText className="h-3 w-3" />
                     </Button>
                   </div>
                 </CardContent>
