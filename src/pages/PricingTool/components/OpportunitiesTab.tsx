@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Search, Filter, Plus, Edit, MapPin, Calendar, Euro, BarChart3, TrendingUp, User, Phone, Mail, Clock, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -149,237 +150,282 @@ const OpportunitiesTab = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters and Actions */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Opportunités de tarification
-            </CardTitle>
-            <Button 
-              className="flex items-center gap-2"
-              onClick={() => setShowCreateDialog(true)}
-            >
-              <Plus className="h-4 w-4" />
-              Nouvelle opportunité
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Rechercher par titre, ville de départ ou d'arrivée..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="active">Actives</SelectItem>
-                <SelectItem value="draft">Brouillons</SelectItem>
-                <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="closed">Fermées</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Trier par" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="created_at">Date de création</SelectItem>
-                <SelectItem value="desired_date">Date souhaitée</SelectItem>
-                <SelectItem value="priority">Priorité</SelectItem>
-                <SelectItem value="estimated_volume">Volume</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Opportunities Grid */}
-      {opportunities && opportunities.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {opportunities.map((opportunity) => {
-            const clientInfo = getClientInfo(opportunity);
-            
-            return (
-              <Card key={opportunity.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{opportunity.title}</CardTitle>
-                      <CardDescription className="flex items-center gap-4">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {opportunity.departure_city} → {opportunity.arrival_city}
-                        </span>
-                      </CardDescription>
-                    </div>
-                    <Badge className={getStatusColor(opportunity.status)}>
-                      {getStatusLabel(opportunity.status)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Informations client */}
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <h4 className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      Informations client
-                    </h4>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex items-center gap-2 text-blue-800">
-                        <User className="h-3 w-3" />
-                        <span className="font-medium">{clientInfo.name}</span>
-                      </div>
-                      {clientInfo.email && (
-                        <div className="flex items-center gap-2 text-blue-600">
-                          <Mail className="h-3 w-3" />
-                          <span className="truncate">{clientInfo.email}</span>
-                        </div>
-                      )}
-                      {clientInfo.phone && (
-                        <div className="flex items-center gap-2 text-blue-600">
-                          <Phone className="h-3 w-3" />
-                          <span>{clientInfo.phone}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <div className="text-lg font-bold text-blue-600">{opportunity.estimated_volume}</div>
-                      <div className="text-xs text-gray-600">m³ estimés</div>
-                    </div>
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <div className="text-sm font-bold text-green-600 flex items-center justify-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
-                      </div>
-                      <div className="text-xs text-gray-600">Date souhaitée</div>
-                    </div>
-                  </div>
-
-                  {opportunity.budget_range_min && opportunity.budget_range_max && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">Budget client :</span>
-                        <span className="font-medium flex items-center gap-1">
-                          <Euro className="h-3 w-3" />
-                          {opportunity.budget_range_min.toLocaleString()} - {opportunity.budget_range_max.toLocaleString()}€
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {opportunity.special_requirements && (
-                    <div className="bg-yellow-50 rounded-lg p-3">
-                      <h4 className="text-xs font-medium text-yellow-700 uppercase tracking-wide mb-1">
-                        Exigences particulières
-                      </h4>
-                      <p className="text-xs text-yellow-800">{opportunity.special_requirements}</p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      variant="default" 
-                      size="sm" 
-                      className="flex-1 bg-green-600 hover:bg-green-700"
-                      onClick={() => handleFindBestPrices(opportunity)}
-                    >
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                      Trouver les prix
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleEditOpportunity(opportunity)}
-                      title="Modifier l'opportunité"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      title="Analytiques (fonctionnalité à venir)"
-                    >
-                      <BarChart3 className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      title="Planning (fonctionnalité à venir)"
-                    >
-                      <Clock className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      title="Rapports (fonctionnalité à venir)"
-                    >
-                      <FileText className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Filters and Actions */}
         <Card>
-          <CardContent className="text-center py-8">
-            <div className="text-gray-500 mb-4">
-              <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium mb-2">Aucune opportunité trouvée</h3>
-              <p className="text-sm">
-                {searchTerm || statusFilter !== 'all' 
-                  ? 'Aucune opportunité ne correspond à vos critères.'
-                  : 'Commencez par créer votre première opportunité.'}
-              </p>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Opportunités de tarification
+              </CardTitle>
+              <Button 
+                className="flex items-center gap-2"
+                onClick={() => setShowCreateDialog(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Nouvelle opportunité
+              </Button>
             </div>
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Créer une opportunité
-            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Rechercher par titre, ville de départ ou d'arrivée..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les statuts</SelectItem>
+                  <SelectItem value="active">Actives</SelectItem>
+                  <SelectItem value="draft">Brouillons</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="closed">Fermées</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Trier par" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Date de création</SelectItem>
+                  <SelectItem value="desired_date">Date souhaitée</SelectItem>
+                  <SelectItem value="priority">Priorité</SelectItem>
+                  <SelectItem value="estimated_volume">Volume</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Dialogs */}
-      <BestPricesDialog
-        open={showBestPrices}
-        onOpenChange={setShowBestPrices}
-        opportunity={selectedOpportunity}
-        suppliers={suppliers || []}
-      />
+        {/* Opportunities Grid */}
+        {opportunities && opportunities.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {opportunities.map((opportunity) => {
+              const clientInfo = getClientInfo(opportunity);
+              
+              return (
+                <Card key={opportunity.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg">{opportunity.title}</CardTitle>
+                        <CardDescription className="flex items-center gap-4">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {opportunity.departure_city} → {opportunity.arrival_city}
+                          </span>
+                        </CardDescription>
+                      </div>
+                      <Badge className={getStatusColor(opportunity.status)}>
+                        {getStatusLabel(opportunity.status)}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Informations client */}
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        Informations client
+                      </h4>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center gap-2 text-blue-800">
+                          <User className="h-3 w-3" />
+                          <span className="font-medium">{clientInfo.name}</span>
+                        </div>
+                        {clientInfo.email && (
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <Mail className="h-3 w-3" />
+                            <span className="truncate">{clientInfo.email}</span>
+                          </div>
+                        )}
+                        {clientInfo.phone && (
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <Phone className="h-3 w-3" />
+                            <span>{clientInfo.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-      <CreateOpportunityDialog
-        open={showCreateDialog}
-        onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) {
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="text-center p-3 bg-blue-50 rounded-lg">
+                        <div className="text-lg font-bold text-blue-600">{opportunity.estimated_volume}</div>
+                        <div className="text-xs text-gray-600">m³ estimés</div>
+                      </div>
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <div className="text-sm font-bold text-green-600 flex items-center justify-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(opportunity.desired_date), 'dd/MM', { locale: fr })}
+                        </div>
+                        <div className="text-xs text-gray-600">Date souhaitée</div>
+                      </div>
+                    </div>
+
+                    {opportunity.budget_range_min && opportunity.budget_range_max && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Budget client :</span>
+                          <span className="font-medium flex items-center gap-1">
+                            <Euro className="h-3 w-3" />
+                            {opportunity.budget_range_min.toLocaleString()} - {opportunity.budget_range_max.toLocaleString()}€
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {opportunity.special_requirements && (
+                      <div className="bg-yellow-50 rounded-lg p-3">
+                        <h4 className="text-xs font-medium text-yellow-700 uppercase tracking-wide mb-1">
+                          Exigences particulières
+                        </h4>
+                        <p className="text-xs text-yellow-800">{opportunity.special_requirements}</p>
+                      </div>
+                    )}
+
+                    {/* Boutons d'action */}
+                    <div className="flex flex-wrap gap-2">
+                      {/* Bouton principal - Trouver les prix */}
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => handleFindBestPrices(opportunity)}
+                      >
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                        Trouver les prix
+                      </Button>
+                      
+                      {/* Bouton modifier */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditOpportunity(opportunity)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Modifier l'opportunité</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+
+                    {/* Fonctionnalités à venir */}
+                    <div className="flex gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            disabled
+                          >
+                            <BarChart3 className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Analytiques</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Analytiques avancées (à venir)</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            disabled
+                          >
+                            <Clock className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Planning</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Gestion du planning (à venir)</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            disabled
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Rapports</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Rapports détaillés (à venir)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="text-center py-8">
+              <div className="text-gray-500 mb-4">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-medium mb-2">Aucune opportunité trouvée</h3>
+                <p className="text-sm">
+                  {searchTerm || statusFilter !== 'all' 
+                    ? 'Aucune opportunité ne correspond à vos critères.'
+                    : 'Commencez par créer votre première opportunité.'}
+                </p>
+              </div>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Créer une opportunité
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Dialogs */}
+        <BestPricesDialog
+          open={showBestPrices}
+          onOpenChange={setShowBestPrices}
+          opportunity={selectedOpportunity}
+          suppliers={suppliers || []}
+        />
+
+        <CreateOpportunityDialog
+          open={showCreateDialog}
+          onOpenChange={(open) => {
+            setShowCreateDialog(open);
+            if (!open) {
+              setSelectedOpportunity(null);
+            }
+          }}
+          opportunity={selectedOpportunity}
+          onSuccess={() => {
+            refetch();
+            setShowCreateDialog(false);
             setSelectedOpportunity(null);
-          }
-        }}
-        opportunity={selectedOpportunity}
-        onSuccess={() => {
-          refetch();
-          setShowCreateDialog(false);
-          setSelectedOpportunity(null);
-        }}
-      />
-    </div>
+          }}
+        />
+      </div>
+    </TooltipProvider>
   );
 };
 
