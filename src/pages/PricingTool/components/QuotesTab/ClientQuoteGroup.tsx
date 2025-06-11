@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Users, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { QuoteCard } from './QuoteCard';
