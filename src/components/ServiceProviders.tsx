@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Settings, MapPin, Phone, Mail, Edit, Trash2, Building, RefreshCw } from 'lucide-react';
@@ -36,6 +37,7 @@ interface ServiceProvider {
   coordinates: string | null;
   created_at: string;
   created_by: string | null;
+  source?: string;
 }
 
 const ServiceProviders = () => {
@@ -86,7 +88,7 @@ const ServiceProviders = () => {
       moves?.forEach(move => {
         if (move.mover_id && !uniqueProviders.has(move.mover_id)) {
           uniqueProviders.set(move.mover_id, {
-            id: `move-${move.mover_id}`, // Préfixe pour éviter les conflits avec les IDs des service_providers
+            id: `move-${move.mover_id}`,
             name: move.mover_name || 'Nom non défini',
             company_name: move.company_name || 'Entreprise non définie',
             email: move.contact_email || '',
@@ -97,7 +99,7 @@ const ServiceProviders = () => {
             coordinates: null,
             created_at: new Date().toISOString(),
             created_by: null,
-            source: 'moves' // Marqueur pour identifier la source
+            source: 'moves'
           });
         }
       });
@@ -772,5 +774,3 @@ const ServiceProviders = () => {
 };
 
 export default ServiceProviders;
-
-}
