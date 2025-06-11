@@ -9,6 +9,47 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string
+          table_name: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id: string
+          table_name: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string
+          table_name?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_requests: {
         Row: {
           access_conditions: string | null
@@ -523,6 +564,156 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_opportunities: {
+        Row: {
+          ai_price_suggestion: Json | null
+          arrival_address: string
+          arrival_city: string
+          arrival_country: string | null
+          arrival_postal_code: string
+          budget_range_max: number | null
+          budget_range_min: number | null
+          client_request_id: number | null
+          created_at: string | null
+          created_by: string
+          date_range_end: string | null
+          date_range_start: string | null
+          departure_address: string
+          departure_city: string
+          departure_country: string | null
+          departure_postal_code: string
+          description: string | null
+          desired_date: string
+          estimated_volume: number
+          flexible_dates: boolean | null
+          id: string
+          priority: number | null
+          special_requirements: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          ai_price_suggestion?: Json | null
+          arrival_address: string
+          arrival_city: string
+          arrival_country?: string | null
+          arrival_postal_code: string
+          budget_range_max?: number | null
+          budget_range_min?: number | null
+          client_request_id?: number | null
+          created_at?: string | null
+          created_by: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          departure_address: string
+          departure_city: string
+          departure_country?: string | null
+          departure_postal_code: string
+          description?: string | null
+          desired_date: string
+          estimated_volume: number
+          flexible_dates?: boolean | null
+          id?: string
+          priority?: number | null
+          special_requirements?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          ai_price_suggestion?: Json | null
+          arrival_address?: string
+          arrival_city?: string
+          arrival_country?: string | null
+          arrival_postal_code?: string
+          budget_range_max?: number | null
+          budget_range_min?: number | null
+          client_request_id?: number | null
+          created_at?: string | null
+          created_by?: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          departure_address?: string
+          departure_city?: string
+          departure_country?: string | null
+          departure_postal_code?: string
+          description?: string | null
+          desired_date?: string
+          estimated_volume?: number
+          flexible_dates?: boolean | null
+          id?: string
+          priority?: number | null
+          special_requirements?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_opportunities_client_request_id_fkey"
+            columns: ["client_request_id"]
+            isOneToOne: false
+            referencedRelation: "client_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pricing_opportunities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_rules: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          id: string
+          is_active: boolean | null
+          rule_config: Json
+          rule_name: string
+          supplier_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          id?: string
+          is_active?: boolean | null
+          rule_config?: Json
+          rule_name: string
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          is_active?: boolean | null
+          rule_config?: Json
+          rule_name?: string
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pricing_rules_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -588,6 +779,76 @@ export type Database = {
           },
         ]
       }
+      quotes: {
+        Row: {
+          bid_amount: number
+          cost_breakdown: Json | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          notes: string | null
+          opportunity_id: string
+          response_time_hours: number | null
+          status: string | null
+          submitted_at: string | null
+          supplier_id: string
+          updated_at: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          bid_amount: number
+          cost_breakdown?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          opportunity_id: string
+          response_time_hours?: number | null
+          status?: string | null
+          submitted_at?: string | null
+          supplier_id: string
+          updated_at?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          bid_amount?: number
+          cost_breakdown?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          opportunity_id?: string
+          response_time_hours?: number | null
+          status?: string | null
+          submitted_at?: string | null
+          supplier_id?: string
+          updated_at?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotes_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_providers: {
         Row: {
           address: string
@@ -629,6 +890,129 @@ export type Database = {
           postal_code?: string
         }
         Relationships: []
+      }
+      supplier_links: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          expires_at: string
+          id: string
+          is_active: boolean | null
+          link_token: string
+          password: string
+          supplier_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          expires_at?: string
+          id?: string
+          is_active?: boolean | null
+          link_token: string
+          password: string
+          supplier_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          expires_at?: string
+          id?: string
+          is_active?: boolean | null
+          link_token?: string
+          password?: string
+          supplier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_links_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string
+          city: string
+          company_name: string
+          contact_name: string
+          country: string | null
+          created_at: string | null
+          created_by: string
+          email: string
+          id: string
+          is_active: boolean | null
+          performance_metrics: Json | null
+          phone: string
+          postal_code: string
+          pricing_model: Json | null
+          priority_level: number | null
+          service_provider_id: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          address: string
+          city: string
+          company_name: string
+          contact_name: string
+          country?: string | null
+          created_at?: string | null
+          created_by: string
+          email: string
+          id?: string
+          is_active?: boolean | null
+          performance_metrics?: Json | null
+          phone: string
+          postal_code: string
+          pricing_model?: Json | null
+          priority_level?: number | null
+          service_provider_id?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string
+          city?: string
+          company_name?: string
+          contact_name?: string
+          country?: string | null
+          created_at?: string | null
+          created_by?: string
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          performance_metrics?: Json | null
+          phone?: string
+          postal_code?: string
+          pricing_model?: Json | null
+          priority_level?: number | null
+          service_provider_id?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suppliers_service_provider_id_fkey"
+            columns: ["service_provider_id"]
+            isOneToOne: false
+            referencedRelation: "service_providers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       trucks: {
         Row: {
