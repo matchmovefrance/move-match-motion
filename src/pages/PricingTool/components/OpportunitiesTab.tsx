@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -306,16 +305,29 @@ const OpportunitiesTab = () => {
                       variant="outline" 
                       size="sm"
                       onClick={() => handleEditOpportunity(opportunity)}
+                      title="Modifier l'opportunité"
                     >
                       <Edit className="h-3 w-3" />
                     </Button>
-                    <Button variant="outline" size="sm" title="Fonctionnalité à venir">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      title="Analytiques (fonctionnalité à venir)"
+                    >
                       <BarChart3 className="h-3 w-3" />
                     </Button>
-                    <Button variant="outline" size="sm" title="Fonctionnalité à venir">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      title="Planning (fonctionnalité à venir)"
+                    >
                       <Clock className="h-3 w-3" />
                     </Button>
-                    <Button variant="outline" size="sm" title="Fonctionnalité à venir">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      title="Rapports (fonctionnalité à venir)"
+                    >
                       <FileText className="h-3 w-3" />
                     </Button>
                   </div>
