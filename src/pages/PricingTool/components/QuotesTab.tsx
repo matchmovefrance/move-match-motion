@@ -40,7 +40,7 @@ const QuotesTab = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Charger les demandes clients actives
-  const { data: activeClients } = useQuery({
+  const { data: activeClients, refetch: refetchClients } = useQuery({
     queryKey: ['active-clients'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -56,7 +56,7 @@ const QuotesTab = () => {
   });
 
   // Charger les prestataires depuis les trajets confirmés
-  const { data: suppliers } = useQuery({
+  const { data: suppliers, refetch: refetchSuppliers } = useQuery({
     queryKey: ['suppliers-for-quotes'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -83,7 +83,7 @@ const QuotesTab = () => {
               volumeRate: 8 + Math.random() * 6,
               distanceRate: 0.8 + Math.random() * 0.4,
               minimumPrice: 180 + Math.random() * 40,
-              matchMoveMargin: 35 + Math.random() * 15,
+              matchMoveMargin: 35 + Math.random() * 15, // Marge variable par prestataire
             }
           });
         }
@@ -103,20 +103,24 @@ const QuotesTab = () => {
     }
   }, [activeClients, suppliers]);
 
+  // 🎯 CORRECTION: Utiliser la MÊME logique que dans OpportunitiesTab
   const calculatePriceForClient = (client: any, supplier: any) => {
     const pricingModel = supplier.pricing_model as PricingModel;
     
-    // Prix de base du prestataire
-    let supplierPrice = pricingModel.basePrice || 150;
-    supplierPrice += client.estimated_volume * (pricingModel.volumeRate || 10);
-    supplierPrice += 50 * (pricingModel.distanceRate || 1); // Distance estimée
-    supplierPrice = Math.max(supplierPrice, pricingModel.minimumPrice || 200);
+    // Calculer le prix de base du prestataire (SANS marge MatchMove)
+    let basePrice = pricingModel.basePrice || 150;
+    basePrice += (client.estimated_volume || 0) * (pricingModel.volumeRate || 10);
+    basePrice += 50 * (pricingModel.distanceRate || 1); // Distance estimée
+    basePrice = Math.max(basePrice, pricingModel.minimumPrice || 200);
     
-    // ⚠️ IMPORTANT: Appliquer la marge MatchMove (comme dans OpportunitiesTab)
-    const matchMoveMargin = 40; // Marge fixe de 40% comme dans OpportunitiesTab
-    const finalPrice = supplierPrice * (1 + matchMoveMargin / 100);
+    // 🎯 IMPORTANT: Appliquer la marge MatchMove spécifique du prestataire
+    const matchMoveMargin = pricingModel.matchMoveMargin || 40; // Marge du prestataire
+    const finalPrice = basePrice * (1 + matchMoveMargin / 100);
     
-    console.log(`💰 Calcul pour ${client.name}: Base ${supplierPrice}€ + Marge ${matchMoveMargin}% = ${Math.round(finalPrice)}€`);
+    console.log(`💰 Calcul ${supplier.company_name} pour ${client.name || `Client #${client.id}`}:`);
+    console.log(`   📊 Prix base: ${basePrice}€`);
+    console.log(`   💎 Marge MatchMove: ${matchMoveMargin}%`);
+    console.log(`   🎯 Prix final: ${Math.round(finalPrice)}€`);
     
     return Math.round(finalPrice);
   };
@@ -125,9 +129,15 @@ const QuotesTab = () => {
     if (!activeClients?.length || !suppliers?.length) return;
     
     setIsGenerating(true);
-    console.log('🔄 Génération automatique des devis...');
+    console.log('🔄 Génération/Régénération des devis...');
+    
+    // 🎯 CORRECTION: Vider d'abord la liste pour une vraie régénération
+    setGeneratedQuotes([]);
     
     try {
+      // 🎯 CORRECTION: Refetch les données pour avoir les dernières variables
+      await Promise.all([refetchClients(), refetchSuppliers()]);
+      
       const allQuotes: GeneratedQuote[] = [];
       
       // Pour chaque client, calculer les prix avec tous les prestataires
@@ -138,7 +148,7 @@ const QuotesTab = () => {
           const price = calculatePriceForClient(client, supplier);
           
           clientQuotes.push({
-            id: `quote-${client.id}-${supplier.id}`,
+            id: `quote-${client.id}-${supplier.id}-${Date.now()}`, // Timestamp pour éviter les doublons
             client_id: client.id,
             client_name: client.name || `Client #${client.id}`,
             client_email: client.email || '',
@@ -166,11 +176,11 @@ const QuotesTab = () => {
       });
       
       setGeneratedQuotes(allQuotes);
-      console.log('✅ Devis générés:', allQuotes.length);
+      console.log('✅ Devis générés/régénérés:', allQuotes.length);
       
       toast({
-        title: "Devis générés",
-        description: `${allQuotes.length} devis calculés automatiquement`,
+        title: "Devis régénérés",
+        description: `${allQuotes.length} devis recalculés avec les dernières variables de prix`,
       });
       
     } catch (error) {
@@ -290,7 +300,7 @@ const QuotesTab = () => {
           </CardTitle>
           <CardDescription>
             Génération automatique des 3 meilleurs devis pour chaque client actif avec tous les prestataires disponibles.
-            <strong className="text-orange-600 ml-2">✨ Marge MatchMove de 40% incluse dans tous les prix</strong>
+            <strong className="text-orange-600 ml-2">✨ Marge MatchMove variable par prestataire (35-50%)</strong>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -324,7 +334,7 @@ const QuotesTab = () => {
               ) : (
                 <>
                   <TrendingUp className="h-4 w-4 mr-2" />
-                  Regénérer tous les devis
+                  {generatedQuotes.length > 0 ? 'Regénérer tous les devis' : 'Générer tous les devis'}
                 </>
               )}
             </Button>
@@ -417,7 +427,7 @@ const QuotesTab = () => {
                 ? 'Aucun client actif trouvé'
                 : !suppliers?.length 
                 ? 'Aucun prestataire disponible'
-                : 'Cliquez sur "Regénérer tous les devis" pour commencer'
+                : 'Cliquez sur "Générer tous les devis" pour commencer'
               }
             </p>
           </CardContent>
