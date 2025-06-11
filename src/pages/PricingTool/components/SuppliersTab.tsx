@@ -39,7 +39,7 @@ type SupplierFromMoves = {
   created_at: string;
   created_by: string;
   updated_at: string;
-  service_provider_id?: number | null;
+  service_provider_id: number | null;
 };
 
 const SuppliersTab = () => {
