@@ -39,7 +39,14 @@ const PublicLinkManager = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setLinks(data || []);
+      
+      // Type assertion pour s'assurer que link_type est du bon type
+      const typedLinks = (data || []).map(link => ({
+        ...link,
+        link_type: link.link_type as 'client' | 'mover'
+      }));
+      
+      setLinks(typedLinks);
     } catch (error) {
       console.error('Error fetching links:', error);
     } finally {

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -36,12 +35,11 @@ export const useMatchActions = () => {
         }
       }
 
-      // Insérer l'action d'acceptation
+      // Insérer l'action d'acceptation (sans client_id qui n'existe pas dans match_actions)
       const { error: actionError } = await supabase
         .from('match_actions')
         .insert({
-          client_id: matchData.client.id,
-          move_id: matchData.move.id,
+          match_id: matchData.id || 0, // Utiliser l'ID du match
           action_type: 'accepted',
           user_id: (await supabase.auth.getUser()).data.user?.id
         });
@@ -118,12 +116,11 @@ export const useMatchActions = () => {
         console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
       }
 
-      // Insérer l'action de rejet
+      // Insérer l'action de rejet (sans client_id qui n'existe pas dans match_actions)
       const { error: actionError } = await supabase
         .from('match_actions')
         .insert({
-          client_id: matchData.client.id,
-          move_id: matchData.move.id,
+          match_id: matchData.id || 0, // Utiliser l'ID du match
           action_type: 'rejected',
           user_id: (await supabase.auth.getUser()).data.user?.id
         });
