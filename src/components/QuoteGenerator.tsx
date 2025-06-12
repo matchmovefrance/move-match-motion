@@ -1,3 +1,4 @@
+
 import jsPDF from 'jspdf';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,7 +41,7 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
   const generatePDF = () => {
-    console.log('🎯 Génération PDF - Adresses complètes');
+    console.log('🎯 Génération PDF - Adresses exactes et organisation');
     
     if (!client.quote_amount || !client.name) {
       console.error('❌ Données essentielles manquantes');
@@ -127,6 +128,78 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     yPos += 15;
     
+    // === ADRESSES COMPLÈTES ===
+    doc.setTextColor(37, 99, 235);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ADRESSES DE DÉMÉNAGEMENT', 20, yPos);
+    
+    yPos += 15;
+    
+    // Adresse de départ
+    doc.setFillColor(220, 252, 231);
+    doc.rect(15, yPos - 5, 180, 25, 'F');
+    doc.setDrawColor(34, 197, 94);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 5, 180, 25);
+    
+    doc.setTextColor(22, 163, 74);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DÉPART:', 20, yPos + 5);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    // Construire l'adresse de départ complète
+    let departureLines = [];
+    if (client.departure_address) {
+      departureLines.push(client.departure_address);
+    }
+    departureLines.push(`${client.departure_postal_code} ${client.departure_city}`);
+    if (client.departure_country && client.departure_country !== 'France') {
+      departureLines.push(client.departure_country);
+    }
+    
+    departureLines.forEach((line, index) => {
+      doc.text(line, 20, yPos + 12 + (index * 5));
+    });
+    
+    yPos += 35;
+    
+    // Adresse d'arrivée
+    doc.setFillColor(254, 226, 226);
+    doc.rect(15, yPos - 5, 180, 25, 'F');
+    doc.setDrawColor(239, 68, 68);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 5, 180, 25);
+    
+    doc.setTextColor(220, 38, 38);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ARRIVÉE:', 20, yPos + 5);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    // Construire l'adresse d'arrivée complète
+    let arrivalLines = [];
+    if (client.arrival_address) {
+      arrivalLines.push(client.arrival_address);
+    }
+    arrivalLines.push(`${client.arrival_postal_code} ${client.arrival_city}`);
+    if (client.arrival_country && client.arrival_country !== 'France') {
+      arrivalLines.push(client.arrival_country);
+    }
+    
+    arrivalLines.forEach((line, index) => {
+      doc.text(line, 20, yPos + 12 + (index * 5));
+    });
+    
+    yPos += 40;
+    
     // === DÉTAILS DU DÉMÉNAGEMENT ===
     doc.setTextColor(37, 99, 235);
     doc.setFontSize(14);
@@ -135,26 +208,16 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     yPos += 15;
     
-    // Construire les adresses complètes
-    const departureFullAddress = client.departure_address 
-      ? `${client.departure_address}, ${client.departure_postal_code} ${client.departure_city}`
-      : `${client.departure_postal_code} ${client.departure_city}`;
-    
-    const arrivalFullAddress = client.arrival_address 
-      ? `${client.arrival_address}, ${client.arrival_postal_code} ${client.arrival_city}`
-      : `${client.arrival_postal_code} ${client.arrival_city}`;
-    
-    const tableData = [
-      ['Départ', departureFullAddress],
-      ['Arrivée', arrivalFullAddress],
-      ['Date souhaitée', new Date(client.desired_date).toLocaleDateString('fr-FR')],
-      ['Volume estimé', client.estimated_volume ? `${client.estimated_volume} m³` : 'Non spécifié']
+    // Tableau des détails
+    const details = [
+      ['Date souhaitée:', new Date(client.desired_date).toLocaleDateString('fr-FR')],
+      ['Volume estimé:', client.estimated_volume ? `${client.estimated_volume} m³` : 'Non spécifié']
     ];
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     
-    tableData.forEach((row, index) => {
+    details.forEach((detail, index) => {
       const rowY = yPos + (index * 8);
       
       if (index % 2 === 0) {
@@ -163,18 +226,14 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
       }
       
       doc.setFont('helvetica', 'bold');
-      doc.text(row[0] + ':', 25, rowY + 2);
+      doc.text(detail[0], 25, rowY + 2);
       doc.setFont('helvetica', 'normal');
-      
-      // Gérer les adresses longues avec retour à la ligne si nécessaire
-      const maxWidth = 120;
-      const textLines = doc.splitTextToSize(row[1], maxWidth);
-      doc.text(textLines, 80, rowY + 2);
+      doc.text(detail[1], 80, rowY + 2);
     });
     
-    yPos += 50;
+    yPos += 30;
     
-    // === MONTANT TOTAL - SECTION SÉPARÉE ===
+    // === MONTANT TOTAL ===
     doc.setFillColor(34, 197, 94);
     doc.rect(15, yPos, 180, 30, 'F');
     
@@ -199,54 +258,46 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     // Encadré pour les coordonnées bancaires
     doc.setFillColor(248, 250, 252);
-    doc.rect(15, yPos - 5, 180, 45, 'F');
+    doc.rect(15, yPos - 5, 180, 35, 'F');
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
-    doc.rect(15, yPos - 5, 180, 45);
+    doc.rect(15, yPos - 5, 180, 35);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     
     if (supplier?.bank_details) {
       const bankData = [
-        ['Titulaire du compte:', supplier.bank_details.account_holder],
+        ['Titulaire:', supplier.bank_details.account_holder],
         ['IBAN:', supplier.bank_details.iban],
         ['BIC:', supplier.bank_details.bic],
         ['Banque:', supplier.bank_details.bank_name]
       ];
       
       bankData.forEach((row, index) => {
-        const rowY = yPos + (index * 8);
+        const rowY = yPos + (index * 6);
         doc.setFont('helvetica', 'bold');
         doc.text(row[0], 20, rowY);
         doc.setFont('helvetica', 'normal');
-        doc.text(row[1], 85, rowY);
+        doc.text(row[1], 60, rowY);
       });
     } else {
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(150, 150, 150);
-      doc.text('RIB: (non renseigné)', 20, yPos + 15);
-      doc.text('Les coordonnées bancaires seront communiquées', 20, yPos + 15);
-      doc.text('lors de la confirmation du devis.', 20, yPos + 23);
+      doc.text('RIB: (non renseigné)', 20, yPos + 5);
+      doc.text('Les coordonnées bancaires seront communiquées', 20, yPos + 12);
+      doc.text('lors de la confirmation du devis.', 20, yPos + 18);
     }
     
-    yPos += 60;
+    yPos += 50;
     
-    // === INSTRUCTIONS SIMPLES ===
+    // === VALIDITÉ ===
     doc.setTextColor(60, 60, 60);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    
-    const instructions = [
-      '• Devis valable 30 jours à compter de la date d\'émission',
-      '• Paiement par virement bancaire uniquement',
-      '• Confirmation écrite requise pour validation du devis',
-      '• Merci d\'indiquer le numéro de devis lors du paiement'
-    ];
-    
-    instructions.forEach((instruction, index) => {
-      doc.text(instruction, 20, yPos + (index * 6));
-    });
+    doc.text('• Devis valable 30 jours à compter de la date d\'émission', 20, yPos);
+    doc.text('• Paiement par virement bancaire uniquement', 20, yPos + 6);
+    doc.text('• Confirmation écrite requise pour validation du devis', 20, yPos + 12);
     
     // === PIED DE PAGE ===
     doc.setTextColor(150, 150, 150);
@@ -258,7 +309,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     const fileName = `devis_${supplierInfo.company_name.replace(/\s+/g, '_')}_${client.name?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
     
-    console.log('✅ PDF généré avec adresses complètes:', fileName);
+    console.log('✅ PDF généré avec adresses exactes:', fileName);
   };
 
   const hasRequiredClientData = !!(client.quote_amount && client.name);
