@@ -41,7 +41,7 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
   const generatePDF = () => {
-    console.log('🎯 Génération PDF - Adresses exactes et organisation');
+    console.log('🎯 Génération PDF - Design professionnel A4');
     
     if (!client.quote_amount || !client.name) {
       console.error('❌ Données essentielles manquantes');
@@ -56,260 +56,271 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     };
 
     const doc = new jsPDF();
-    let yPos = 30;
+    const pageWidth = 210;
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPos = 25;
     
-    // === EN-TÊTE PRINCIPAL ===
-    doc.setFillColor(37, 99, 235);
-    doc.rect(0, 0, 210, 50, 'F');
+    // === EN-TÊTE PROFESSIONNEL ===
+    // Bandeau bleu
+    doc.setFillColor(30, 58, 138);
+    doc.rect(0, 0, pageWidth, 35, 'F');
     
+    // Titre principal
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(28);
+    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text('DEVIS DE DÉMÉNAGEMENT', 20, 25);
+    doc.text('DEVIS DE DÉMÉNAGEMENT', margin, 18);
     
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    const quoteNumber = `DEV-${Date.now().toString().slice(-6)}`;
-    doc.text(`N° ${quoteNumber}`, 20, 40);
-    doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, 120, 40);
-    
-    yPos = 70;
-    
-    // === SECTION PRESTATAIRE ===
-    doc.setFillColor(248, 250, 252);
-    doc.rect(15, yPos - 5, 180, 40, 'F');
-    doc.setDrawColor(37, 99, 235);
-    doc.setLineWidth(0.5);
-    doc.rect(15, yPos - 5, 180, 40);
-    
-    // Nom du prestataire en titre
-    doc.setTextColor(37, 99, 235);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(supplierInfo.company_name, 20, yPos + 10);
-    
-    // Coordonnées du prestataire
+    // Numéro et date
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(60, 60, 60);
-    doc.text(`Contact: ${supplierInfo.contact_name}`, 20, yPos + 20);
-    doc.text(`Email: ${supplierInfo.email}`, 20, yPos + 28);
-    doc.text(`Téléphone: ${supplierInfo.phone}`, 20, yPos + 36);
+    const quoteNumber = `DEV-${Date.now().toString().slice(-6)}`;
+    doc.text(`N° ${quoteNumber}`, margin, 28);
+    doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - 50, 28);
     
-    yPos += 55;
+    yPos = 50;
     
-    // === SECTION CLIENT ===
-    doc.setTextColor(37, 99, 235);
+    // === INFORMATIONS ENTREPRISE ===
+    doc.setFillColor(248, 250, 252);
+    doc.rect(margin, yPos, contentWidth, 35, 'F');
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, yPos, contentWidth, 35);
+    
+    doc.setTextColor(30, 58, 138);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(supplierInfo.company_name, margin + 5, yPos + 12);
+    
+    doc.setTextColor(51, 65, 85);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Contact: ${supplierInfo.contact_name}`, margin + 5, yPos + 20);
+    doc.text(`Email: ${supplierInfo.email}`, margin + 5, yPos + 26);
+    doc.text(`Téléphone: ${supplierInfo.phone}`, margin + 5, yPos + 32);
+    
+    yPos += 45;
+    
+    // === INFORMATIONS CLIENT ===
+    doc.setTextColor(30, 58, 138);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('CLIENT', 20, yPos);
-    
-    yPos += 10;
-    
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text(client.name, 20, yPos);
+    doc.text('INFORMATIONS CLIENT', margin, yPos);
     
     yPos += 8;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(60, 60, 60);
-    
-    if (client.email) {
-      doc.text(`Email: ${client.email}`, 20, yPos);
-      yPos += 6;
-    }
-    if (client.phone) {
-      doc.text(`Téléphone: ${client.phone}`, 20, yPos);
-      yPos += 6;
-    }
-    
-    yPos += 15;
-    
-    // === ADRESSES COMPLÈTES ===
-    doc.setTextColor(37, 99, 235);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ADRESSES DE DÉMÉNAGEMENT', 20, yPos);
-    
-    yPos += 15;
-    
-    // Adresse de départ
-    doc.setFillColor(220, 252, 231);
-    doc.rect(15, yPos - 5, 180, 25, 'F');
-    doc.setDrawColor(34, 197, 94);
-    doc.setLineWidth(0.3);
-    doc.rect(15, yPos - 5, 180, 25);
-    
-    doc.setTextColor(22, 163, 74);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DÉPART:', 20, yPos + 5);
+    doc.setFillColor(254, 249, 195);
+    doc.rect(margin, yPos, contentWidth, 25, 'F');
+    doc.setDrawColor(245, 158, 11);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, yPos, contentWidth, 25);
     
     doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(client.name, margin + 5, yPos + 8);
+    
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    
-    // Construire l'adresse de départ complète
-    let departureLines = [];
-    if (client.departure_address) {
-      departureLines.push(client.departure_address);
+    doc.setTextColor(51, 65, 85);
+    let clientInfoY = yPos + 14;
+    if (client.email) {
+      doc.text(`Email: ${client.email}`, margin + 5, clientInfoY);
+      clientInfoY += 5;
     }
-    departureLines.push(`${client.departure_postal_code} ${client.departure_city}`);
-    if (client.departure_country && client.departure_country !== 'France') {
-      departureLines.push(client.departure_country);
+    if (client.phone) {
+      doc.text(`Téléphone: ${client.phone}`, margin + 5, clientInfoY);
     }
-    
-    departureLines.forEach((line, index) => {
-      doc.text(line, 20, yPos + 12 + (index * 5));
-    });
     
     yPos += 35;
     
-    // Adresse d'arrivée
-    doc.setFillColor(254, 226, 226);
-    doc.rect(15, yPos - 5, 180, 25, 'F');
-    doc.setDrawColor(239, 68, 68);
-    doc.setLineWidth(0.3);
-    doc.rect(15, yPos - 5, 180, 25);
+    // === ADRESSES DE DÉMÉNAGEMENT ===
+    doc.setTextColor(30, 58, 138);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ADRESSES DE DÉMÉNAGEMENT', margin, yPos);
     
-    doc.setTextColor(220, 38, 38);
+    yPos += 10;
+    
+    // ADRESSE DE DÉPART
+    doc.setFillColor(220, 252, 231);
+    doc.rect(margin, yPos, contentWidth/2 - 2, 40, 'F');
+    doc.setDrawColor(34, 197, 94);
+    doc.setLineWidth(0.8);
+    doc.rect(margin, yPos, contentWidth/2 - 2, 40);
+    
+    doc.setTextColor(21, 128, 61);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('ARRIVÉE:', 20, yPos + 5);
+    doc.text('DÉPART', margin + 5, yPos + 8);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    
+    let departureText = '';
+    if (client.departure_address) {
+      departureText += client.departure_address + '\n';
+    }
+    departureText += `${client.departure_postal_code} ${client.departure_city}`;
+    if (client.departure_country && client.departure_country !== 'France') {
+      departureText += '\n' + client.departure_country;
+    }
+    
+    const departureLines = departureText.split('\n');
+    departureLines.forEach((line, index) => {
+      if (line.trim()) {
+        doc.text(line.trim(), margin + 5, yPos + 16 + (index * 5));
+      }
+    });
+    
+    // ADRESSE D'ARRIVÉE
+    doc.setFillColor(254, 226, 226);
+    doc.rect(margin + contentWidth/2 + 2, yPos, contentWidth/2 - 2, 40, 'F');
+    doc.setDrawColor(239, 68, 68);
+    doc.setLineWidth(0.8);
+    doc.rect(margin + contentWidth/2 + 2, yPos, contentWidth/2 - 2, 40);
+    
+    doc.setTextColor(185, 28, 28);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ARRIVÉE', margin + contentWidth/2 + 7, yPos + 8);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    
+    let arrivalText = '';
+    if (client.arrival_address) {
+      arrivalText += client.arrival_address + '\n';
+    }
+    arrivalText += `${client.arrival_postal_code} ${client.arrival_city}`;
+    if (client.arrival_country && client.arrival_country !== 'France') {
+      arrivalText += '\n' + client.arrival_country;
+    }
+    
+    const arrivalLines = arrivalText.split('\n');
+    arrivalLines.forEach((line, index) => {
+      if (line.trim()) {
+        doc.text(line.trim(), margin + contentWidth/2 + 7, yPos + 16 + (index * 5));
+      }
+    });
+    
+    yPos += 50;
+    
+    // === DÉTAILS DU DÉMÉNAGEMENT ===
+    doc.setTextColor(30, 58, 138);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DÉTAILS DU DÉMÉNAGEMENT', margin, yPos);
+    
+    yPos += 8;
+    doc.setFillColor(248, 250, 252);
+    doc.rect(margin, yPos, contentWidth, 20, 'F');
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, yPos, contentWidth, 20);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    // Construire l'adresse d'arrivée complète
-    let arrivalLines = [];
-    if (client.arrival_address) {
-      arrivalLines.push(client.arrival_address);
-    }
-    arrivalLines.push(`${client.arrival_postal_code} ${client.arrival_city}`);
-    if (client.arrival_country && client.arrival_country !== 'France') {
-      arrivalLines.push(client.arrival_country);
-    }
-    
-    arrivalLines.forEach((line, index) => {
-      doc.text(line, 20, yPos + 12 + (index * 5));
-    });
-    
-    yPos += 40;
-    
-    // === DÉTAILS DU DÉMÉNAGEMENT ===
-    doc.setTextColor(37, 99, 235);
-    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('DÉTAILS DU DÉMÉNAGEMENT', 20, yPos);
+    doc.text('Date souhaitée:', margin + 5, yPos + 8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(new Date(client.desired_date).toLocaleDateString('fr-FR'), margin + 45, yPos + 8);
     
-    yPos += 15;
-    
-    // Tableau des détails
-    const details = [
-      ['Date souhaitée:', new Date(client.desired_date).toLocaleDateString('fr-FR')],
-      ['Volume estimé:', client.estimated_volume ? `${client.estimated_volume} m³` : 'Non spécifié']
-    ];
-    
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    
-    details.forEach((detail, index) => {
-      const rowY = yPos + (index * 8);
-      
-      if (index % 2 === 0) {
-        doc.setFillColor(248, 250, 252);
-        doc.rect(20, rowY - 3, 170, 8, 'F');
-      }
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text(detail[0], 25, rowY + 2);
-      doc.setFont('helvetica', 'normal');
-      doc.text(detail[1], 80, rowY + 2);
-    });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Volume estimé:', margin + 5, yPos + 15);
+    doc.setFont('helvetica', 'normal');
+    doc.text(client.estimated_volume ? `${client.estimated_volume} m³` : 'Non spécifié', margin + 45, yPos + 15);
     
     yPos += 30;
     
     // === MONTANT TOTAL ===
     doc.setFillColor(34, 197, 94);
-    doc.rect(15, yPos, 180, 30, 'F');
+    doc.rect(margin, yPos, contentWidth, 25, 'F');
+    doc.setDrawColor(21, 128, 61);
+    doc.setLineWidth(1);
+    doc.rect(margin, yPos, contentWidth, 25);
     
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT TOTAL TTC', 25, yPos + 12);
-    
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${client.quote_amount.toFixed(2)} €`, 25, yPos + 24);
-    
-    yPos += 45;
-    
-    // === COORDONNÉES BANCAIRES ===
-    doc.setTextColor(37, 99, 235);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('COORDONNÉES BANCAIRES', 20, yPos);
+    doc.text('MONTANT TOTAL TTC', margin + 5, yPos + 10);
     
-    yPos += 15;
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${client.quote_amount.toFixed(2)} €`, margin + 5, yPos + 20);
     
-    // Encadré pour les coordonnées bancaires
-    doc.setFillColor(248, 250, 252);
-    doc.rect(15, yPos - 5, 180, 35, 'F');
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.rect(15, yPos - 5, 180, 35);
+    yPos += 35;
+    
+    // === COORDONNÉES BANCAIRES ===
+    doc.setTextColor(30, 58, 138);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('COORDONNÉES BANCAIRES', margin, yPos);
+    
+    yPos += 8;
+    doc.setFillColor(255, 247, 237);
+    doc.rect(margin, yPos, contentWidth, 35, 'F');
+    doc.setDrawColor(251, 146, 60);
+    doc.setLineWidth(0.8);
+    doc.rect(margin, yPos, contentWidth, 35);
     
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     
     if (supplier?.bank_details) {
-      const bankData = [
-        ['Titulaire:', supplier.bank_details.account_holder],
-        ['IBAN:', supplier.bank_details.iban],
-        ['BIC:', supplier.bank_details.bic],
-        ['Banque:', supplier.bank_details.bank_name]
-      ];
-      
-      bankData.forEach((row, index) => {
-        const rowY = yPos + (index * 6);
-        doc.setFont('helvetica', 'bold');
-        doc.text(row[0], 20, rowY);
-        doc.setFont('helvetica', 'normal');
-        doc.text(row[1], 60, rowY);
-      });
-    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.text('Titulaire du compte:', margin + 5, yPos + 8);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(150, 150, 150);
-      doc.text('RIB: (non renseigné)', 20, yPos + 5);
-      doc.text('Les coordonnées bancaires seront communiquées', 20, yPos + 12);
-      doc.text('lors de la confirmation du devis.', 20, yPos + 18);
+      doc.text(supplier.bank_details.account_holder, margin + 50, yPos + 8);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('IBAN:', margin + 5, yPos + 15);
+      doc.setFont('helvetica', 'normal');
+      doc.text(supplier.bank_details.iban, margin + 25, yPos + 15);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('BIC:', margin + 5, yPos + 22);
+      doc.setFont('helvetica', 'normal');
+      doc.text(supplier.bank_details.bic, margin + 20, yPos + 22);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Banque:', margin + 5, yPos + 29);
+      doc.setFont('helvetica', 'normal');
+      doc.text(supplier.bank_details.bank_name, margin + 30, yPos + 29);
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(120, 113, 108);
+      doc.text('RIB: (non renseigné)', margin + 5, yPos + 12);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('Les coordonnées bancaires seront communiquées lors de la confirmation du devis.', margin + 5, yPos + 20);
     }
     
-    yPos += 50;
+    yPos += 45;
     
-    // === VALIDITÉ ===
-    doc.setTextColor(60, 60, 60);
+    // === CONDITIONS ===
+    doc.setTextColor(71, 85, 105);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text('• Devis valable 30 jours à compter de la date d\'émission', 20, yPos);
-    doc.text('• Paiement par virement bancaire uniquement', 20, yPos + 6);
-    doc.text('• Confirmation écrite requise pour validation du devis', 20, yPos + 12);
+    doc.text('• Devis valable 30 jours à compter de la date d\'émission', margin, yPos);
+    doc.text('• Paiement par virement bancaire uniquement', margin, yPos + 5);
+    doc.text('• Confirmation écrite requise pour validation du devis', margin, yPos + 10);
     
     // === PIED DE PAGE ===
-    doc.setTextColor(150, 150, 150);
+    doc.setTextColor(156, 163, 175);
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${supplierInfo.company_name} - Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, 20, 285);
+    doc.setFont('helvetica', 'italic');
+    doc.text(`${supplierInfo.company_name} - Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, margin, 285);
     
     // Télécharger
     const fileName = `devis_${supplierInfo.company_name.replace(/\s+/g, '_')}_${client.name?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
     
-    console.log('✅ PDF généré avec adresses exactes:', fileName);
+    console.log('✅ PDF généré avec design professionnel:', fileName);
   };
 
   const hasRequiredClientData = !!(client.quote_amount && client.name);
