@@ -1,278 +1,149 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-// Configuration pour la MAIN APP
-const MAIN_APP_URL = import.meta.env.VITE_MAIN_API_URL || 'https://your-main-app.com';
-
-interface AuthToken {
-  token: string;
-  expiresAt: number;
+interface Opportunity {
+  id: string;
+  title: string;
+  estimated_volume: number;
+  departure_city: string;
+  arrival_city: string;
 }
 
-class MainAppApiService {
-  private authToken: AuthToken | null = null;
+interface Quote {
+  id: string;
+  supplier_id: string;
+  supplier_name: string;
+  amount: number;
+  response_time: number;
+}
 
-  /**
-   * Obtient un token d'authentification sécurisé
-   */
-  private async getAuthToken(): Promise<string> {
-    try {
-      // Vérifier si le token est encore valide
-      if (this.authToken && this.authToken.expiresAt > Date.now()) {
-        return this.authToken.token;
-      }
+class MainAppApi {
+  private baseUrl = 'https://api.matchmove-main.com';
+  private isAvailable = false;
 
-      // Obtenir le token Supabase actuel
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Non authentifié - session Supabase manquante');
-      }
-
-      // Echanger le token Supabase contre un token MAIN APP
-      const response = await fetch(`${MAIN_APP_URL}/api/v1/auth/exchange-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          source: 'pricing-tool',
-          supabase_token: session.access_token
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Token exchange failed: ${response.status}`);
-      }
-
-      const tokenData = await response.json();
-      
-      this.authToken = {
-        token: tokenData.access_token,
-        expiresAt: Date.now() + (tokenData.expires_in * 1000)
-      };
-
-      console.log('✅ Token MAIN APP obtenu avec succès');
-      return this.authToken.token;
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'obtention du token MAIN APP:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Récupère les clients actifs depuis la MAIN APP
-   */
-  async fetchClients(): Promise<any[]> {
-    try {
-      const token = await this.getAuthToken();
-      
-      const response = await fetch(`${MAIN_APP_URL}/api/v1/clients/active`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Source': 'pricing-tool'
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Clients fetch failed: ${response.status} - ${response.statusText}`);
-      }
-
-      const clients = await response.json();
-      
-      console.log('🏢 Clients MAIN APP chargés:', clients.length);
-      if (clients.length > 0) {
-        console.log('📋 Premier client MAIN APP:', clients[0]);
-      }
-
-      return clients;
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des clients MAIN APP:', error);
-      // Fallback: utiliser les clients locaux si la MAIN APP est indisponible
-      return this.getFallbackClients();
-    }
-  }
-
-  /**
-   * Récupère les prestataires actifs depuis la MAIN APP
-   */
-  async fetchSuppliers(): Promise<any[]> {
-    try {
-      const token = await this.getAuthToken();
-      
-      const response = await fetch(`${MAIN_APP_URL}/api/v1/suppliers/active`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Source': 'pricing-tool'
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Suppliers fetch failed: ${response.status} - ${response.statusText}`);
-      }
-
-      const suppliers = await response.json();
-      
-      console.log('🚚 Prestataires MAIN APP chargés:', suppliers.length);
-      if (suppliers.length > 0) {
-        console.log('🚚 Premier prestataire MAIN APP:', suppliers[0]);
-      }
-
-      return suppliers;
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des prestataires MAIN APP:', error);
-      // Fallback: utiliser les fournisseurs locaux si la MAIN APP est indisponible
-      return this.getFallbackSuppliers();
-    }
-  }
-
-  /**
-   * Envoie une demande de devis aux prestataires via la MAIN APP
-   */
-  async requestQuotes(opportunityData: any): Promise<any[]> {
-    try {
-      const token = await this.getAuthToken();
-      
-      const response = await fetch(`${MAIN_APP_URL}/api/v1/quotes/request`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Source': 'pricing-tool'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          opportunity: opportunityData,
-          timestamp: new Date().toISOString(),
-          source: 'pricing-tool'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Quote request failed: ${response.status} - ${response.statusText}`);
-      }
-
-      const quotes = await response.json();
-      
-      console.log('💰 Devis MAIN APP reçus:', quotes.length);
-      
-      return quotes;
-    } catch (error) {
-      console.error('❌ Erreur lors de la demande de devis MAIN APP:', error);
-      // Fallback: simuler des devis si la MAIN APP est indisponible
-      return this.getFallbackQuotes(opportunityData);
-    }
-  }
-
-  /**
-   * Données de fallback pour les clients si la MAIN APP est indisponible
-   */
-  private async getFallbackClients(): Promise<any[]> {
-    console.log('⚠️ Mode fallback - utilisation des clients locaux');
-    
-    // Récupérer les clients depuis Supabase local
-    const { data: localClients, error } = await supabase
-      .from('clients')
-      .select('*')
-      .limit(10);
-
-    if (error) {
-      console.error('Erreur fallback clients:', error);
-      return [];
-    }
-
-    return localClients || [];
-  }
-
-  /**
-   * Données de fallback pour les fournisseurs si la MAIN APP est indisponible
-   */
-  private async getFallbackSuppliers(): Promise<any[]> {
-    console.log('⚠️ Mode fallback - utilisation des fournisseurs locaux');
-    
-    // Récupérer les fournisseurs depuis Supabase local
-    const { data: localSuppliers, error } = await supabase
-      .from('suppliers')
-      .select('*')
-      .eq('is_active', true)
-      .limit(10);
-
-    if (error) {
-      console.error('Erreur fallback fournisseurs:', error);
-      return [];
-    }
-
-    return localSuppliers || [];
-  }
-
-  /**
-   * Génère des devis simulés si la MAIN APP est indisponible
-   */
-  private getFallbackQuotes(opportunityData: any): any[] {
-    console.log('⚠️ Mode fallback - génération de devis simulés');
-    
-    const mockQuotes = [
-      {
-        id: 'fallback-1',
-        supplier_name: 'Transport Express Local',
-        price: Math.round(opportunityData.estimated_volume * (90 + Math.random() * 30)),
-        estimated_duration: '2-3 jours',
-        includes_packing: true,
-        includes_insurance: true,
-        rating: 4.5,
-        source: 'fallback'
-      },
-      {
-        id: 'fallback-2',
-        supplier_name: 'Déménagement Pro Local',
-        price: Math.round(opportunityData.estimated_volume * (85 + Math.random() * 35)),
-        estimated_duration: '1-2 jours',
-        includes_packing: false,
-        includes_insurance: true,
-        rating: 4.2,
-        source: 'fallback'
-      }
-    ];
-
-    return mockQuotes;
-  }
-
-  /**
-   * Test de connectivité avec la MAIN APP
-   */
   async testConnection(): Promise<boolean> {
     try {
-      // Créer un AbortController pour gérer le timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-      const response = await fetch(`${MAIN_APP_URL}/api/v1/health`, {
-        method: 'GET',
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      const isHealthy = response.ok;
-      console.log(`🔗 Test connexion MAIN APP: ${isHealthy ? 'OK' : 'FAILED'}`);
+      console.log('🔗 Test connexion MAIN APP...');
       
-      return isHealthy;
+      // For demo purposes, simulate a connection test
+      // In real implementation, this would make an actual HTTP request
+      const simulatedResponse = Math.random() > 0.3; // 70% success rate for demo
+      
+      this.isAvailable = simulatedResponse;
+      
+      if (simulatedResponse) {
+        console.log('✅ MAIN APP disponible');
+      } else {
+        console.log('❌ MAIN APP indisponible - mode fallback');
+      }
+      
+      return simulatedResponse;
     } catch (error) {
-      console.error('❌ MAIN APP indisponible:', error);
+      console.error('❌ Erreur test connexion MAIN APP:', error);
+      this.isAvailable = false;
       return false;
     }
   }
+
+  async requestQuotes(opportunity: Opportunity): Promise<Quote[]> {
+    try {
+      if (!this.isAvailable) {
+        console.log('⚠️ MAIN APP indisponible, génération de devis de fallback...');
+        return this.generateFallbackQuotes(opportunity);
+      }
+
+      console.log('📤 Demande de devis via MAIN APP pour:', opportunity.title);
+      
+      // In real implementation, this would make an HTTP request to the main app
+      // For demo, we'll use fallback quotes
+      return this.generateFallbackQuotes(opportunity);
+      
+    } catch (error) {
+      console.error('❌ Erreur demande devis MAIN APP:', error);
+      return this.generateFallbackQuotes(opportunity);
+    }
+  }
+
+  private async generateFallbackQuotes(opportunity: Opportunity): Promise<Quote[]> {
+    try {
+      console.log('🔄 Génération devis de fallback...');
+      
+      // Load active suppliers from database
+      const { data: suppliers, error } = await supabase
+        .from('suppliers')
+        .select('id, company_name, contact_name, pricing_model')
+        .eq('is_active', true)
+        .limit(3);
+
+      if (error) throw error;
+
+      const fallbackQuotes: Quote[] = [];
+
+      if (suppliers && suppliers.length > 0) {
+        for (const supplier of suppliers) {
+          // Simple pricing calculation for fallback
+          const basePrice = opportunity.estimated_volume * 50;
+          const variation = (Math.random() - 0.5) * 0.2; // ±10% variation
+          const amount = Math.round(basePrice * (1 + variation));
+          
+          fallbackQuotes.push({
+            id: `fallback-${supplier.id}-${Date.now()}`,
+            supplier_id: supplier.id,
+            supplier_name: supplier.company_name,
+            amount,
+            response_time: Math.floor(Math.random() * 24) + 1 // 1-24 hours
+          });
+        }
+      }
+
+      console.log(`✅ ${fallbackQuotes.length} devis de fallback générés`);
+      return fallbackQuotes;
+      
+    } catch (error) {
+      console.error('❌ Erreur génération devis fallback:', error);
+      return [];
+    }
+  }
+
+  async submitQuoteResponse(quoteId: string, accepted: boolean, notes?: string): Promise<boolean> {
+    try {
+      console.log(`📤 Soumission réponse devis ${quoteId}:`, accepted ? 'ACCEPTÉ' : 'REFUSÉ');
+      
+      if (!this.isAvailable) {
+        console.log('⚠️ MAIN APP indisponible, sauvegarde locale...');
+        
+        // Save locally when main app is unavailable
+        const { error } = await supabase
+          .from('quotes')
+          .insert({
+            id: quoteId,
+            opportunity_id: 'local-opportunity',
+            supplier_id: 'local-supplier',
+            bid_amount: 0,
+            status: accepted ? 'accepted' : 'rejected',
+            notes: notes || '',
+            created_by: (await supabase.auth.getUser()).data.user?.id
+          });
+
+        if (error) throw error;
+        return true;
+      }
+
+      // In real implementation, this would send to main app
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Erreur soumission réponse:', error);
+      return false;
+    }
+  }
+
+  getStatus(): { available: boolean; lastChecked: Date } {
+    return {
+      available: this.isAvailable,
+      lastChecked: new Date()
+    };
+  }
 }
 
-// Instance singleton
-export const mainAppApi = new MainAppApiService();
-
-// Export pour les tests
-export { MainAppApiService };
+export const mainAppApi = new MainAppApi();

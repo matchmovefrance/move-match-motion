@@ -52,7 +52,7 @@ const MatchFinder = () => {
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
-        .in('status', ['pending', 'active'])
+        .in('status', ['pending', 'confirmed'])
         .not('departure_postal_code', 'is', null)
         .not('arrival_postal_code', 'is', null)
         .order('created_at', { ascending: false });
