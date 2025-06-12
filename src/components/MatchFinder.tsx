@@ -93,78 +93,87 @@ const MatchFinder = () => {
     showAll: false
   });
 
-  // ULTRA-OPTIMIZED data fetchers with minimal field selection
+  // Fonctions de récupération de données optimisées
   const fetchClientRequests = useCallback(async () => {
+    console.log('🔍 Récupération des demandes clients...');
     const { data, error } = await supabase
       .from('client_requests')
-      .select('id, name, email, phone, departure_city, departure_postal_code, arrival_city, arrival_postal_code, desired_date, estimated_volume, budget_min, budget_max, status, is_matched, match_status, flexible_dates, date_range_start, date_range_end')
+      .select('*')
       .in('status', ['pending', 'confirmed'])
       .neq('status', 'completed')
-      .limit(100); // Limit results for better performance
+      .limit(100);
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Erreur récupération clients:', error);
+      throw error;
+    }
+    
+    console.log('✅ Clients récupérés:', data?.length || 0);
     return data || [];
   }, []);
 
   const fetchMoves = useCallback(async () => {
+    console.log('🚛 Récupération des déménagements...');
     const { data, error } = await supabase
       .from('confirmed_moves')
-      .select('id, mover_name, company_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume, price_per_m3, total_price, status, status_custom, route_type')
+      .select('*')
       .eq('status', 'confirmed')
       .neq('status_custom', 'termine')
-      .limit(100); // Limit results for better performance
+      .limit(100);
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Erreur récupération moves:', error);
+      throw error;
+    }
+    
+    console.log('✅ Déménagements récupérés:', data?.length || 0);
     return data || [];
   }, []);
 
   const fetchMatchesWithActions = useCallback(async () => {
-    // Single optimized query for matches with latest actions
+    console.log('🔗 Récupération des matchs...');
     const { data: matchData, error } = await supabase
       .from('move_matches')
       .select(`
         id, move_id, client_request_id, match_type, distance_km, date_diff_days, 
-        combined_volume, volume_ok, is_valid, created_at,
-        match_actions!inner(action_type, action_date)
+        combined_volume, volume_ok, is_valid, created_at
       `)
       .order('created_at', { ascending: false })
-      .limit(500); // Reasonable limit
+      .limit(500);
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Erreur récupération matchs:', error);
+      throw error;
+    }
 
-    // Process matches with their latest action status
+    // Récupérer les actions séparément pour éviter les problèmes de jointure
+    const { data: actionsData } = await supabase
+      .from('match_actions')
+      .select('match_id, action_type, action_date')
+      .order('action_date', { ascending: false });
+
     const enrichedMatches = (matchData || []).map(match => {
-      const actions = (match as any).match_actions || [];
-      const latestAction = actions.sort((a: any, b: any) => 
-        new Date(b.action_date).getTime() - new Date(a.action_date).getTime()
-      )[0];
+      const matchActions = (actionsData || []).filter(action => action.match_id === match.id);
+      const latestAction = matchActions[0]; // Le plus récent
       
       return {
-        id: match.id,
-        move_id: match.move_id,
-        client_request_id: match.client_request_id,
-        match_type: match.match_type,
-        distance_km: match.distance_km,
-        date_diff_days: match.date_diff_days,
-        combined_volume: match.combined_volume,
-        volume_ok: match.volume_ok,
-        is_valid: match.is_valid,
-        created_at: match.created_at,
+        ...match,
         status: latestAction?.action_type || 'pending'
       };
     });
 
+    console.log('✅ Matchs enrichis:', enrichedMatches.length);
     return enrichedMatches;
   }, []);
 
-  // ULTRA-FAST cache with 30-minute TTL and stale-while-revalidate
+  // Cache avec TTL plus court pour éviter les données obsolètes
   const { 
     data: clientRequestsData, 
     loading: clientsLoading,
     refetch: refetchClients
   } = useCache(fetchClientRequests, {
-    key: 'client-requests-optimized',
-    ttl: 30 * 60 * 1000, // 30 minutes
+    key: 'client-requests-match-finder',
+    ttl: 10 * 60 * 1000, // 10 minutes
     staleWhileRevalidate: true
   });
 
@@ -173,8 +182,8 @@ const MatchFinder = () => {
     loading: movesLoading,
     refetch: refetchMoves
   } = useCache(fetchMoves, {
-    key: 'moves-optimized',
-    ttl: 30 * 60 * 1000, // 30 minutes
+    key: 'moves-match-finder',
+    ttl: 10 * 60 * 1000, // 10 minutes
     staleWhileRevalidate: true
   });
 
@@ -183,8 +192,8 @@ const MatchFinder = () => {
     loading: matchesLoading,
     refetch: refetchMatches
   } = useCache(fetchMatchesWithActions, {
-    key: 'matches-actions-optimized',
-    ttl: 15 * 60 * 1000, // 15 minutes
+    key: 'matches-actions-match-finder',
+    ttl: 5 * 60 * 1000, // 5 minutes
     staleWhileRevalidate: true
   });
 
@@ -194,7 +203,13 @@ const MatchFinder = () => {
 
   const loading = clientsLoading || movesLoading || matchesLoading;
 
-  // MEMOIZED distance calculation
+  console.log('📊 Données chargées:', {
+    clients: clientRequests.length,
+    moves: moves.length,
+    matches: matches.length
+  });
+
+  // Calcul de distance optimisé
   const calculateDistance = useMemo(() => {
     const cache = new Map<string, number>();
     
@@ -215,19 +230,25 @@ const MatchFinder = () => {
     };
   }, []);
 
-  // OPTIMIZED grouping with useMemo
+  // Traitement des matchs optimisé et stabilisé
   const processedMatches = useMemo(() => {
-    if (!Array.isArray(matches) || matches.length === 0) return [];
+    if (!Array.isArray(matches) || matches.length === 0) {
+      console.log('⚠️ Aucun match à traiter');
+      return [];
+    }
 
+    console.log('🔄 Traitement des matchs...', matches.length);
     const clientMap = new Map<number, ClientWithMatches>();
 
     matches.forEach(match => {
       const client = clientRequests.find(c => c.id === match.client_request_id);
       const move = moves.find(m => m.id === match.move_id);
       
-      if (!client || !move || move.status_custom === 'termine' || client.status === 'completed') return;
+      if (!client || !move || move.status_custom === 'termine' || client.status === 'completed') {
+        return;
+      }
 
-      // Apply filters
+      // Appliquer les filtres
       if (!currentFilters.showAll) {
         const status = match.status || 'pending';
         if (!((currentFilters.pending && status === 'pending') ||
@@ -250,25 +271,31 @@ const MatchFinder = () => {
       });
     });
 
-    // Efficient sorting and limiting
-    return Array.from(clientMap.values()).map(group => ({
+    const result = Array.from(clientMap.values()).map(group => ({
       ...group,
       matches: group.matches
         .sort((a, b) => (a.realDistance || 0) - (b.realDistance || 0))
         .slice(0, 5)
     }));
+
+    console.log('✅ Traitement terminé:', result.length, 'groupes');
+    return result;
   }, [matches, currentFilters, clientRequests, moves, calculateDistance]);
 
+  // Effet stabilisé pour mettre à jour les matchs groupés
   useEffect(() => {
     setGroupedMatches(processedMatches);
   }, [processedMatches]);
 
   const handleFiltersChange = useCallback((filters: MatchFilterOptions) => {
+    console.log('🔧 Changement de filtres:', filters);
     setCurrentFilters(filters);
   }, []);
 
   const handleMatchAction = useCallback(async (matchId: number, actionType: 'accepted' | 'rejected') => {
     try {
+      console.log('⚙️ Action match:', { matchId, actionType });
+      
       const { error } = await supabase
         .from('match_actions')
         .insert({
@@ -286,10 +313,9 @@ const MatchFinder = () => {
         description: `Match ${actionType === 'accepted' ? 'accepté' : 'rejeté'} avec succès`,
       });
 
-      // Only refetch matches, not all data
       refetchMatches();
     } catch (error: any) {
-      console.error('Error processing match action:', error);
+      console.error('❌ Erreur action match:', error);
       toast({
         title: "Erreur",
         description: "Impossible de traiter l'action",
@@ -298,61 +324,70 @@ const MatchFinder = () => {
     }
   }, [user?.id, toast, refetchMatches]);
 
-  // Simplified date compatibility check
-  const areDatesCompatible = (client: ClientRequest, moveDate: string) => {
-    const move = new Date(moveDate);
-    
-    if (client.flexible_dates && client.date_range_start && client.date_range_end) {
-      const rangeStart = new Date(client.date_range_start);
-      const rangeEnd = new Date(client.date_range_end);
-      return move >= rangeStart && move <= rangeEnd;
-    } else {
-      const clientDate = new Date(client.desired_date);
-      const timeDiff = Math.abs(clientDate.getTime() - move.getTime());
-      const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-      return daysDiff <= 15;
-    }
-  };
-
   const findMatches = useCallback(async () => {
     try {
       setIsSearching(true);
-      console.log('🔍 Recherche ultra-rapide de matchs...');
+      console.log('🔍 Recherche de matchs - Démarrage...');
+      console.log('📊 Données disponibles:', {
+        clients: clientRequests.length,
+        moves: moves.length
+      });
       
-      // Optimized batch operations
+      // Nettoyer les anciens matchs sans actions (correction de la requête SQL)
+      console.log('🧹 Nettoyage des anciens matchs...');
       const { error: deleteError } = await supabase
         .from('move_matches')
         .delete()
-        .not('id', 'in', `(SELECT DISTINCT match_id FROM match_actions WHERE match_id IS NOT NULL)`);
+        .not('id', 'in', `(
+          SELECT DISTINCT move_matches.id 
+          FROM move_matches 
+          LEFT JOIN match_actions ON move_matches.id = match_actions.match_id 
+          WHERE match_actions.match_id IS NOT NULL
+        )`);
 
       if (deleteError) {
-        console.warn('Erreur lors de la suppression des anciens matchs:', deleteError);
+        console.warn('⚠️ Erreur nettoyage (ignorée):', deleteError);
       }
 
       let newMatchesCount = 0;
       const batchInserts: any[] = [];
 
-      // Ultra-fast processing with early exits
-      for (const client of clientRequests.slice(0, 50)) { // Limit processing
+      console.log('🔄 Analyse des combinaisons client-move...');
+      
+      for (const client of clientRequests.slice(0, 50)) {
         if (client.status === 'completed') continue;
+        
+        console.log(`👤 Analyse client: ${client.name} (${client.departure_city} → ${client.arrival_city})`);
         
         const clientMatches: Array<{ move: any; distance: number; match: any }> = [];
 
-        for (const move of moves.slice(0, 50)) { // Limit processing
+        for (const move of moves.slice(0, 50)) {
           if (move.status_custom === 'termine') continue;
           
           const clientVolume = client.estimated_volume || 0;
           const availableVolume = move.available_volume || 0;
-          if (clientVolume > availableVolume) continue; // Early exit
+          
+          console.log(`🚛 Test move: ${move.company_name} vol:${availableVolume} vs ${clientVolume}`);
+          
+          if (clientVolume > availableVolume) {
+            console.log('❌ Volume insuffisant');
+            continue;
+          }
           
           const distanceKm = calculateDistance(move.departure_postal_code, client.departure_postal_code);
-          if (distanceKm > 500) continue; // Early exit
+          if (distanceKm > 500) {
+            console.log('❌ Distance trop grande:', distanceKm);
+            continue;
+          }
           
-          // Quick date check
           const clientDate = new Date(client.desired_date);
           const moveDate = new Date(move.departure_date);
           const dateDiffDays = Math.abs((clientDate.getTime() - moveDate.getTime()) / (1000 * 60 * 60 * 24));
-          if (dateDiffDays > 15) continue; // Early exit
+          
+          if (dateDiffDays > 15) {
+            console.log('❌ Date trop éloignée:', dateDiffDays);
+            continue;
+          }
           
           let matchType = 'partial';
           if (client.departure_city.toLowerCase() === move.departure_city.toLowerCase() &&
@@ -361,6 +396,8 @@ const MatchFinder = () => {
           } else if (distanceKm <= 100) {
             matchType = 'good';
           }
+
+          console.log(`✅ Match trouvé: ${matchType}, distance: ${distanceKm}km, date diff: ${dateDiffDays}j`);
 
           clientMatches.push({
             move,
@@ -378,11 +415,14 @@ const MatchFinder = () => {
           });
         }
 
-        // Process only best 5 matches per client
+        console.log(`📊 ${clientMatches.length} matchs trouvés pour ${client.name}`);
+
+        // Prendre les 5 meilleurs matchs par client
         clientMatches
           .sort((a, b) => a.distance - b.distance)
           .slice(0, 5)
           .forEach(({ match }) => {
+            // Vérifier si le match existe déjà
             const existingMatch = matches.find(m => 
               m.client_request_id === match.client_request_id && m.move_id === match.move_id
             );
@@ -393,18 +433,20 @@ const MatchFinder = () => {
           });
       }
 
-      // Batch insert for better performance
+      console.log('💾 Insertion en batch:', batchInserts.length, 'nouveaux matchs');
+
       if (batchInserts.length > 0) {
         const { error } = await supabase
           .from('move_matches')
           .insert(batchInserts);
 
         if (error) {
-          console.error('Error batch inserting matches:', error);
+          console.error('❌ Erreur insertion batch:', error);
+          throw error;
         }
       }
 
-      console.log('✅ Recherche ultra-rapide terminée:', newMatchesCount, 'matchs');
+      console.log('✅ Recherche terminée:', newMatchesCount, 'nouveaux matchs');
       
       toast({
         title: "Recherche terminée",
@@ -413,7 +455,7 @@ const MatchFinder = () => {
 
       refetchMatches();
     } catch (error) {
-      console.error('Error finding matches:', error);
+      console.error('❌ Erreur recherche matchs:', error);
       toast({
         title: "Erreur",
         description: "Erreur lors de la recherche",
@@ -450,7 +492,7 @@ const MatchFinder = () => {
           </div>
           <Button disabled>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Chargement ultra-rapide...
+            Chargement...
           </Button>
         </div>
         <LoadingSkeleton type="stats" />
@@ -464,30 +506,30 @@ const MatchFinder = () => {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Search className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances ⚡</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances 🔍</h2>
         </div>
         <div className="relative">
           <Button
             onClick={findMatches}
             disabled={isSearching}
-            className="bg-blue-600 hover:bg-blue-700 relative overflow-hidden"
+            className="bg-blue-600 hover:bg-blue-700"
           >
             {isSearching ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Recherche ultra-rapide...
+                Recherche en cours...
               </>
             ) : (
               <>
                 <Search className="h-4 w-4 mr-2" />
-                Trouver des matchs ⚡
+                Trouver des matchs
               </>
             )}
           </Button>
         </div>
       </div>
 
-      {/* Statistiques optimisées */}
+      {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
@@ -518,7 +560,7 @@ const MatchFinder = () => {
             <div className="flex items-center space-x-2">
               <Search className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-gray-600">Correspondances ⚡</p>
+                <p className="text-sm text-gray-600">Correspondances</p>
                 <p className="text-2xl font-bold">{totalMatches}</p>
               </div>
             </div>
@@ -557,6 +599,9 @@ const MatchFinder = () => {
                   'Ajustez les filtres pour voir plus de résultats'
                 }
               </p>
+              <div className="mt-4 text-sm text-gray-400">
+                <p>Debug: {clientRequests.length} clients, {moves.length} déménagements disponibles</p>
+              </div>
             </CardContent>
           </Card>
         ) : (
