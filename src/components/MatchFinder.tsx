@@ -679,16 +679,53 @@ const MatchFinder = () => {
               className="space-y-6"
             >
               {sortedMatches.length > 0 ? (
-                <ListView
-                  items={sortedMatches}
-                  searchFields={['client.name', 'client.client_reference', 'move.company_name', 'move.move_reference', 'match_reference']}
-                  renderCard={renderMatchCard}
-                  renderListItem={renderMatchListItem}
-                  itemsPerPage={10}
-                  searchPlaceholder="Rechercher un match..."
-                  emptyStateMessage="Aucun match trouvé avec ces critères"
-                  emptyStateIcon={<Target className="h-12 w-12 text-gray-400 mx-auto" />}
-                />
+                <div className="space-y-4">
+                  {/* Manual search and filters since we can't use nested properties in ListView */}
+                  <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Rechercher un match..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Filtrer par statut" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les matches</SelectItem>
+                        <SelectItem value="valid">Compatibles</SelectItem>
+                        <SelectItem value="invalid">Incompatibles</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Trier par" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="distance">Distance</SelectItem>
+                        <SelectItem value="score">Score</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Results grid */}
+                  <div className="grid gap-4">
+                    {sortedMatches.map((match, index) => (
+                      <motion.div
+                        key={match.match_reference}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                      >
+                        {renderMatchCard(match)}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <motion.div
                   initial={{ opacity: 0 }}
