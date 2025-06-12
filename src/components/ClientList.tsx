@@ -73,12 +73,17 @@ const ClientList = () => {
       // Ajouter tous les clients de client_requests
       if (requestsData) {
         requestsData.forEach(request => {
+          // Gérer client_reference de manière sécurisée
+          const clientRef = (request as any).client_reference || `CLI-${String(request.id).padStart(6, '0')}`;
+          // Gérer flexibility_days de manière sécurisée
+          const flexDays = (request as any).flexibility_days || 0;
+          
           allClients.push({
             id: request.id,
             name: request.name || 'Client sans nom',
             email: request.email || 'Email manquant',
             phone: request.phone || 'Téléphone manquant',
-            client_reference: request.client_reference || `CLI-${String(request.id).padStart(6, '0')}`,
+            client_reference: clientRef,
             created_at: request.created_at,
             created_by: request.created_by,
             departure_city: request.departure_city,
@@ -88,7 +93,7 @@ const ClientList = () => {
             desired_date: request.desired_date,
             estimated_volume: request.estimated_volume,
             flexible_dates: request.flexible_dates,
-            flexibility_days: request.flexibility_days || 0,
+            flexibility_days: flexDays,
             status: request.status
           });
         });
