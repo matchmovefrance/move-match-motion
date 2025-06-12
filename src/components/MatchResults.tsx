@@ -73,12 +73,11 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
       setLoading(true);
       console.log('🔍 Chargement des résultats de matching...');
 
-      // Charger les matches d'abord
+      // Approche simple: charger directement depuis move_matches avec une requête basique
       const { data: matchesData, error: matchesError } = await supabase
         .from('move_matches')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+        .order('created_at', { ascending: false });
 
       if (matchesError) {
         console.error('❌ Erreur chargement matches:', matchesError);
@@ -91,53 +90,73 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
         return;
       }
 
-      // Charger les clients séparément
+      console.log('📊 Matches bruts trouvés:', matchesData.length);
+
+      // Récupérer tous les IDs uniques des clients et moves
       const clientIds = [...new Set(matchesData.map(m => m.client_id))];
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('clients')
-        .select('id, name, client_reference, departure_city, departure_postal_code, arrival_city, arrival_postal_code, estimated_volume, desired_date')
-        .in('id', clientIds);
-
-      if (clientsError) {
-        console.error('❌ Erreur chargement clients:', clientsError);
-        throw clientsError;
-      }
-
-      // Charger les moves séparément
       const moveIds = [...new Set(matchesData.map(m => m.move_id))];
-      const { data: movesData, error: movesError } = await supabase
-        .from('confirmed_moves')
-        .select('id, company_name, mover_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume')
-        .in('id', moveIds);
 
-      if (movesError) {
-        console.error('❌ Erreur chargement moves:', movesError);
-        throw movesError;
+      console.log('🔍 Chargement des données associées:', { clientIds: clientIds.length, moveIds: moveIds.length });
+
+      // Charger les clients
+      let clientsData = [];
+      if (clientIds.length > 0) {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, name, client_reference, departure_city, departure_postal_code, arrival_city, arrival_postal_code, estimated_volume, desired_date')
+          .in('id', clientIds);
+
+        if (error) {
+          console.error('❌ Erreur chargement clients:', error);
+        } else {
+          clientsData = data || [];
+          console.log('✅ Clients chargés:', clientsData.length);
+        }
       }
 
-      // Combiner les données
+      // Charger les moves
+      let movesData = [];
+      if (moveIds.length > 0) {
+        const { data, error } = await supabase
+          .from('confirmed_moves')
+          .select('id, company_name, mover_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume')
+          .in('id', moveIds);
+
+        if (error) {
+          console.error('❌ Erreur chargement moves:', error);
+        } else {
+          movesData = data || [];
+          console.log('✅ Moves chargés:', movesData.length);
+        }
+      }
+
+      // Assembler les données finales
       const transformedMatches: MatchResultData[] = matchesData.map(match => {
-        const client = clientsData?.find(c => c.id === match.client_id) || {
+        const client = clientsData.find(c => c.id === match.client_id);
+        const move = movesData.find(m => m.id === match.move_id);
+
+        // Si client ou move introuvable, créer une structure par défaut
+        const clientData = client || {
           id: match.client_id,
-          name: 'Client introuvable',
-          client_reference: '',
-          departure_city: '',
-          departure_postal_code: '',
-          arrival_city: '',
-          arrival_postal_code: '',
+          name: `Client #${match.client_id}`,
+          client_reference: `CLI-${String(match.client_id).padStart(6, '0')}`,
+          departure_city: 'Ville inconnue',
+          departure_postal_code: '00000',
+          arrival_city: 'Ville inconnue',
+          arrival_postal_code: '00000',
           estimated_volume: 0,
-          desired_date: ''
+          desired_date: new Date().toISOString().split('T')[0]
         };
 
-        const move = movesData?.find(m => m.id === match.move_id) || {
+        const moveData = move || {
           id: match.move_id,
-          company_name: 'Transporteur introuvable',
-          mover_name: '',
-          departure_city: '',
-          departure_postal_code: '',
-          arrival_city: '',
-          arrival_postal_code: '',
-          departure_date: '',
+          company_name: `Transporteur #${match.move_id}`,
+          mover_name: 'Transporteur inconnu',
+          departure_city: 'Ville inconnue',
+          departure_postal_code: '00000',
+          arrival_city: 'Ville inconnue',
+          arrival_postal_code: '00000',
+          departure_date: new Date().toISOString().split('T')[0],
           max_volume: 0,
           used_volume: 0,
           available_volume: 0
@@ -145,12 +164,12 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
 
         return {
           ...match,
-          client,
-          move
+          client: clientData,
+          move: moveData
         };
       });
 
-      console.log('✅ Matches transformés:', transformedMatches.length);
+      console.log('✅ Matches finaux assemblés:', transformedMatches.length);
       setMatches(transformedMatches);
 
     } catch (error) {
@@ -160,6 +179,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
         description: "Impossible de charger les résultats de matching",
         variant: "destructive",
       });
+      setMatches([]); // S'assurer que l'état est propre en cas d'erreur
     } finally {
       setLoading(false);
     }
@@ -175,7 +195,9 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
       match.client?.departure_city?.toLowerCase().includes(searchLower) ||
       match.client?.arrival_city?.toLowerCase().includes(searchLower) ||
       match.move?.departure_city?.toLowerCase().includes(searchLower) ||
-      match.move?.arrival_city?.toLowerCase().includes(searchLower);
+      match.move?.arrival_city?.toLowerCase().includes(searchLower) ||
+      String(match.client_id).includes(searchLower) ||
+      String(match.move_id).includes(searchLower);
 
     const matchesStatus = statusFilter === 'all' || 
       (statusFilter === 'valid' && match.is_valid) ||
@@ -264,7 +286,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Rechercher client, transporteur, ville..."
+                placeholder="Rechercher par nom, référence, ville, ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -307,7 +329,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
       <Card>
         <CardHeader>
           <CardTitle>
-            Résultats du Matching ({filteredMatches.length})
+            Résultats du Matching ({filteredMatches.length} résultats)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -319,14 +341,22 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
           ) : filteredMatches.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="font-medium">Aucun résultat trouvé</p>
-              <p className="text-sm">Essayez de modifier vos filtres de recherche</p>
+              <p className="font-medium">
+                {matches.length === 0 ? 'Aucun résultat de matching trouvé' : 'Aucun résultat ne correspond aux filtres'}
+              </p>
+              <p className="text-sm">
+                {matches.length === 0 
+                  ? 'Utilisez le moteur de matching pour générer des correspondances' 
+                  : 'Essayez de modifier vos filtres de recherche'
+                }
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Référence Client</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Trajet Client</TableHead>
                     <TableHead>Transporteur</TableHead>
@@ -343,13 +373,21 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
                   {filteredMatches.map((match) => (
                     <TableRow key={match.id}>
                       <TableCell>
+                        <div className="font-mono text-sm">
+                          <div className="font-medium">
+                            {match.client?.client_reference || `CLI-${String(match.client_id).padStart(6, '0')}`}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            ID: {match.client_id}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div>
                           <div className="font-medium">{match.client?.name || 'N/A'}</div>
-                          {match.client?.client_reference && (
-                            <div className="text-sm text-gray-500">
-                              {match.client.client_reference}
-                            </div>
-                          )}
+                          <div className="text-sm text-gray-500">
+                            Vol: {match.client?.estimated_volume || 0}m³
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
