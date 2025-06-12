@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +21,7 @@ interface AcceptedQuoteWithDetails {
     title: string;
     departure_city: string;
     arrival_city: string;
+    client_request_id?: number;
   };
 }
 
@@ -60,7 +60,7 @@ export const useAcceptedQuotes = () => {
         .select(`
           *,
           supplier:suppliers(company_name, contact_name, email, phone),
-          opportunity:pricing_opportunities(title, departure_city, arrival_city)
+          opportunity:pricing_opportunities(title, departure_city, arrival_city, client_request_id)
         `)
         .in('status', statusFilter);
 

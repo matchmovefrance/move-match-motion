@@ -20,6 +20,7 @@ interface AcceptedQuoteWithDetails {
     title: string;
     departure_city: string;
     arrival_city: string;
+    client_request_id?: number;
   };
 }
 
