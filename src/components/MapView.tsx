@@ -191,45 +191,73 @@ const MapView = () => {
         )}
       </div>
 
-      {/* Filtre de recherche par référence */}
-      <div className="bg-white p-4 rounded-lg border">
-        <div className="flex items-center space-x-4">
+      {/* Recherche par référence - Interface améliorée */}
+      <div className="bg-white p-6 rounded-lg border shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+          Rechercher un trajet par référence
+        </h3>
+        
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Rechercher par référence
+            <label htmlFor="reference-search" className="block text-sm font-medium text-gray-700 mb-2">
+              Référence
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="CLI-000001, TRJ-000001, MTH-000001..."
+                id="reference-search"
+                placeholder="Tapez CLI-000001, TRJ-000001 ou MTH-000001..."
                 value={referenceFilter}
                 onChange={(e) => setReferenceFilter(e.target.value)}
                 onKeyPress={handleKeyPress}
-                className="pl-10 border-blue-300 focus:border-blue-500"
+                className="pl-10 h-12 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Formats acceptés : CLI-XXXXXX (clients), TRJ-XXXXXX (trajets), MTH-XXXXXX (matchs)
+            </p>
           </div>
-          <Button 
-            onClick={searchByReference}
-            disabled={loading || referenceFilter.length < 3}
-            className="mt-6"
-          >
-            {loading ? 'Recherche...' : 'Rechercher'}
-          </Button>
+          
+          <div className="flex items-end">
+            <Button 
+              onClick={searchByReference}
+              disabled={loading || referenceFilter.length < 3}
+              className="h-12 px-6 bg-blue-600 hover:bg-blue-700"
+              size="lg"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Recherche...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  Rechercher
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
+        {/* Résultat de la recherche */}
         {selectedItem && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Badge className="bg-blue-100 text-blue-800">
-                {selectedItem.reference}
-              </Badge>
-              <div>
-                <span className="font-medium">{selectedItem.name}</span>
-                <div className="text-sm text-gray-500">
-                  {selectedItem.details} • {selectedItem.date}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-medium">
+                  {selectedItem.reference}
+                </Badge>
+                <div>
+                  <span className="font-medium text-gray-900">{selectedItem.name}</span>
+                  <div className="text-sm text-gray-600">
+                    {selectedItem.details} • {selectedItem.date}
+                  </div>
                 </div>
               </div>
+              <Button variant="ghost" onClick={clearFilter} size="sm">
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         )}
@@ -237,8 +265,10 @@ const MapView = () => {
 
       {/* Affichage de la carte */}
       {selectedItem && selectedItem.type === 'move' && selectedItem.departure_postal_code && selectedItem.arrival_postal_code ? (
-        <div className="bg-white rounded-lg border p-4">
-          <h3 className="font-semibold mb-4">Trajet: {selectedItem.reference}</h3>
+        <div className="bg-white rounded-lg border shadow-sm p-6">
+          <h3 className="font-semibold text-lg mb-4 text-gray-800">
+            Trajet: {selectedItem.reference}
+          </h3>
           <GoogleMapRoute 
             move={{
               departure_postal_code: selectedItem.departure_postal_code,
@@ -250,8 +280,8 @@ const MapView = () => {
           />
         </div>
       ) : selectedItem && (selectedItem.type === 'client' || selectedItem.type === 'match') && selectedItem.departure_postal_code && selectedItem.arrival_postal_code ? (
-        <div className="bg-white rounded-lg border p-4">
-          <h3 className="font-semibold mb-4">
+        <div className="bg-white rounded-lg border shadow-sm p-6">
+          <h3 className="font-semibold text-lg mb-4 text-gray-800">
             {selectedItem.type === 'client' ? 'Demande client' : 'Match'}: {selectedItem.reference}
           </h3>
           <GoogleMapRoute 
@@ -265,22 +295,24 @@ const MapView = () => {
           />
         </div>
       ) : !selectedItem ? (
-        <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+        <div className="h-96 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
           <div className="text-center">
-            <Map className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-500">Recherchez par référence pour afficher un trajet</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Saisissez une référence (CLI-XXXXXX, TRJ-XXXXXX, MTH-XXXXXX)
+            <Map className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Aucun trajet sélectionné</h3>
+            <p className="text-gray-500 mb-1">Recherchez par référence pour afficher un trajet sur la carte</p>
+            <p className="text-sm text-gray-400">
+              Exemples : CLI-000001, TRJ-000001, MTH-000001
             </p>
           </div>
         </div>
       ) : (
-        <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+        <div className="h-96 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
           <div className="text-center">
-            <Map className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-500">Impossible d'afficher la carte</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Données d'adresse manquantes pour {selectedItem.reference}
+            <Map className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Impossible d'afficher la carte</h3>
+            <p className="text-gray-500 mb-1">Données d'adresse manquantes pour {selectedItem.reference}</p>
+            <p className="text-sm text-gray-400">
+              Vérifiez que les codes postaux de départ et d'arrivée sont renseignés
             </p>
           </div>
         </div>
