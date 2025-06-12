@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,12 @@ interface Move {
   status: string;
   created_at: string;
   client_request_id?: number;
+  departure_address?: string;
+  arrival_address?: string;
+  departure_postal_code?: string;
+  arrival_postal_code?: string;
+  desired_date?: string;
+  description?: string;
 }
 
 const MoveManagement = () => {
@@ -30,16 +37,6 @@ const MoveManagement = () => {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedMove, setSelectedMove] = useState<Move | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [newMove, setNewMove] = useState<Omit<Move, 'id' | 'created_at'>>({
-    title: '',
-    departure_city: '',
-    arrival_city: '',
-    departure_date: new Date().toISOString().split('T')[0],
-    estimated_volume: 0,
-    status: 'pending',
-    client_request_id: undefined
-  });
 
   useEffect(() => {
     loadMoves();
@@ -52,7 +49,7 @@ const MoveManagement = () => {
       setLoading(true);
       
       const { data, error } = await supabase
-        .from('opportunities')
+        .from('pricing_opportunities')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -73,30 +70,38 @@ const MoveManagement = () => {
 
   const handleOpenDialog = () => {
     setIsDialogOpen(true);
-    setIsEditMode(false);
     setSelectedMove(null);
   };
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setSelectedMove(null);
-    setIsEditMode(false);
   };
 
   const handleSelectMove = (move: Move) => {
     setSelectedMove(move);
     setIsDialogOpen(true);
-    setIsEditMode(true);
   };
 
-  const handleCreateMove = async () => {
+  const handleCreateMove = async (moveData: Partial<Move>) => {
     if (!user) return;
     
     try {
       const { error } = await supabase
-        .from('opportunities')
+        .from('pricing_opportunities')
         .insert({
-          ...newMove,
+          title: moveData.title || '',
+          departure_city: moveData.departure_city || '',
+          arrival_city: moveData.arrival_city || '',
+          departure_date: moveData.departure_date || new Date().toISOString().split('T')[0],
+          estimated_volume: moveData.estimated_volume || 0,
+          status: moveData.status || 'draft',
+          departure_address: moveData.departure_address || '',
+          arrival_address: moveData.arrival_address || '',
+          departure_postal_code: moveData.departure_postal_code || '',
+          arrival_postal_code: moveData.arrival_postal_code || '',
+          desired_date: moveData.desired_date || moveData.departure_date || new Date().toISOString().split('T')[0],
+          description: moveData.description || '',
           created_by: user.id,
         });
 
@@ -119,14 +124,24 @@ const MoveManagement = () => {
     }
   };
 
-  const handleUpdateMove = async () => {
+  const handleUpdateMove = async (moveData: Partial<Move>) => {
     if (!user || !selectedMove) return;
     
     try {
       const { error } = await supabase
-        .from('opportunities')
+        .from('pricing_opportunities')
         .update({
-          ...selectedMove,
+          title: moveData.title,
+          departure_city: moveData.departure_city,
+          arrival_city: moveData.arrival_city,
+          departure_date: moveData.departure_date,
+          estimated_volume: moveData.estimated_volume,
+          status: moveData.status,
+          departure_address: moveData.departure_address,
+          arrival_address: moveData.arrival_address,
+          departure_postal_code: moveData.departure_postal_code,
+          arrival_postal_code: moveData.arrival_postal_code,
+          description: moveData.description,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedMove.id);
@@ -155,7 +170,7 @@ const MoveManagement = () => {
     
     try {
       const { error } = await supabase
-        .from('opportunities')
+        .from('pricing_opportunities')
         .delete()
         .eq('id', moveId);
 
@@ -177,21 +192,12 @@ const MoveManagement = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (isEditMode && selectedMove) {
-      setSelectedMove({ ...selectedMove, [name]: value });
-    } else {
-      setNewMove({ ...newMove, [name]: value });
-    }
-  };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <Badge variant="outline">En attente</Badge>;
-      case 'confirmed':
-        return <Badge className="bg-green-100 text-green-800">Confirmé</Badge>;
+      case 'draft':
+        return <Badge variant="outline">Brouillon</Badge>;
+      case 'active':
+        return <Badge className="bg-green-100 text-green-800">Actif</Badge>;
       case 'completed':
         return <Badge className="bg-blue-100 text-blue-800">Terminé</Badge>;
       case 'cancelled':
@@ -286,12 +292,8 @@ const MoveManagement = () => {
       <MoveCardDialog
         open={isDialogOpen}
         onOpenChange={handleCloseDialog}
-        isEditMode={isEditMode}
-        move={selectedMove || newMove}
-        onInputChange={handleInputChange}
-        onCreate={handleCreateMove}
-        onUpdate={handleUpdateMove}
-        onShowCompleteDialog={() => {}}
+        move={selectedMove}
+        onMoveUpdated={loadMoves}
       />
     </>
   );
