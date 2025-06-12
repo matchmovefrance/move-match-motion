@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Truck, MapPin, Calendar, Volume2, Plus } from 'lucide-react';
+import { Truck, MapPin, Calendar, Volume2, Plus, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +28,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [providersLoading, setProvidersLoading] = useState(true);
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [formData, setFormData] = useState({
     provider_id: '',
@@ -54,15 +55,39 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
 
   const fetchProviders = async () => {
     try {
+      setProvidersLoading(true);
+      console.log('Récupération des prestataires...');
+      
       const { data, error } = await supabase
         .from('service_providers')
         .select('id, name, company_name, phone, email')
         .order('company_name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erreur lors de la récupération des prestataires:', error);
+        throw error;
+      }
+      
+      console.log('Prestataires récupérés:', data);
       setProviders(data || []);
+      
+      if (!data || data.length === 0) {
+        toast({
+          title: "Aucun prestataire",
+          description: "Aucun prestataire trouvé. Ajoutez-en un dans l'onglet Prestataires.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('Error fetching providers:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les prestataires",
+        variant: "destructive",
+      });
+      setProviders([]);
+    } finally {
+      setProvidersLoading(false);
     }
   };
 
@@ -211,16 +236,32 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
               <Select 
                 value={formData.provider_id} 
                 onValueChange={(value) => setFormData({ ...formData, provider_id: value })}
+                disabled={providersLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un prestataire" />
+                  <SelectValue 
+                    placeholder={
+                      providersLoading 
+                        ? "Chargement des prestataires..." 
+                        : providers.length === 0 
+                          ? "Aucun prestataire disponible"
+                          : "Sélectionner un prestataire"
+                    } 
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {providers.map((provider) => (
-                    <SelectItem key={provider.id} value={provider.id.toString()}>
-                      {provider.company_name} - {provider.name}
-                    </SelectItem>
-                  ))}
+                  {providers.length === 0 && !providersLoading ? (
+                    <div className="p-2 text-center text-gray-500">
+                      <AlertCircle className="h-4 w-4 mx-auto mb-1" />
+                      Aucun prestataire trouvé
+                    </div>
+                  ) : (
+                    providers.map((provider) => (
+                      <SelectItem key={provider.id} value={provider.id.toString()}>
+                        {provider.company_name} - {provider.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <Button 
@@ -232,9 +273,17 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-gray-600 mt-1">
-              Si le prestataire n'existe pas, ajoutez-le dans l'onglet "Prestataires"
-            </p>
+            {providers.length === 0 && !providersLoading && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Aucun prestataire trouvé. Ajoutez-en un dans l'onglet "Prestataires"
+              </p>
+            )}
+            {providers.length > 0 && (
+              <p className="text-xs text-gray-600 mt-1">
+                {providers.length} prestataire(s) disponible(s)
+              </p>
+            )}
           </div>
 
           {/* Codes postaux */}
@@ -355,7 +404,11 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
             </div>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button 
+            type="submit" 
+            disabled={loading || providers.length === 0} 
+            className="w-full"
+          >
             {loading ? 'Enregistrement...' : (isEditing ? 'Mettre à jour le trajet' : 'Créer le trajet')}
           </Button>
         </form>

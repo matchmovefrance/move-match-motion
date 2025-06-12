@@ -26,32 +26,46 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
 
   useEffect(() => {
     const initMap = async () => {
-      if (!mapRef.current || !window.google) return;
+      if (!mapRef.current) return;
+
+      // Attendre que Google Maps soit disponible
+      if (!window.google || !window.google.maps) {
+        console.log('Google Maps pas encore chargé, attente...');
+        return;
+      }
 
       try {
+        console.log('Initialisation de la carte pour:', move.departure_postal_code, '->', move.arrival_postal_code);
+        
         const geocoder = new google.maps.Geocoder();
         
         // Géocoder les adresses de départ et d'arrivée
         const departureQuery = `${move.departure_postal_code}, ${move.departure_city}, France`;
         const arrivalQuery = `${move.arrival_postal_code}, ${move.arrival_city}, France`;
 
+        console.log('Géocodage:', departureQuery, arrivalQuery);
+
         const [departureResult, arrivalResult] = await Promise.all([
           new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
             geocoder.geocode({ address: departureQuery }, (results, status) => {
+              console.log('Résultat géocodage départ:', status, results);
               if (status === 'OK' && results) resolve(results);
-              else reject(new Error('Geocoding failed for departure'));
+              else reject(new Error(`Geocoding failed for departure: ${status}`));
             });
           }),
           new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
             geocoder.geocode({ address: arrivalQuery }, (results, status) => {
+              console.log('Résultat géocodage arrivée:', status, results);
               if (status === 'OK' && results) resolve(results);
-              else reject(new Error('Geocoding failed for arrival'));
+              else reject(new Error(`Geocoding failed for arrival: ${status}`));
             });
           })
         ]);
 
         const departureLocation = departureResult[0].geometry.location;
         const arrivalLocation = arrivalResult[0].geometry.location;
+
+        console.log('Positions trouvées:', departureLocation.toString(), arrivalLocation.toString());
 
         // Créer la carte
         const map = new google.maps.Map(mapRef.current, {
@@ -61,6 +75,7 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
         });
 
         mapInstanceRef.current = map;
+        console.log('Carte créée');
 
         // Ajouter les marqueurs
         new google.maps.Marker({
@@ -83,6 +98,8 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
           }
         });
 
+        console.log('Marqueurs ajoutés');
+
         // Ajouter la route
         const directionsService = new google.maps.DirectionsService();
         const directionsRenderer = new google.maps.DirectionsRenderer();
@@ -103,8 +120,12 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
           destination: arrivalLocation,
           travelMode: google.maps.TravelMode.DRIVING
         }, (result, status) => {
+          console.log('Résultat directions:', status, result);
           if (status === 'OK' && result) {
             directionsRenderer.setDirections(result);
+            console.log('Route affichée');
+          } else {
+            console.error('Erreur directions:', status);
           }
         });
 
@@ -114,24 +135,52 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
         bounds.extend(arrivalLocation);
         map.fitBounds(bounds);
 
+        console.log('Carte initialisée avec succès');
+
       } catch (error) {
         console.error('Erreur lors de l\'initialisation de la carte:', error);
       }
     };
 
-    if (window.google) {
-      initMap();
-    } else {
-      // Attendre que Google Maps soit chargé
-      const checkGoogleMaps = setInterval(() => {
-        if (window.google) {
-          clearInterval(checkGoogleMaps);
-          initMap();
-        }
-      }, 100);
+    // Fonction pour charger le script Google Maps
+    const loadGoogleMaps = () => {
+      if (window.google && window.google.maps) {
+        initMap();
+        return;
+      }
 
-      return () => clearInterval(checkGoogleMaps);
-    }
+      // Créer le script Google Maps s'il n'existe pas
+      if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+        const script = document.createElement('script');
+        script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y&libraries=places';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          console.log('Script Google Maps chargé');
+          setTimeout(initMap, 100); // Petit délai pour s'assurer que tout est prêt
+        };
+        script.onerror = () => {
+          console.error('Erreur de chargement du script Google Maps');
+        };
+        document.head.appendChild(script);
+      } else {
+        // Script déjà présent, attendre qu'il soit prêt
+        const checkGoogleMaps = setInterval(() => {
+          if (window.google && window.google.maps) {
+            clearInterval(checkGoogleMaps);
+            initMap();
+          }
+        }, 100);
+
+        // Timeout après 10 secondes
+        setTimeout(() => {
+          clearInterval(checkGoogleMaps);
+          console.error('Timeout: Google Maps non disponible après 10 secondes');
+        }, 10000);
+      }
+    };
+
+    loadGoogleMaps();
   }, [move]);
 
   if (isLoading) {
@@ -147,7 +196,7 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
 
   return (
     <div className="space-y-4">
-      <div ref={mapRef} className="h-96 w-full rounded-lg" />
+      <div ref={mapRef} className="h-96 w-full rounded-lg border" />
       {distance && (
         <div className="text-sm text-gray-600 text-center">
           Distance: {distance}km

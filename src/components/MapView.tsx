@@ -21,18 +21,19 @@ interface FilteredItem {
 const MapView = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [referenceFilter, setReferenceFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [filteredItems, setFilteredItems] = useState<FilteredItem[]>([]);
   const [selectedItems, setSelectedItems] = useState<FilteredItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (searchTerm.length >= 2) {
+    if (searchTerm.length >= 2 || referenceFilter.length >= 3) {
       searchItems();
     } else {
       setFilteredItems([]);
     }
-  }, [searchTerm, typeFilter]);
+  }, [searchTerm, referenceFilter, typeFilter]);
 
   const searchItems = async () => {
     setLoading(true);
@@ -48,7 +49,17 @@ const MapView = () => {
           .limit(10);
 
         if (!clientError && clients) {
-          items.push(...clients.map(client => ({
+          let filteredClients = clients;
+          
+          // Filtre par référence si spécifié
+          if (referenceFilter) {
+            filteredClients = clients.filter(client => {
+              const ref = `CLI-${String(client.id).padStart(6, '0')}`;
+              return ref.toLowerCase().includes(referenceFilter.toLowerCase());
+            });
+          }
+
+          items.push(...filteredClients.map(client => ({
             id: client.id,
             type: 'client' as const,
             reference: `CLI-${String(client.id).padStart(6, '0')}`,
@@ -68,7 +79,17 @@ const MapView = () => {
           .limit(10);
 
         if (!moveError && moves) {
-          items.push(...moves.map(move => ({
+          let filteredMoves = moves;
+          
+          // Filtre par référence si spécifié
+          if (referenceFilter) {
+            filteredMoves = moves.filter(move => {
+              const ref = `TRJ-${String(move.id).padStart(6, '0')}`;
+              return ref.toLowerCase().includes(referenceFilter.toLowerCase());
+            });
+          }
+
+          items.push(...filteredMoves.map(move => ({
             id: move.id,
             type: 'move' as const,
             reference: `TRJ-${String(move.id).padStart(6, '0')}`,
@@ -92,18 +113,29 @@ const MapView = () => {
           .limit(10);
 
         if (!matchError && matches) {
-          const filteredMatches = matches.filter(match => {
-            const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
-            const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
-            
-            const matchRef = `MTH-${String(match.id).padStart(6, '0')}`;
-            const clientName = clientRequest?.name || '';
-            const moveName = confirmedMove?.company_name || '';
-            
-            return matchRef.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                   clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                   moveName.toLowerCase().includes(searchTerm.toLowerCase());
-          });
+          let filteredMatches = matches;
+          
+          // Filtre par référence si spécifié
+          if (referenceFilter) {
+            filteredMatches = matches.filter(match => {
+              const ref = `MTH-${String(match.id).padStart(6, '0')}`;
+              return ref.toLowerCase().includes(referenceFilter.toLowerCase());
+            });
+          }
+
+          // Filtre par terme de recherche
+          if (searchTerm) {
+            filteredMatches = filteredMatches.filter(match => {
+              const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
+              const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
+              
+              const clientName = clientRequest?.name || '';
+              const moveName = confirmedMove?.company_name || '';
+              
+              return clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                     moveName.toLowerCase().includes(searchTerm.toLowerCase());
+            });
+          }
 
           items.push(...filteredMatches.map(match => {
             const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
@@ -151,6 +183,7 @@ const MapView = () => {
   const clearAllFilters = () => {
     setSelectedItems([]);
     setSearchTerm('');
+    setReferenceFilter('');
     setFilteredItems([]);
   };
 
@@ -184,29 +217,57 @@ const MapView = () => {
 
       {/* Filtres de recherche */}
       <div className="bg-white p-4 rounded-lg border space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Rechercher par référence, nom, ou code postal..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Filtre par référence - Plus visible */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Recherche par référence
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="CLI-000001, TRJ-000001, MTH-000001..."
+                value={referenceFilter}
+                onChange={(e) => setReferenceFilter(e.target.value)}
+                className="pl-10 border-blue-300 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Recherche générale */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Recherche générale
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Nom, entreprise, code postal..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
           
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full sm:w-48">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les types</SelectItem>
-              <SelectItem value="client">Clients</SelectItem>
-              <SelectItem value="move">Trajets</SelectItem>
-              <SelectItem value="match">Matchs</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Type de contenu */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type de contenu
+            </label>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger>
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les types</SelectItem>
+                <SelectItem value="client">Clients</SelectItem>
+                <SelectItem value="move">Trajets</SelectItem>
+                <SelectItem value="match">Matchs</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Résultats de recherche */}
@@ -243,11 +304,15 @@ const MapView = () => {
               </div>
             ))}
           </div>
-        ) : searchTerm.length >= 2 ? (
+        ) : (searchTerm.length >= 2 || referenceFilter.length >= 3) ? (
           <div className="text-center py-4 text-gray-500">
             Aucun résultat trouvé
           </div>
-        ) : null}
+        ) : (
+          <div className="text-center py-4 text-gray-400">
+            Saisissez au moins 2 caractères dans la recherche générale ou 3 dans la référence
+          </div>
+        )}
       </div>
 
       {/* Éléments sélectionnés */}
