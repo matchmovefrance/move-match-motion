@@ -4,11 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, MapPin, Calendar, Package, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Users, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import SimpleClientFormReplacement from '@/components/SimpleClientFormReplacement';
 
 const PublicClientForm = () => {
   const { token } = useParams();
@@ -18,24 +18,7 @@ const PublicClientForm = () => {
   const [password, setPassword] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [linkValid, setLinkValid] = useState(true);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    departure_address: '',
-    departure_city: '',
-    departure_postal_code: '',
-    arrival_address: '',
-    arrival_city: '',
-    arrival_postal_code: '',
-    desired_date: '',
-    estimated_volume: '',
-    budget_max: '',
-    description: ''
-  });
 
   useEffect(() => {
     if (token) {
@@ -106,54 +89,11 @@ const PublicClientForm = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-
-    try {
-      const { error } = await supabase
-        .from('clients')
-        .insert([{
-          ...formData,
-          estimated_volume: parseFloat(formData.estimated_volume) || 0,
-          budget_max: parseFloat(formData.budget_max) || null,
-          status: 'pending',
-          created_by: null // Pas d'utilisateur connecté pour les formulaires publics
-        }]);
-
-      if (error) throw error;
-
-      toast({
-        title: "Demande envoyée !",
-        description: "Votre demande de devis a été transmise avec succès",
-      });
-
-      // Réinitialiser le formulaire
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        departure_address: '',
-        departure_city: '',
-        departure_postal_code: '',
-        arrival_address: '',
-        arrival_city: '',
-        arrival_postal_code: '',
-        desired_date: '',
-        estimated_volume: '',
-        budget_max: '',
-        description: ''
-      });
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible d'envoyer votre demande",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
+  const handleSuccess = () => {
+    toast({
+      title: "Demande envoyée !",
+      description: "Votre demande de devis a été transmise avec succès",
+    });
   };
 
   if (!linkValid) {
@@ -221,164 +161,7 @@ const PublicClientForm = () => {
           <p className="text-gray-600">Remplissez ce formulaire pour recevoir votre devis personnalisé</p>
         </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Informations personnelles */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                  <Users className="h-5 w-5 mr-2" />
-                  Vos informations
-                </h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label htmlFor="name">Nom complet *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="phone">Téléphone *</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Adresses */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                  <MapPin className="h-5 w-5 mr-2" />
-                  Adresses
-                </h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-green-700">Adresse de départ</h4>
-                    <Input
-                      placeholder="Adresse complète"
-                      value={formData.departure_address}
-                      onChange={(e) => setFormData({...formData, departure_address: e.target.value})}
-                      required
-                    />
-                    <div className="grid gap-2 grid-cols-2">
-                      <Input
-                        placeholder="Ville"
-                        value={formData.departure_city}
-                        onChange={(e) => setFormData({...formData, departure_city: e.target.value})}
-                        required
-                      />
-                      <Input
-                        placeholder="Code postal"
-                        value={formData.departure_postal_code}
-                        onChange={(e) => setFormData({...formData, departure_postal_code: e.target.value})}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-red-700">Adresse d'arrivée</h4>
-                    <Input
-                      placeholder="Adresse complète"
-                      value={formData.arrival_address}
-                      onChange={(e) => setFormData({...formData, arrival_address: e.target.value})}
-                      required
-                    />
-                    <div className="grid gap-2 grid-cols-2">
-                      <Input
-                        placeholder="Ville"
-                        value={formData.arrival_city}
-                        onChange={(e) => setFormData({...formData, arrival_city: e.target.value})}
-                        required
-                      />
-                      <Input
-                        placeholder="Code postal"
-                        value={formData.arrival_postal_code}
-                        onChange={(e) => setFormData({...formData, arrival_postal_code: e.target.value})}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Détails du déménagement */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                  <Package className="h-5 w-5 mr-2" />
-                  Détails du déménagement
-                </h3>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <Label htmlFor="desired_date">Date souhaitée *</Label>
-                    <Input
-                      id="desired_date"
-                      type="date"
-                      value={formData.desired_date}
-                      onChange={(e) => setFormData({...formData, desired_date: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="estimated_volume">Volume estimé (m³) *</Label>
-                    <Input
-                      id="estimated_volume"
-                      type="number"
-                      step="0.1"
-                      value={formData.estimated_volume}
-                      onChange={(e) => setFormData({...formData, estimated_volume: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="budget_max">Budget maximum (€)</Label>
-                    <Input
-                      id="budget_max"
-                      type="number"
-                      value={formData.budget_max}
-                      onChange={(e) => setFormData({...formData, budget_max: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="description">Informations complémentaires</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Étage, ascenseur, objets fragiles, etc."
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <Button 
-                type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-3"
-                disabled={submitting}
-              >
-                {submitting && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-                {submitting ? 'Envoi en cours...' : 'Envoyer ma demande de devis'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <SimpleClientFormReplacement onSuccess={handleSuccess} />
       </div>
     </div>
   );

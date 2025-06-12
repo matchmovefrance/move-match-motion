@@ -1,14 +1,14 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Truck, MapPin, Calendar, Package, Lock, Volume2 } from 'lucide-react';
+import { Truck, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import SimpleMoverFormReplacement from '@/components/SimpleMoverFormReplacement';
 
 const PublicMoverForm = () => {
   const { token } = useParams();
@@ -18,28 +18,6 @@ const PublicMoverForm = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [linkData, setLinkData] = useState<any>(null);
-  
-  const [formData, setFormData] = useState({
-    company_name: '',
-    mover_name: '',
-    contact_phone: '',
-    contact_email: '',
-    departure_city: '',
-    departure_postal_code: '',
-    departure_address: '',
-    arrival_city: '',
-    arrival_postal_code: '',
-    arrival_address: '',
-    departure_date: '',
-    departure_time: '',
-    estimated_arrival_date: '',
-    estimated_arrival_time: '',
-    max_volume: '',
-    used_volume: '',
-    truck_type: 'Semi-remorque',
-    description: '',
-    special_requirements: ''
-  });
 
   useEffect(() => {
     if (token) {
@@ -53,6 +31,7 @@ const PublicMoverForm = () => {
         .from('public_links')
         .select('*')
         .eq('link_token', token)
+        .eq('link_type', 'mover')
         .gt('expires_at', new Date().toISOString())
         .single();
 
@@ -90,117 +69,11 @@ const PublicMoverForm = () => {
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const calculateAvailableVolume = () => {
-    const maxVol = parseFloat(formData.max_volume) || 0;
-    const usedVol = parseFloat(formData.used_volume) || 0;
-    return Math.max(0, maxVol - usedVol);
-  };
-
-  const handleVolumeChange = (field: 'max_volume' | 'used_volume', value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      console.log('📝 Début de soumission du formulaire public');
-      
-      const maxVolume = parseFloat(formData.max_volume);
-      const usedVolume = parseFloat(formData.used_volume) || 0;
-      const availableVolume = Math.max(0, maxVolume - usedVolume);
-
-      const moveData = {
-        // Données obligatoires
-        departure_city: formData.departure_city,
-        departure_postal_code: formData.departure_postal_code,
-        departure_date: formData.departure_date,
-        arrival_city: formData.arrival_city,
-        arrival_postal_code: formData.arrival_postal_code,
-        max_volume: maxVolume,
-        used_volume: usedVolume,
-        available_volume: availableVolume,
-        price_per_m3: 0, // Valeur par défaut
-        
-        // Données du formulaire
-        company_name: formData.company_name,
-        mover_name: formData.mover_name,
-        contact_phone: formData.contact_phone,
-        contact_email: formData.contact_email,
-        departure_address: formData.departure_address || '',
-        arrival_address: formData.arrival_address || '',
-        departure_time: formData.departure_time || null,
-        estimated_arrival_date: formData.estimated_arrival_date || null,
-        estimated_arrival_time: formData.estimated_arrival_time || null,
-        truck_identifier: 'AUTO-GENERATED',
-        truck_type: formData.truck_type,
-        description: formData.description || '',
-        special_requirements: formData.special_requirements || '',
-        
-        // Valeurs par défaut
-        status: 'confirmed',
-        mover_id: 1,
-        truck_id: 1,
-        created_by: linkData?.created_by || null
-      };
-
-      console.log('📊 Données à insérer:', moveData);
-
-      const { data: moveResult, error: moveError } = await supabase
-        .from('confirmed_moves')
-        .insert(moveData)
-        .select();
-
-      if (moveError) {
-        console.error('❌ Erreur insertion move:', moveError);
-        throw moveError;
-      }
-
-      console.log('✅ Trajet créé avec succès:', moveResult);
-
-      toast({
-        title: "Trajet enregistré",
-        description: `Trajet enregistré avec ${availableVolume.toFixed(1)}m³ disponible`,
-      });
-
-      // Réinitialiser le formulaire
-      setFormData({
-        company_name: '',
-        mover_name: '',
-        contact_phone: '',
-        contact_email: '',
-        departure_city: '',
-        departure_postal_code: '',
-        departure_address: '',
-        arrival_city: '',
-        arrival_postal_code: '',
-        arrival_address: '',
-        departure_date: '',
-        departure_time: '',
-        estimated_arrival_date: '',
-        estimated_arrival_time: '',
-        max_volume: '',
-        used_volume: '',
-        truck_type: 'Semi-remorque',
-        description: '',
-        special_requirements: ''
-      });
-
-    } catch (error: any) {
-      console.error('❌ Erreur complète:', error);
-      toast({
-        title: "Erreur",
-        description: `Impossible d'enregistrer le trajet: ${error.message}`,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+  const handleSuccess = () => {
+    toast({
+      title: "Trajet enregistré",
+      description: "Votre trajet a été enregistré avec succès",
+    });
   };
 
   if (!linkData) {
@@ -250,314 +123,16 @@ const PublicMoverForm = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-      <div className="container mx-auto max-w-4xl">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8 text-center"
-        >
+      <div className="container mx-auto max-w-2xl">
+        <div className="mb-8 text-center">
           <div className="flex items-center justify-center space-x-3 mb-4">
             <Truck className="h-8 w-8 text-blue-600" />
             <h1 className="text-3xl font-bold text-gray-800">Saisie de trajet</h1>
           </div>
           <p className="text-gray-600">Enregistrez votre trajet de déménagement</p>
-        </motion.div>
+        </div>
 
-        <Card className="shadow-xl">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Package className="h-5 w-5" />
-              <span>Informations du trajet</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Informations de l'entreprise */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="company_name">Nom de l'entreprise *</Label>
-                  <Input
-                    id="company_name"
-                    value={formData.company_name}
-                    onChange={(e) => handleInputChange('company_name', e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="mover_name">Nom du responsable *</Label>
-                  <Input
-                    id="mover_name"
-                    value={formData.mover_name}
-                    onChange={(e) => handleInputChange('mover_name', e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contact_phone">Téléphone *</Label>
-                  <Input
-                    id="contact_phone"
-                    type="tel"
-                    value={formData.contact_phone}
-                    onChange={(e) => handleInputChange('contact_phone', e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contact_email">Email *</Label>
-                  <Input
-                    id="contact_email"
-                    type="email"
-                    value={formData.contact_email}
-                    onChange={(e) => handleInputChange('contact_email', e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Informations du départ */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold flex items-center space-x-2">
-                  <MapPin className="h-5 w-5 text-green-600" />
-                  <span>Départ</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="departure_city">Ville *</Label>
-                    <Input
-                      id="departure_city"
-                      value={formData.departure_city}
-                      onChange={(e) => handleInputChange('departure_city', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="departure_postal_code">Code postal *</Label>
-                    <Input
-                      id="departure_postal_code"
-                      value={formData.departure_postal_code}
-                      onChange={(e) => handleInputChange('departure_postal_code', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="departure_address">Adresse</Label>
-                    <Input
-                      id="departure_address"
-                      value={formData.departure_address}
-                      onChange={(e) => handleInputChange('departure_address', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Informations de l'arrivée */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold flex items-center space-x-2">
-                  <MapPin className="h-5 w-5 text-red-600" />
-                  <span>Arrivée</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="arrival_city">Ville *</Label>
-                    <Input
-                      id="arrival_city"
-                      value={formData.arrival_city}
-                      onChange={(e) => handleInputChange('arrival_city', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="arrival_postal_code">Code postal *</Label>
-                    <Input
-                      id="arrival_postal_code"
-                      value={formData.arrival_postal_code}
-                      onChange={(e) => handleInputChange('arrival_postal_code', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="arrival_address">Adresse</Label>
-                    <Input
-                      id="arrival_address"
-                      value={formData.arrival_address}
-                      onChange={(e) => handleInputChange('arrival_address', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Dates et horaires */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold flex items-center space-x-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <span>Planning</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="departure_date">Date de départ *</Label>
-                    <Input
-                      id="departure_date"
-                      type="date"
-                      value={formData.departure_date}
-                      onChange={(e) => handleInputChange('departure_date', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="departure_time">Heure de départ</Label>
-                    <Input
-                      id="departure_time"
-                      type="time"
-                      value={formData.departure_time}
-                      onChange={(e) => handleInputChange('departure_time', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="estimated_arrival_date">Date d'arrivée estimée</Label>
-                    <Input
-                      id="estimated_arrival_date"
-                      type="date"
-                      value={formData.estimated_arrival_date}
-                      onChange={(e) => handleInputChange('estimated_arrival_date', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="estimated_arrival_time">Heure d'arrivée estimée</Label>
-                    <Input
-                      id="estimated_arrival_time"
-                      type="time"
-                      value={formData.estimated_arrival_time}
-                      onChange={(e) => handleInputChange('estimated_arrival_time', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Informations du camion et volumes */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold flex items-center space-x-2">
-                  <Truck className="h-5 w-5 text-purple-600" />
-                  <span>Camion et capacité</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="truck_type">Type de camion</Label>
-                    <select
-                      id="truck_type"
-                      value={formData.truck_type}
-                      onChange={(e) => handleInputChange('truck_type', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="Semi-remorque">Semi-remorque</option>
-                      <option value="Camion">Camion</option>
-                      <option value="Fourgon">Fourgon</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="max_volume">Volume maximum (m³) *</Label>
-                    <Input
-                      id="max_volume"
-                      type="number"
-                      step="0.1"
-                      value={formData.max_volume}
-                      onChange={(e) => handleVolumeChange('max_volume', e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Section volumes avec calcul automatique */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
-                  <h4 className="font-medium flex items-center gap-2 text-blue-800">
-                    <Volume2 className="h-4 w-4" />
-                    Gestion des volumes
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="used_volume">Volume utilisé (m³)</Label>
-                      <Input
-                        id="used_volume"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={formData.used_volume}
-                        onChange={(e) => handleVolumeChange('used_volume', e.target.value)}
-                        placeholder="0.0"
-                      />
-                      <p className="text-xs text-blue-600 mt-1">
-                        Volume déjà occupé dans le camion
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <Label>Volume disponible (m³)</Label>
-                      <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-md">
-                        <span className="font-bold text-green-700">
-                          {calculateAvailableVolume().toFixed(1)} m³
-                        </span>
-                      </div>
-                      <p className="text-xs text-green-600 mt-1">
-                        Calculé automatiquement
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label>Taux d'occupation</Label>
-                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
-                        <span className="font-bold text-gray-700">
-                          {formData.max_volume && parseFloat(formData.max_volume) > 0 
-                            ? ((parseFloat(formData.used_volume) || 0) / parseFloat(formData.max_volume) * 100).toFixed(1)
-                            : 0}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Pourcentage utilisé
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Alerte si volume utilisé > volume max */}
-                  {parseFloat(formData.used_volume) > parseFloat(formData.max_volume) && formData.max_volume && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                      <p className="text-red-700 text-sm font-medium">
-                        ⚠️ Le volume utilisé ne peut pas dépasser le volume maximum du camion
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Informations supplémentaires */}
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    placeholder="Détails supplémentaires sur le trajet..."
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="special_requirements">Exigences spéciales</Label>
-                  <Textarea
-                    id="special_requirements"
-                    value={formData.special_requirements}
-                    onChange={(e) => handleInputChange('special_requirements', e.target.value)}
-                    placeholder="Équipements spéciaux, contraintes..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Enregistrement...' : 'Enregistrer le trajet'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <SimpleMoverFormReplacement onSuccess={handleSuccess} />
       </div>
     </div>
   );
