@@ -126,11 +126,30 @@ const MatchFinder = () => {
     }
   };
 
-  const calculateDistance = (postalCode1: string, postalCode2: string): number => {
+  const calculateDistance = (postalCode1: string | null, postalCode2: string | null): number => {
+    // Vérifier que les codes postaux ne sont pas null ou undefined
+    if (!postalCode1 || !postalCode2) {
+      console.warn('Code postal manquant:', { postalCode1, postalCode2 });
+      return 999; // Distance par défaut élevée pour les codes postaux manquants
+    }
+
+    // Vérifier que les codes postaux ont une longueur suffisante
+    if (postalCode1.length < 2 || postalCode2.length < 2) {
+      console.warn('Code postal trop court:', { postalCode1, postalCode2 });
+      return 999;
+    }
+
     // Simulation de calcul de distance basé sur les codes postaux
     // Dans une vraie application, on utiliserait l'API Google Maps
     const code1 = parseInt(postalCode1.substring(0, 2));
     const code2 = parseInt(postalCode2.substring(0, 2));
+    
+    // Vérifier que les codes sont des nombres valides
+    if (isNaN(code1) || isNaN(code2)) {
+      console.warn('Code postal invalide:', { postalCode1, postalCode2, code1, code2 });
+      return 999;
+    }
+    
     return Math.abs(code1 - code2) * 10; // Distance approximative en km
   };
 
