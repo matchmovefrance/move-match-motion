@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, TrendingUp, Users, Truck, Target, Eye, Filter } from 'lucide-react';
@@ -202,7 +203,7 @@ const MatchAnalytics = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-1">
                       <Badge variant="outline">
-                        {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}
+                        MTH-{String(match.id).padStart(6, '0')}
                       </Badge>
                       <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
                         {match.is_valid ? 'Valide' : 'Non valide'}
