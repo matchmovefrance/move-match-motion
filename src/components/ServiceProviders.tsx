@@ -58,11 +58,11 @@ const ServiceProviders = () => {
     postal_code: ''
   });
 
-  // Récupérer les prestataires depuis les trajets confirmés
+  // Récupérer les prestataires depuis les trajets confirmés (unifiés sans doublons)
   const { data: providersFromMoves } = useQuery({
-    queryKey: ['providers-from-confirmed-moves'],
+    queryKey: ['unified-providers-from-confirmed-moves'],
     queryFn: async () => {
-      console.log('🔍 Chargement des prestataires depuis les trajets confirmés...');
+      console.log('🔍 Chargement des prestataires unifiés depuis les trajets confirmés...');
       
       const { data: moves, error } = await supabase
         .from('confirmed_moves')
@@ -80,12 +80,17 @@ const ServiceProviders = () => {
         return [];
       }
 
-      // Créer un Map pour éviter les doublons par mover_id
+      // Créer un Map pour éviter les doublons par email/nom entreprise
       const uniqueProviders = new Map();
       
       moves?.forEach(move => {
-        if (move.mover_id && !uniqueProviders.has(move.mover_id)) {
-          uniqueProviders.set(move.mover_id, {
+        const email = move.contact_email?.toLowerCase() || '';
+        const companyName = move.company_name?.toLowerCase() || '';
+        const key = `${email}-${companyName}`;
+        
+        // Éviter les doublons et les entrées vides
+        if (!uniqueProviders.has(key) && (email || companyName)) {
+          uniqueProviders.set(key, {
             id: `move-${move.mover_id}`,
             name: move.mover_name || 'Nom non défini',
             company_name: move.company_name || 'Entreprise non définie',
@@ -409,7 +414,7 @@ const ServiceProviders = () => {
     setShowBankDetailsDialog(true);
   };
 
-  // Combiner les prestataires de la DB avec ceux des trajets
+  // Combiner les prestataires de la DB avec ceux des trajets (sans doublons)
   const allProviders = [
     ...(providers || []),
     ...(providersFromMoves || [])
@@ -564,6 +569,7 @@ const ServiceProviders = () => {
         <div className="flex items-center space-x-3">
           <Settings className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Prestataires de services</h2>
+          <Badge variant="secondary">{allProviders.length}</Badge>
         </div>
         <div className="flex space-x-2">
           <Button
@@ -584,6 +590,12 @@ const ServiceProviders = () => {
         </div>
       </div>
 
+      {allProviders.length > 0 && (
+        <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+          📊 Répartition: {providers.length} depuis la base de données, {providersFromMoves?.length || 0} depuis les trajets (sans doublons)
+        </div>
+      )}
+
       <ListView
         items={allProviders}
         searchFields={['name', 'company_name', 'email', 'city']}
@@ -599,6 +611,9 @@ const ServiceProviders = () => {
                   <h3 className="font-semibold text-gray-800">
                     {provider.company_name}
                   </h3>
+                  <Badge variant="outline" className="text-xs">
+                    {provider.source === 'moves' ? 'Trajets' : 'DB'}
+                  </Badge>
                 </div>
                 
                 <div className="space-y-2 text-sm text-gray-600">
@@ -675,6 +690,7 @@ const ServiceProviders = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setEditingProvider(provider)}
+                  disabled={provider.source === 'moves'}
                 >
                   <Edit className="h-4 w-4" />
                 </Button>
@@ -683,6 +699,7 @@ const ServiceProviders = () => {
                   size="sm"
                   onClick={() => handleDeleteClick(provider)}
                   className="text-red-600 hover:text-red-700"
+                  disabled={provider.source === 'moves'}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -697,6 +714,9 @@ const ServiceProviders = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="font-medium text-gray-800">{provider.company_name}</h4>
+                    <Badge variant="outline" className="text-xs">
+                      {provider.source === 'moves' ? 'Trajets' : 'DB'}
+                    </Badge>
                   </div>
                   <p className="text-sm text-gray-600">{provider.name}</p>
                 </div>
@@ -753,6 +773,7 @@ const ServiceProviders = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => setEditingProvider(provider)}
+                disabled={provider.source === 'moves'}
               >
                 <Edit className="h-3 w-3" />
               </Button>
@@ -761,6 +782,7 @@ const ServiceProviders = () => {
                 size="sm"
                 onClick={() => handleDeleteClick(provider)}
                 className="text-red-600 hover:text-red-700"
+                disabled={provider.source === 'moves'}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>

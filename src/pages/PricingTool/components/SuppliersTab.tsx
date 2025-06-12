@@ -31,6 +31,7 @@ type SupplierFromMoves = {
   created_by: string;
   updated_at: string;
   service_provider_id: number | null;
+  source: 'moves' | 'suppliers';
 };
 
 const SuppliersTab = () => {
@@ -45,30 +46,97 @@ const SuppliersTab = () => {
   const [supplierToDelete, setSupplierToDelete] = useState<SupplierFromMoves | null>(null);
 
   const { data: suppliers, isLoading } = useQuery({
-    queryKey: ['suppliers-from-moves'],
+    queryKey: ['unified-suppliers'],
     queryFn: async () => {
-      console.log('🏢 Chargement des prestataires depuis les trajets...');
+      console.log('🏢 Chargement des prestataires unifiés...');
       
-      const { data, error } = await supabase
+      // Charger les prestataires depuis la table suppliers
+      const { data: suppliersData, error: suppliersError } = await supabase
+        .from('suppliers')
+        .select('*');
+
+      if (suppliersError) {
+        console.error('❌ Erreur chargement table suppliers:', suppliersError);
+      }
+
+      // Charger les prestataires depuis les trajets confirmés
+      const { data: movesData, error: movesError } = await supabase
         .from('confirmed_moves')
         .select('mover_id, mover_name, company_name, contact_email, contact_phone')
         .not('mover_id', 'is', null);
 
-      if (error) {
-        console.error('❌ Erreur chargement prestataires:', error);
-        throw error;
+      if (movesError) {
+        console.error('❌ Erreur chargement prestataires depuis trajets:', movesError);
       }
 
-      // Créer un Map pour éviter les doublons basés sur mover_name + company_name
-      const uniqueSuppliersMap = new Map();
-      
-      data?.forEach((move) => {
-        const key = `${move.mover_name}-${move.company_name}`;
-        if (!uniqueSuppliersMap.has(key)) {
-          uniqueSuppliersMap.set(key, {
+      // Créer une Map pour gérer les doublons par email/nom entreprise
+      const suppliersMap = new Map<string, SupplierFromMoves>();
+
+      // Ajouter les prestataires de la table suppliers
+      suppliersData?.forEach((supplier) => {
+        const key = `${supplier.email?.toLowerCase()}-${supplier.company_name?.toLowerCase()}`;
+        suppliersMap.set(key, {
+          id: supplier.id,
+          company_name: supplier.company_name,
+          contact_name: supplier.contact_name,
+          email: supplier.email || '',
+          phone: supplier.phone || '',
+          address: supplier.address || 'Non spécifié',
+          city: supplier.city || 'Non spécifié',
+          postal_code: supplier.postal_code || '00000',
+          country: supplier.country || 'France',
+          is_active: supplier.is_active !== false,
+          priority_level: supplier.priority_level || 1,
+          pricing_model: supplier.pricing_model || {
+            basePrice: 150,
+            volumeRate: 10,
+            distanceRate: 1,
+            distanceRateHighVolume: 2,
+            floorRate: 50,
+            packingRate: 5,
+            unpackingRate: 5,
+            dismantleRate: 20,
+            reassembleRate: 20,
+            carryingDistanceFee: 100,
+            carryingDistanceThreshold: 10,
+            heavyItemsFee: 200,
+            volumeSupplementThreshold1: 20,
+            volumeSupplementFee1: 150,
+            volumeSupplementThreshold2: 29,
+            volumeSupplementFee2: 160,
+            furnitureLiftFee: 500,
+            furnitureLiftThreshold: 4,
+            parkingFeeEnabled: false,
+            parkingFeeAmount: 0,
+            timeMultiplier: 1,
+            minimumPrice: 200,
+            matchMoveMargin: 40,
+          },
+          performance_metrics: supplier.performance_metrics || {
+            total_bids: 0,
+            acceptance_rate: 0,
+            avg_response_time: 0
+          },
+          created_at: supplier.created_at,
+          created_by: supplier.created_by,
+          updated_at: supplier.updated_at,
+          service_provider_id: supplier.service_provider_id,
+          source: 'suppliers'
+        });
+      });
+
+      // Ajouter les prestataires des trajets (seulement s'ils n'existent pas déjà)
+      movesData?.forEach((move) => {
+        const email = move.contact_email?.toLowerCase() || '';
+        const companyName = move.company_name?.toLowerCase() || '';
+        const key = `${email}-${companyName}`;
+        
+        // Vérifier si ce prestataire existe déjà
+        if (!suppliersMap.has(key) && (email || companyName)) {
+          suppliersMap.set(key, {
             id: `move-supplier-${move.mover_id}`,
-            company_name: move.company_name,
-            contact_name: move.mover_name,
+            company_name: move.company_name || 'Entreprise non définie',
+            contact_name: move.mover_name || 'Nom non défini',
             email: move.contact_email || '',
             phone: move.contact_phone || '',
             address: 'Non spécifié',
@@ -100,7 +168,7 @@ const SuppliersTab = () => {
               parkingFeeAmount: 0,
               timeMultiplier: 1,
               minimumPrice: 200,
-              matchMoveMargin: 40, // Ajouter la marge par défaut
+              matchMoveMargin: 40,
             },
             performance_metrics: {
               total_bids: 0,
@@ -111,12 +179,18 @@ const SuppliersTab = () => {
             created_by: user?.id || '',
             updated_at: new Date().toISOString(),
             service_provider_id: null,
+            source: 'moves'
           });
         }
       });
 
-      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
-      console.log('✅ Prestataires uniques chargés depuis les trajets:', uniqueSuppliers.length);
+      const uniqueSuppliers = Array.from(suppliersMap.values());
+      console.log('✅ Prestataires unifiés chargés:', uniqueSuppliers.length);
+      console.log('📊 Répartition:', {
+        fromSuppliers: uniqueSuppliers.filter(s => s.source === 'suppliers').length,
+        fromMoves: uniqueSuppliers.filter(s => s.source === 'moves').length
+      });
+      
       return uniqueSuppliers;
     },
     enabled: !!user,
@@ -130,11 +204,35 @@ const SuppliersTab = () => {
   const handleDeleteConfirm = async () => {
     if (!supplierToDelete) return;
 
-    // Pour les prestataires issus des trajets, on ne peut pas les supprimer
-    toast({
-      title: "Information",
-      description: "Ce prestataire provient des trajets confirmés et ne peut pas être supprimé",
-    });
+    if (supplierToDelete.source === 'moves') {
+      toast({
+        title: "Information",
+        description: "Ce prestataire provient des trajets confirmés et ne peut pas être supprimé",
+      });
+    } else {
+      try {
+        const { error } = await supabase
+          .from('suppliers')
+          .delete()
+          .eq('id', supplierToDelete.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Succès",
+          description: "Prestataire supprimé avec succès",
+        });
+        
+        queryClient.invalidateQueries({ queryKey: ['unified-suppliers'] });
+      } catch (error) {
+        console.error('Error deleting supplier:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de supprimer le prestataire",
+          variant: "destructive",
+        });
+      }
+    }
     
     setShowDeleteDialog(false);
     setSupplierToDelete(null);
@@ -152,20 +250,20 @@ const SuppliersTab = () => {
 
   const handleCreateSuccess = () => {
     setShowCreateDialog(false);
-    queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
+    queryClient.invalidateQueries({ queryKey: ['unified-suppliers'] });
     queryClient.invalidateQueries({ queryKey: ['pricing-stats'] });
   };
 
   const handlePricingUpdate = () => {
     setShowPricingDialog(false);
     setSelectedSupplier(null);
-    queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
+    queryClient.invalidateQueries({ queryKey: ['unified-suppliers'] });
   };
 
   const handleBankDetailsUpdate = () => {
     setShowBankDetailsDialog(false);
     setSelectedSupplier(null);
-    queryClient.invalidateQueries({ queryKey: ['suppliers-from-moves'] });
+    queryClient.invalidateQueries({ queryKey: ['unified-suppliers'] });
   };
 
   if (isLoading) {
@@ -182,7 +280,7 @@ const SuppliersTab = () => {
         <div>
           <h3 className="text-lg font-semibold">Prestataires ({suppliers?.length || 0})</h3>
           <p className="text-sm text-muted-foreground">
-            Prestataires extraits des trajets confirmés avec leurs modèles de tarification
+            Prestataires unifiés depuis les trajets confirmés et la table prestataires (sans doublons)
           </p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)}>
@@ -210,7 +308,7 @@ const SuppliersTab = () => {
                     {supplier.is_active ? "Actif" : "Inactif"}
                   </Badge>
                   <Badge variant="outline" className="text-xs">
-                    Priorité {supplier.priority_level}
+                    {supplier.source === 'moves' ? 'Trajets' : 'DB'}
                   </Badge>
                 </div>
               </div>
@@ -272,9 +370,10 @@ const SuppliersTab = () => {
                     size="sm" 
                     onClick={() => handleDeleteClick(supplier)}
                     className="text-red-600 hover:text-red-700 text-xs"
+                    disabled={supplier.source === 'moves'}
                   >
                     <Trash2 className="h-3 w-3 mr-1" />
-                    Supprimer
+                    {supplier.source === 'moves' ? 'Non supprimable' : 'Supprimer'}
                   </Button>
                 </div>
               </div>
@@ -288,7 +387,7 @@ const SuppliersTab = () => {
               <Building className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">Aucun prestataire trouvé</h3>
               <p className="text-muted-foreground text-center mb-4">
-                Aucun trajet confirmé trouvé avec des prestataires
+                Aucun prestataire dans la base de données ou les trajets confirmés
               </p>
               <Button onClick={() => setShowCreateDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
