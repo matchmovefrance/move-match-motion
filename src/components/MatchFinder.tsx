@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle, Radar, Heart, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -227,6 +228,8 @@ const MatchFinder = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('date');
   const [scanProgress, setScanProgress] = useState(0);
+  const [showResults, setShowResults] = useState(false);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   useEffect(() => {
     fetchClients();
@@ -278,6 +281,8 @@ const MatchFinder = () => {
     }
 
     setIsScanning(true);
+    setShowResults(false);
+    setCurrentMatchIndex(0);
     setScanProgress(0);
     console.log('🚀 Début du processus de matching ULTRA-RAPIDE...');
 
@@ -300,6 +305,7 @@ const MatchFinder = () => {
           description: "Aucun trajet confirmé disponible",
           variant: "destructive",
         });
+        setIsScanning(false);
         return;
       }
 
@@ -328,10 +334,15 @@ const MatchFinder = () => {
 
       setMatches(allMatches);
 
-      toast({
-        title: "⚡ Scan ULTRA-RAPIDE terminé",
-        description: `${allMatches.length} correspondances trouvées en ${processingTime}ms (${allMatches.filter(m => m.is_valid).length} valides)`,
-      });
+      // Attendre 4 secondes avant d'afficher les résultats
+      setTimeout(() => {
+        setIsScanning(false);
+        setShowResults(true);
+        toast({
+          title: "⚡ Scan ULTRA-RAPIDE terminé",
+          description: `${allMatches.length} correspondances trouvées en ${processingTime}ms (${allMatches.filter(m => m.is_valid).length} valides)`,
+        });
+      }, 4000);
 
     } catch (error) {
       console.error('❌ Erreur matching:', error);
@@ -340,9 +351,7 @@ const MatchFinder = () => {
         description: "Erreur lors du processus de matching",
         variant: "destructive",
       });
-    } finally {
       setIsScanning(false);
-      setScanProgress(0);
     }
   };
 
@@ -350,6 +359,9 @@ const MatchFinder = () => {
     const success = await acceptMatch(match);
     if (success) {
       setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
+      if (currentMatchIndex >= filteredMatches.length - 1) {
+        setCurrentMatchIndex(0);
+      }
     }
   };
 
@@ -357,6 +369,21 @@ const MatchFinder = () => {
     const success = await rejectMatch(match);
     if (success) {
       setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
+      if (currentMatchIndex >= filteredMatches.length - 1) {
+        setCurrentMatchIndex(0);
+      }
+    }
+  };
+
+  const nextMatch = () => {
+    if (currentMatchIndex < filteredMatches.length - 1) {
+      setCurrentMatchIndex(prev => prev + 1);
+    }
+  };
+
+  const previousMatch = () => {
+    if (currentMatchIndex > 0) {
+      setCurrentMatchIndex(prev => prev - 1);
     }
   };
 
@@ -392,264 +419,346 @@ const MatchFinder = () => {
     }
   });
 
+  const currentMatch = sortedMatches[currentMatchIndex];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-indigo-100 p-4"
     >
-      <div className="flex items-center space-x-3">
-        <Target className="h-6 w-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching ULTRA-RAPIDE ⚡</h2>
-      </div>
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center">
+          <motion.h1 
+            className="text-4xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent mb-2"
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+          >
+            💕 MatchMover
+          </motion.h1>
+          <p className="text-gray-600">Trouvez l'amour parfait entre clients et transporteurs</p>
+        </div>
 
-      {/* Statistiques et contrôles */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Users className="h-4 w-4 mr-2 text-blue-600" />
-              Clients actifs
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{clients.length}</div>
-            <p className="text-xs text-muted-foreground">Prêts pour matching</p>
-          </CardContent>
-        </Card>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="bg-white/60 backdrop-blur border-pink-200">
+            <CardContent className="p-4 text-center">
+              <Users className="h-8 w-8 text-pink-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-pink-600">{clients.length}</div>
+              <p className="text-xs text-gray-600">Clients</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Target className="h-4 w-4 mr-2 text-green-600" />
-              Matches trouvés
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{matches.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {matches.filter(m => m.is_valid).length} valides
-            </p>
-          </CardContent>
-        </Card>
+          <Card className="bg-white/60 backdrop-blur border-purple-200">
+            <CardContent className="p-4 text-center">
+              <Target className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-purple-600">{matches.length}</div>
+              <p className="text-xs text-gray-600">Matches</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Truck className="h-4 w-4 mr-2 text-purple-600" />
-              Scanner ULTRA-RAPIDE
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={findMatches}
-              disabled={loading || isScanning || clients.length === 0}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+          <Card className="bg-white/60 backdrop-blur border-green-200">
+            <CardContent className="p-4 text-center">
+              <Heart className="h-8 w-8 text-green-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-green-600">{matches.filter(m => m.is_valid).length}</div>
+              <p className="text-xs text-gray-600">Compatibles</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/60 backdrop-blur border-indigo-200">
+            <CardContent className="p-4 text-center">
+              <Truck className="h-8 w-8 text-indigo-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-indigo-600">∞</div>
+              <p className="text-xs text-gray-600">Possibilités</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Radar Scanner ou Résultats */}
+        <AnimatePresence mode="wait">
+          {!showResults ? (
+            <motion.div
+              key="scanner"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="flex flex-col items-center justify-center py-16"
             >
-              {isScanning ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Scan ULTRA-RAPIDE... {scanProgress}%
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  ⚡ Lancer le scan RAPIDE
-                </>
-              )}
-            </Button>
-            {isScanning && (
-              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                <div 
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-1.5 rounded-full transition-all duration-300"
-                  style={{ width: `${scanProgress}%` }}
-                ></div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Radar Status ⚡</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative h-16 w-16 mx-auto">
-              {isScanning && (
-                <div className="absolute inset-0">
-                  <div className="animate-ping absolute h-full w-full rounded-full bg-blue-400 opacity-25"></div>
-                  <div className="animate-pulse absolute h-full w-full rounded-full bg-blue-500 opacity-50"></div>
-                </div>
-              )}
-              <div className={`h-full w-full rounded-full ${isScanning ? 'bg-gradient-to-r from-blue-600 to-purple-600' : 'bg-gray-300'} flex items-center justify-center`}>
-                <Target className={`h-6 w-6 ${isScanning ? 'text-white animate-spin' : 'text-gray-600'}`} />
-              </div>
-            </div>
-            {isScanning && (
-              <div className="text-center text-xs text-blue-600 mt-2 font-medium">
-                ULTRA-RAPIDE
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtres */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtres et Recherche
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Rechercher par référence, nom, ville..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="valid">Valides uniquement</SelectItem>
-                <SelectItem value="invalid">Non valides</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger>
-                <SelectValue placeholder="Trier par" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date">Date souhaitée</SelectItem>
-                <SelectItem value="distance">Distance</SelectItem>
-                <SelectItem value="score">Score de match</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="text-sm text-gray-600 flex items-center">
-              <Package className="h-4 w-4 mr-1" />
-              {sortedMatches.length} résultats
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Résultats */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Résultats du Matching ULTRA-RAPIDE ⚡</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p>Chargement des données...</p>
-            </div>
-          ) : sortedMatches.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="font-medium">
-                {matches.length === 0 ? 'Aucun match trouvé' : 'Aucun résultat ne correspond aux filtres'}
-              </p>
-              <p className="text-sm mt-2">
-                {matches.length === 0 
-                  ? 'Cliquez sur "⚡ Lancer le scan RAPIDE" pour rechercher des correspondances'
-                  : 'Ajustez vos filtres de recherche'
-                }
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {sortedMatches.map((match, index) => (
-                <Card 
-                  key={`${match.client.id}-${match.move.id}-${index}`}
-                  className={`${match.is_valid ? 'border-green-200 bg-green-50/30' : 'border-orange-200 bg-orange-50/30'}`}
+              {!isScanning ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center space-y-8"
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {match.match_reference}
-                        </Badge>
-                        <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
-                          {match.is_valid ? 'Valide' : 'Partiel'}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          Score: {match.match_score}
-                        </Badge>
-                      </div>
-                      {match.is_valid && (
-                        <div className="flex items-center space-x-2">
+                  <div className="relative">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                      className="w-32 h-32 mx-auto"
+                    >
+                      <Radar className="w-full h-full text-pink-500" />
+                    </motion.div>
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="absolute inset-0 rounded-full border-4 border-pink-300 opacity-30"
+                    />
+                  </div>
+                  
+                  <Button
+                    onClick={findMatches}
+                    disabled={loading || clients.length === 0}
+                    size="lg"
+                    className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-8 py-4 text-lg rounded-full shadow-lg"
+                  >
+                    <Heart className="h-6 w-6 mr-2" />
+                    Commencer le Matching ✨
+                  </Button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center space-y-8"
+                >
+                  <div className="relative">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-48 h-48 mx-auto"
+                    >
+                      <Radar className="w-full h-full text-pink-500" />
+                    </motion.div>
+                    
+                    {/* Ondes radar */}
+                    <motion.div
+                      animate={{ scale: [1, 2, 1], opacity: [0.8, 0, 0.8] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="absolute inset-0 rounded-full border-4 border-pink-400"
+                    />
+                    <motion.div
+                      animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0, 0.6] }}
+                      transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
+                      className="absolute inset-0 rounded-full border-4 border-purple-400"
+                    />
+                    <motion.div
+                      animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
+                      transition={{ duration: 2, repeat: Infinity, delay: 1 }}
+                      className="absolute inset-0 rounded-full border-4 border-indigo-400"
+                    />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h2 className="text-2xl font-bold text-gray-800">Recherche en cours... 💕</h2>
+                    <div className="w-64 bg-gray-200 rounded-full h-2 mx-auto">
+                      <motion.div 
+                        className="bg-gradient-to-r from-pink-500 to-purple-600 h-2 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${scanProgress}%` }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+                    <p className="text-gray-600">{scanProgress}% - Analysing compatibility...</p>
+                  </div>
+                </motion.div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* Filtres */}
+              <Card className="bg-white/60 backdrop-blur border-pink-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-pink-600">
+                    <Filter className="h-5 w-5" />
+                    Filtres de recherche
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Rechercher..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 border-pink-200 focus:border-pink-400"
+                      />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="border-pink-200 focus:border-pink-400">
+                        <SelectValue placeholder="Statut" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les statuts</SelectItem>
+                        <SelectItem value="valid">💕 Compatibles</SelectItem>
+                        <SelectItem value="invalid">💔 Incompatibles</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="border-pink-200 focus:border-pink-400">
+                        <SelectValue placeholder="Trier par" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Date souhaitée</SelectItem>
+                        <SelectItem value="distance">Distance</SelectItem>
+                        <SelectItem value="score">Score de match</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="text-sm text-gray-600 flex items-center justify-center">
+                      <Heart className="h-4 w-4 mr-1 text-pink-500" />
+                      {sortedMatches.length} matches
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Carte de match style Tinder */}
+              {sortedMatches.length > 0 && currentMatch ? (
+                <div className="flex flex-col items-center space-y-6">
+                  <div className="text-center">
+                    <p className="text-gray-600">
+                      Match {currentMatchIndex + 1} sur {sortedMatches.length}
+                    </p>
+                  </div>
+
+                  <motion.div
+                    key={currentMatchIndex}
+                    initial={{ x: 300, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: -300, opacity: 0 }}
+                    className="w-full max-w-md mx-auto"
+                  >
+                    <Card className={`overflow-hidden shadow-2xl ${currentMatch.is_valid ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-300'}`}>
+                      <CardHeader className="text-center pb-2">
+                        <div className="flex items-center justify-center space-x-2 mb-2">
+                          <Badge className={currentMatch.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
+                            {currentMatch.is_valid ? '💕 Compatible' : '💔 Incompatible'}
+                          </Badge>
+                          <Badge variant="outline" className="font-mono text-xs">
+                            Score: {currentMatch.match_score}
+                          </Badge>
+                        </div>
+                        <CardTitle className="text-xl font-bold text-gray-800">
+                          {currentMatch.client.name} ❤️ {currentMatch.move.company_name}
+                        </CardTitle>
+                      </CardHeader>
+                      
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-center p-3 bg-white/50 rounded-lg">
+                            <h4 className="font-semibold text-gray-700 mb-2">👤 Client</h4>
+                            <p className="font-medium">{currentMatch.client.name}</p>
+                            <p className="text-sm text-gray-500">{currentMatch.client.client_reference}</p>
+                            <p className="text-sm">{currentMatch.client.departure_postal_code} → {currentMatch.client.arrival_postal_code}</p>
+                          </div>
+                          
+                          <div className="text-center p-3 bg-white/50 rounded-lg">
+                            <h4 className="font-semibold text-gray-700 mb-2">🚛 Transporteur</h4>
+                            <p className="font-medium">{currentMatch.move.company_name}</p>
+                            <p className="text-sm text-gray-500">{currentMatch.move.move_reference}</p>
+                            <p className="text-sm">{currentMatch.move.departure_postal_code} → {currentMatch.move.arrival_postal_code}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center space-x-2 justify-center p-2 bg-white/50 rounded">
+                            <MapPin className="h-4 w-4 text-blue-600" />
+                            <span><strong>{currentMatch.distance_km}km</strong></span>
+                          </div>
+                          <div className="flex items-center space-x-2 justify-center p-2 bg-white/50 rounded">
+                            <Calendar className="h-4 w-4 text-purple-600" />
+                            <span><strong>±{currentMatch.date_diff_days}j</strong></span>
+                          </div>
+                          <div className="flex items-center space-x-2 justify-center p-2 bg-white/50 rounded">
+                            <Package className="h-4 w-4 text-orange-600" />
+                            <span><strong>{currentMatch.client.estimated_volume}m³</strong></span>
+                          </div>
+                          <div className="flex items-center space-x-2 justify-center p-2 bg-white/50 rounded">
+                            <Package className="h-4 w-4 text-green-600" />
+                            <span><strong>Reste: {Number(currentMatch.available_volume_after.toFixed(2))}m³</strong></span>
+                          </div>
+                        </div>
+
+                        {/* Boutons d'action style Tinder */}
+                        <div className="flex justify-center items-center space-x-6 pt-4">
                           <Button
-                            size="sm"
-                            onClick={() => handleAcceptMatch(match)}
+                            onClick={() => handleRejectMatch(currentMatch)}
                             disabled={actionLoading}
-                            className="bg-green-600 hover:bg-green-700"
+                            size="lg"
+                            className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg"
                           >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Accepter devis
+                            <X className="h-8 w-8" />
                           </Button>
+                          
+                          {currentMatch.is_valid && (
+                            <Button
+                              onClick={() => handleAcceptMatch(currentMatch)}
+                              disabled={actionLoading}
+                              size="lg"
+                              className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg"
+                            >
+                              <Heart className="h-8 w-8" />
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Navigation */}
+                        <div className="flex justify-between items-center pt-4">
                           <Button
-                            size="sm"
+                            onClick={previousMatch}
+                            disabled={currentMatchIndex === 0}
                             variant="outline"
-                            onClick={() => handleRejectMatch(match)}
-                            disabled={actionLoading}
-                            className="text-red-600 hover:text-red-700 border-red-300"
+                            size="sm"
+                            className="border-pink-300"
                           >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Refuser devis
+                            ← Précédent
+                          </Button>
+                          
+                          <Button
+                            onClick={nextMatch}
+                            disabled={currentMatchIndex >= sortedMatches.length - 1}
+                            variant="outline"
+                            size="sm"
+                            className="border-pink-300"
+                          >
+                            Suivant →
                           </Button>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                      <div>
-                        <span className="font-medium text-gray-600">Client:</span>
-                        <p className="font-medium">{match.client.name}</p>
-                        <p className="text-sm text-gray-500">{match.client.client_reference}</p>
-                        <p className="text-sm">{match.client.departure_postal_code} → {match.client.arrival_postal_code}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600">Transporteur:</span>
-                        <p className="font-medium">{match.move.company_name}</p>
-                        <p className="text-sm text-gray-500">{match.move.move_reference}</p>
-                        <p className="text-sm">{match.move.departure_postal_code} → {match.move.arrival_postal_code}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-3 border-t">
-                      <div className="flex items-center space-x-1">
-                        <MapPin className="h-4 w-4 text-blue-600" />
-                        <span><strong>{match.distance_km}km</strong></span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-4 w-4 text-purple-600" />
-                        <span><strong>±{match.date_diff_days}j</strong></span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Package className="h-4 w-4 text-orange-600" />
-                        <span><strong>Volume:</strong> {match.client.estimated_volume}m³</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Package className="h-4 w-4 text-green-600" />
-                        <span><strong>Reste:</strong> {match.available_volume_after}m³</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-16"
+                >
+                  <div className="text-6xl mb-4">💔</div>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Aucun match trouvé</h2>
+                  <p className="text-gray-600">Essayez d'ajuster vos filtres ou lancez un nouveau scan</p>
+                  <Button
+                    onClick={() => {
+                      setShowResults(false);
+                      setMatches([]);
+                    }}
+                    className="mt-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
+                  >
+                    <Radar className="h-4 w-4 mr-2" />
+                    Nouveau scan
+                  </Button>
+                </motion.div>
+              )}
+            </motion.div>
           )}
-        </CardContent>
-      </Card>
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 };
