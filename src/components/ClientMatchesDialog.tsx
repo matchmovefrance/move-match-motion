@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -299,6 +298,9 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                         <CardTitle className="text-lg flex items-center space-x-2">
                           <Truck className="h-5 w-5 text-blue-600" />
                           <span>{match.confirmed_move?.company_name}</span>
+                          <Badge variant="outline" className="ml-2">
+                            MTH-{String(match.id).padStart(6, '0')}
+                          </Badge>
                         </CardTitle>
                         <div className="flex items-center space-x-2">
                           <Badge className={getMatchTypeColor(match.match_type)}>

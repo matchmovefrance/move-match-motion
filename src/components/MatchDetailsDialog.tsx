@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -167,7 +168,10 @@ export const MatchDetailsDialog = ({ open, onOpenChange, match, onMatchUpdated }
             <DialogTitle className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Target className="h-5 w-5 text-blue-600" />
-                <span>Détails du Match MTH-{String(match.id).padStart(6, '0')}</span>
+                <span>Détails du Match</span>
+                <Badge variant="outline" className="ml-2">
+                  MTH-{String(match.id).padStart(6, '0')}
+                </Badge>
               </div>
               <Button
                 variant="outline"
@@ -328,3 +332,4 @@ export const MatchDetailsDialog = ({ open, onOpenChange, match, onMatchUpdated }
     </>
   );
 };
+

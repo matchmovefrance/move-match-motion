@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Target, Search, MapPin, Calendar, Volume2, Users, Truck, Filter, Eye, XCircle, CheckCircle } from 'lucide-react';
@@ -298,6 +299,9 @@ const MatchFinder = () => {
                   <CardTitle className="text-lg flex items-center space-x-2">
                     <Target className="h-5 w-5 text-blue-600" />
                     <span>Match {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}</span>
+                    <Badge variant="outline" className="ml-2">
+                      {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}
+                    </Badge>
                   </CardTitle>
                   <div className="flex space-x-2">
                     <Badge className={getMatchStatusColor(match.is_valid)}>
@@ -467,3 +471,4 @@ const MatchFinder = () => {
 };
 
 export default MatchFinder;
+
