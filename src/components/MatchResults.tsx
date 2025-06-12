@@ -23,6 +23,7 @@ interface MatchResultData {
   combined_volume: number;
   is_valid: boolean;
   created_at: string;
+  match_reference: string;
   client: {
     id: number;
     name: string;
@@ -46,6 +47,7 @@ interface MatchResultData {
     max_volume: number;
     used_volume: number;
     available_volume: number;
+    move_reference: string;
   };
 }
 
@@ -130,7 +132,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
         }
       }
 
-      // Assembler les données finales
+      // Assembler les données finales avec les références standardisées
       const transformedMatches: MatchResultData[] = matchesData.map(match => {
         const client = clientsData.find(c => c.id === match.client_id);
         const move = movesData.find(m => m.id === match.move_id);
@@ -159,11 +161,22 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
           departure_date: new Date().toISOString().split('T')[0],
           max_volume: 0,
           used_volume: 0,
-          available_volume: 0
+          available_volume: 0,
+          move_reference: `TRJ-${String(match.move_id).padStart(6, '0')}`
         };
+
+        // S'assurer que les références sont au bon format
+        if (!clientData.client_reference || !clientData.client_reference.startsWith('CLI-')) {
+          clientData.client_reference = `CLI-${String(match.client_id).padStart(6, '0')}`;
+        }
+
+        if (!moveData.move_reference || !moveData.move_reference.startsWith('TRJ-')) {
+          moveData.move_reference = `TRJ-${String(match.move_id).padStart(6, '0')}`;
+        }
 
         return {
           ...match,
+          match_reference: `MTH-${String(match.id).padStart(6, '0')}`,
           client: clientData,
           move: moveData
         };
@@ -192,6 +205,8 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
       match.client?.client_reference?.toLowerCase().includes(searchLower) ||
       match.move?.company_name?.toLowerCase().includes(searchLower) ||
       match.move?.mover_name?.toLowerCase().includes(searchLower) ||
+      match.move?.move_reference?.toLowerCase().includes(searchLower) ||
+      match.match_reference?.toLowerCase().includes(searchLower) ||
       match.client?.departure_city?.toLowerCase().includes(searchLower) ||
       match.client?.arrival_city?.toLowerCase().includes(searchLower) ||
       match.move?.departure_city?.toLowerCase().includes(searchLower) ||
@@ -286,7 +301,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Rechercher par nom, référence, ville, ID..."
+                placeholder="Rechercher par référence (MTH/CLI/TRJ), nom, ville..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -356,9 +371,11 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Référence Match</TableHead>
                     <TableHead>Référence Client</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Trajet Client</TableHead>
+                    <TableHead>Référence Trajet</TableHead>
                     <TableHead>Transporteur</TableHead>
                     <TableHead>Trajet Transporteur</TableHead>
                     <TableHead>Type</TableHead>
@@ -374,8 +391,18 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
                     <TableRow key={match.id}>
                       <TableCell>
                         <div className="font-mono text-sm">
+                          <div className="font-medium text-blue-600">
+                            {match.match_reference}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            ID: {match.id}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-mono text-sm">
                           <div className="font-medium">
-                            {match.client?.client_reference || `CLI-${String(match.client_id).padStart(6, '0')}`}
+                            {match.client?.client_reference}
                           </div>
                           <div className="text-xs text-gray-500">
                             ID: {match.client_id}
@@ -398,6 +425,16 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
                         </div>
                         <div className="text-xs text-gray-500">
                           {match.client?.departure_city || 'N/A'} → {match.client?.arrival_city || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-mono text-sm">
+                          <div className="font-medium text-green-600">
+                            {match.move?.move_reference}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            ID: {match.move_id}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

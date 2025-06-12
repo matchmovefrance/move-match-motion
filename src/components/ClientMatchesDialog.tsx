@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -317,6 +318,9 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                 <CardTitle className="text-lg flex items-center space-x-2">
                   <Package className="h-5 w-5 text-green-600" />
                   <span>Demande client</span>
+                  <Badge variant="outline" className="font-mono">
+                    {client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`}
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -351,7 +355,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Rechercher par référence trajet, transporteur, codes postaux..."
+              placeholder="Rechercher par référence trajet (TRJ-XXXXXX), transporteur, codes postaux..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -391,13 +395,13 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-2">
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="font-mono">
                             {match.move.move_reference}
                           </Badge>
                           <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
                             {match.is_valid ? 'Compatible' : 'Partiel'}
                           </Badge>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs font-mono">
                             {match.match_reference}
                           </Badge>
                         </div>
