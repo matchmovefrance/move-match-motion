@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +34,8 @@ import { fr } from 'date-fns/locale';
 import SimpleMoverFormReplacement from './SimpleMoverFormReplacement';
 import MapPopup from './MapPopup';
 import StatusToggle from './StatusToggle';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { MarkCompleteDialog } from './MarkCompleteDialog';
 
 interface ConfirmedMove {
   id: number;
@@ -70,9 +71,16 @@ const MoveManagement = () => {
   const [showMapPopup, setShowMapPopup] = useState(false);
   const [selectedMoveForMap, setSelectedMoveForMap] = useState<ConfirmedMove | null>(null);
   
-  // Nouveaux états pour les filtres
+  // États pour les filtres
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // États pour les dialogues
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [selectedMoveForAction, setSelectedMoveForAction] = useState<ConfirmedMove | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     loadMoves();
@@ -109,18 +117,25 @@ const MoveManagement = () => {
     }
   };
 
-  const handleDeleteMove = async (moveId: number) => {
-    if (!user) return;
-    
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce trajet ?')) {
-      return;
-    }
+  const handleShowDeleteDialog = (move: ConfirmedMove) => {
+    setSelectedMoveForAction(move);
+    setShowDeleteDialog(true);
+  };
+
+  const handleShowCompleteDialog = (move: ConfirmedMove) => {
+    setSelectedMoveForAction(move);
+    setShowCompleteDialog(true);
+  };
+
+  const handleDeleteMove = async () => {
+    if (!user || !selectedMoveForAction) return;
     
     try {
+      setIsDeleting(true);
       const { error } = await supabase
         .from('confirmed_moves')
         .delete()
-        .eq('id', moveId);
+        .eq('id', selectedMoveForAction.id);
 
       if (error) throw error;
 
@@ -129,6 +144,8 @@ const MoveManagement = () => {
         description: "Le trajet a été supprimé avec succès",
       });
       
+      setShowDeleteDialog(false);
+      setSelectedMoveForAction(null);
       loadMoves();
     } catch (error) {
       console.error('Error deleting move:', error);
@@ -137,6 +154,43 @@ const MoveManagement = () => {
         description: "Impossible de supprimer le trajet",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleMarkAsCompleted = async () => {
+    if (!user || !selectedMoveForAction) return;
+    
+    try {
+      setIsCompleting(true);
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .update({ 
+          status_custom: 'termine',
+          status: 'completed'
+        })
+        .eq('id', selectedMoveForAction.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Trajet terminé",
+        description: "Le trajet a été marqué comme terminé et sera exclu des futurs matchings",
+      });
+      
+      setShowCompleteDialog(false);
+      setSelectedMoveForAction(null);
+      loadMoves();
+    } catch (error) {
+      console.error('Error marking move as completed:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de marquer le trajet comme terminé",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -427,7 +481,7 @@ const MoveManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteMove(move.id)}
+                            onClick={() => handleShowDeleteDialog(move)}
                             className="text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -442,6 +496,27 @@ const MoveManagement = () => {
           </Card>
         )}
       </div>
+
+      {/* Dialogues de confirmation */}
+      <DeleteConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Supprimer le trajet"
+        description="Êtes-vous sûr de vouloir supprimer ce trajet ? Cette action est irréversible."
+        itemName={selectedMoveForAction ? `${generateMoveReference(selectedMoveForAction.id)} - ${selectedMoveForAction.company_name}` : ''}
+        onConfirm={handleDeleteMove}
+        isDeleting={isDeleting}
+      />
+
+      <MarkCompleteDialog
+        open={showCompleteDialog}
+        onOpenChange={setShowCompleteDialog}
+        title="Marquer le trajet comme terminé"
+        description="Êtes-vous sûr de vouloir marquer ce trajet comme terminé ? Il sera exclu des futurs matchings."
+        itemName={selectedMoveForAction ? `${generateMoveReference(selectedMoveForAction.id)} - ${selectedMoveForAction.company_name}` : ''}
+        onConfirm={handleMarkAsCompleted}
+        isProcessing={isCompleting}
+      />
 
       {selectedMoveForMap && (
         <MapPopup
