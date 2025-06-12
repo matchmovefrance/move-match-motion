@@ -46,38 +46,64 @@ interface MatchResult {
   client: Client;
 }
 
-// Fonction pour calculer la distance via Google Maps API
-const calculateGoogleMapsDistance = async (
+// Cache pour les distances calculées
+const distanceCache = new Map<string, number>();
+
+// Fonction optimisée pour calculer la distance avec cache et parallélisation
+const calculateOptimizedDistance = async (
   fromPostal: string, 
   toPostal: string
 ): Promise<number> => {
+  const cacheKey = `${fromPostal}-${toPostal}`;
+  
+  // Vérifier le cache d'abord
+  if (distanceCache.has(cacheKey)) {
+    return distanceCache.get(cacheKey)!;
+  }
+
   const apiKey = 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
   
   try {
-    console.log(`🗺️ Calcul distance Google Maps: ${fromPostal} -> ${toPostal}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // Timeout de 3s
     
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${fromPostal},France&destinations=${toPostal},France&units=metric&key=${apiKey}&mode=driving`
+      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${fromPostal},France&destinations=${toPostal},France&units=metric&key=${apiKey}&mode=driving`,
+      { 
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      }
     );
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
     
     const data = await response.json();
     
     if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
       const distanceInMeters = data.rows[0].elements[0].distance.value;
       const distanceInKm = Math.round(distanceInMeters / 1000);
-      console.log(`✅ Distance Google Maps: ${distanceInKm}km`);
+      
+      // Mettre en cache le résultat
+      distanceCache.set(cacheKey, distanceInKm);
+      distanceCache.set(`${toPostal}-${fromPostal}`, distanceInKm); // Cache bidirectionnel
+      
       return distanceInKm;
     } else {
-      console.warn('⚠️ Google Maps API error:', data);
       throw new Error('Google Maps API error');
     }
   } catch (error) {
-    console.error('❌ Erreur Google Maps API:', error);
-    return calculateFallbackDistance(fromPostal, toPostal);
+    // Fallback rapide en cas d'erreur
+    const fallbackDistance = calculateFallbackDistance(fromPostal, toPostal);
+    distanceCache.set(cacheKey, fallbackDistance);
+    return fallbackDistance;
   }
 };
 
-// Fonction de fallback pour le calcul de distance
+// Fonction de fallback optimisée
 const calculateFallbackDistance = (postal1: string, postal2: string): number => {
   const lat1 = parseFloat(postal1.substring(0, 2)) + parseFloat(postal1.substring(2, 5)) / 1000;
   const lon1 = parseFloat(postal1.substring(0, 2)) * 0.5;
@@ -92,9 +118,102 @@ const calculateFallbackDistance = (postal1: string, postal2: string): number => 
             Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   
-  const distance = Math.round(R * c);
-  console.log(`📏 Distance fallback: ${distance}km pour ${postal1} -> ${postal2}`);
-  return distance;
+  return Math.round(R * c);
+};
+
+// Fonction pour traiter les matches en parallèle avec limitation de concurrence
+const processMatchesConcurrently = async (
+  clients: Client[],
+  moves: ConfirmedMove[],
+  maxConcurrency: number = 10
+): Promise<MatchResult[]> => {
+  const allMatches: MatchResult[] = [];
+  const tasks: Promise<MatchResult | null>[] = [];
+
+  for (const client of clients) {
+    for (const move of moves) {
+      // Créer une tâche pour chaque combinaison client/trajet
+      const task = processMatch(client, move);
+      tasks.push(task);
+
+      // Si on atteint la limite de concurrence, attendre que certaines tâches se terminent
+      if (tasks.length >= maxConcurrency) {
+        const results = await Promise.allSettled(tasks.splice(0, Math.floor(maxConcurrency / 2)));
+        results.forEach(result => {
+          if (result.status === 'fulfilled' && result.value) {
+            allMatches.push(result.value);
+          }
+        });
+      }
+    }
+  }
+
+  // Traiter les tâches restantes
+  const remainingResults = await Promise.allSettled(tasks);
+  remainingResults.forEach(result => {
+    if (result.status === 'fulfilled' && result.value) {
+      allMatches.push(result.value);
+    }
+  });
+
+  return allMatches;
+};
+
+// Fonction pour traiter un match individuel
+const processMatch = async (client: Client, move: ConfirmedMove): Promise<MatchResult | null> => {
+  try {
+    // Calculs parallèles des distances
+    const [departureDistance, arrivalDistance] = await Promise.all([
+      calculateOptimizedDistance(client.departure_postal_code, move.departure_postal_code),
+      calculateOptimizedDistance(client.arrival_postal_code, move.arrival_postal_code)
+    ]);
+
+    const totalDistance = departureDistance + arrivalDistance;
+
+    // Filtre précoce pour éviter les calculs inutiles
+    if (totalDistance > 100) {
+      return null;
+    }
+
+    // Calculer la différence de dates
+    const clientDate = new Date(client.desired_date);
+    const moveDate = new Date(move.departure_date);
+    const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
+
+    // Calculer la compatibilité du volume
+    const volumeNeeded = client.estimated_volume || 0;
+    const volumeAvailable = (move.max_volume || 0) - (move.used_volume || 0);
+    const volumeCompatible = volumeNeeded <= volumeAvailable;
+    const availableVolumeAfter = Math.max(0, volumeAvailable - volumeNeeded);
+
+    // Critères de validation
+    const isValid = 
+      totalDistance <= 100 &&
+      dateDiff <= 7 &&
+      volumeCompatible;
+
+    // Calculer un score de match
+    const matchScore = totalDistance + (dateDiff * 10) + (volumeCompatible ? 0 : 1000);
+
+    return {
+      move: {
+        ...move,
+        move_reference: `TRJ-${String(move.id).padStart(6, '0')}`,
+        available_volume: volumeAvailable
+      },
+      distance_km: Math.round(totalDistance),
+      date_diff_days: Math.round(dateDiff),
+      volume_compatible: volumeCompatible,
+      available_volume_after: availableVolumeAfter,
+      match_score: matchScore,
+      is_valid: isValid,
+      match_reference: `MTH-${client.id}-${move.id}`,
+      client: client
+    };
+  } catch (error) {
+    console.error(`❌ Erreur traitement match client ${client.id} - trajet ${move.id}:`, error);
+    return null;
+  }
 };
 
 const MatchFinder = () => {
@@ -107,6 +226,7 @@ const MatchFinder = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('date');
+  const [scanProgress, setScanProgress] = useState(0);
 
   useEffect(() => {
     fetchClients();
@@ -158,105 +278,59 @@ const MatchFinder = () => {
     }
 
     setIsScanning(true);
-    console.log('🎯 Début du processus de matching...');
+    setScanProgress(0);
+    console.log('🚀 Début du processus de matching ULTRA-RAPIDE...');
 
     try {
-      const allMatches: MatchResult[] = [];
+      // Étape 1: Charger les trajets confirmés
+      setScanProgress(10);
+      const { data: movesData, error: movesError } = await supabase
+        .from('confirmed_moves')
+        .select('*')
+        .eq('status', 'confirmed')
+        .not('departure_postal_code', 'is', null)
+        .not('arrival_postal_code', 'is', null);
 
-      for (const client of clients) {
-        console.log(`🔍 Recherche matches pour client ${client.name} (${client.client_reference})`);
+      if (movesError) throw movesError;
 
-        // Charger les trajets confirmés
-        const { data: movesData, error: movesError } = await supabase
-          .from('confirmed_moves')
-          .select('*')
-          .eq('status', 'confirmed')
-          .not('departure_postal_code', 'is', null)
-          .not('arrival_postal_code', 'is', null);
-
-        if (movesError) throw movesError;
-
-        if (!movesData || movesData.length === 0) continue;
-
-        for (const move of movesData) {
-          try {
-            // Calculer la distance exacte via Google Maps pour les départs
-            const departureDistance = await calculateGoogleMapsDistance(
-              client.departure_postal_code,
-              move.departure_postal_code
-            );
-
-            // Calculer la distance exacte via Google Maps pour les arrivées
-            const arrivalDistance = await calculateGoogleMapsDistance(
-              client.arrival_postal_code,
-              move.arrival_postal_code
-            );
-
-            const totalDistance = departureDistance + arrivalDistance;
-
-            // FILTRE: Afficher uniquement les trajets ≤ 100km
-            if (totalDistance > 100) {
-              console.log(`❌ Trajet ${move.id} exclu: distance ${totalDistance}km > 100km`);
-              continue;
-            }
-
-            // Calculer la différence de dates
-            const clientDate = new Date(client.desired_date);
-            const moveDate = new Date(move.departure_date);
-            const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
-
-            // Calculer la compatibilité du volume
-            const volumeNeeded = client.estimated_volume || 0;
-            const volumeAvailable = (move.max_volume || 0) - (move.used_volume || 0);
-            const volumeCompatible = volumeNeeded <= volumeAvailable;
-            const availableVolumeAfter = Math.max(0, volumeAvailable - volumeNeeded);
-
-            // Critères de validation
-            const isValid = 
-              totalDistance <= 100 && // ≤ 100km
-              dateDiff <= 7 &&        // ≤ 7 jours de différence
-              volumeCompatible;       // Volume compatible
-
-            // Calculer un score de match
-            const matchScore = totalDistance + (dateDiff * 10) + (volumeCompatible ? 0 : 1000);
-
-            const matchResult: MatchResult = {
-              move: {
-                ...move,
-                move_reference: `TRJ-${String(move.id).padStart(6, '0')}`,
-                available_volume: volumeAvailable
-              },
-              distance_km: Math.round(totalDistance),
-              date_diff_days: Math.round(dateDiff),
-              volume_compatible: volumeCompatible,
-              available_volume_after: availableVolumeAfter,
-              match_score: matchScore,
-              is_valid: isValid,
-              match_reference: `MTH-${client.id}-${move.id}`,
-              client: client
-            };
-
-            allMatches.push(matchResult);
-
-          } catch (error) {
-            console.error(`❌ Erreur calcul match pour trajet ${move.id}:`, error);
-          }
-        }
+      if (!movesData || movesData.length === 0) {
+        setMatches([]);
+        toast({
+          title: "Aucun trajet",
+          description: "Aucun trajet confirmé disponible",
+          variant: "destructive",
+        });
+        return;
       }
 
-      // Trier par score (meilleurs matches en premier)
-      allMatches.sort((a, b) => a.match_score - b.match_score);
+      setScanProgress(20);
+      console.log(`📦 ${movesData.length} trajets confirmés trouvés`);
 
-      console.log('✅ Matches calculés:', {
+      // Étape 2: Traitement en parallèle ultra-rapide
+      setScanProgress(30);
+      console.log('⚡ Traitement parallèle en cours...');
+      
+      const startTime = Date.now();
+      const allMatches = await processMatchesConcurrently(clients, movesData, 15);
+      const processingTime = Date.now() - startTime;
+
+      setScanProgress(80);
+
+      // Étape 3: Tri et finalisation
+      allMatches.sort((a, b) => a.match_score - b.match_score);
+      setScanProgress(100);
+
+      console.log(`✅ Matching ULTRA-RAPIDE terminé en ${processingTime}ms:`, {
         total: allMatches.length,
-        valides: allMatches.filter(m => m.is_valid).length
+        valides: allMatches.filter(m => m.is_valid).length,
+        vitesse: `${Math.round(allMatches.length / (processingTime / 1000))} matches/seconde`
       });
 
       setMatches(allMatches);
 
       toast({
-        title: "Scan terminé",
-        description: `${allMatches.length} correspondances trouvées dont ${allMatches.filter(m => m.is_valid).length} valides`,
+        title: "⚡ Scan ULTRA-RAPIDE terminé",
+        description: `${allMatches.length} correspondances trouvées en ${processingTime}ms (${allMatches.filter(m => m.is_valid).length} valides)`,
       });
 
     } catch (error) {
@@ -268,13 +342,13 @@ const MatchFinder = () => {
       });
     } finally {
       setIsScanning(false);
+      setScanProgress(0);
     }
   };
 
   const handleAcceptMatch = async (match: MatchResult) => {
     const success = await acceptMatch(match);
     if (success) {
-      // Retirer le match de la liste après acceptation
       setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
     }
   };
@@ -282,7 +356,6 @@ const MatchFinder = () => {
   const handleRejectMatch = async (match: MatchResult) => {
     const success = await rejectMatch(match);
     if (success) {
-      // Retirer le match de la liste après rejet
       setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
     }
   };
@@ -327,7 +400,7 @@ const MatchFinder = () => {
     >
       <div className="flex items-center space-x-3">
         <Target className="h-6 w-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching Avancé</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching ULTRA-RAPIDE ⚡</h2>
       </div>
 
       {/* Statistiques et contrôles */}
@@ -364,46 +437,59 @@ const MatchFinder = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center">
               <Truck className="h-4 w-4 mr-2 text-purple-600" />
-              Scanner radar
+              Scanner ULTRA-RAPIDE
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Button
               onClick={findMatches}
               disabled={loading || isScanning || clients.length === 0}
-              className="w-full"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             >
               {isScanning ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Scan en cours...
+                  Scan ULTRA-RAPIDE... {scanProgress}%
                 </>
               ) : (
                 <>
                   <Play className="h-4 w-4 mr-2" />
-                  Lancer le scan
+                  ⚡ Lancer le scan RAPIDE
                 </>
               )}
             </Button>
+            {isScanning && (
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${scanProgress}%` }}
+                ></div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="relative overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Radar Status</CardTitle>
+            <CardTitle className="text-sm font-medium">Radar Status ⚡</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="relative h-16 w-16 mx-auto">
               {isScanning && (
                 <div className="absolute inset-0">
-                  <div className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-25"></div>
-                  <div className="animate-pulse absolute h-full w-full rounded-full bg-green-500 opacity-50"></div>
+                  <div className="animate-ping absolute h-full w-full rounded-full bg-blue-400 opacity-25"></div>
+                  <div className="animate-pulse absolute h-full w-full rounded-full bg-blue-500 opacity-50"></div>
                 </div>
               )}
-              <div className={`h-full w-full rounded-full ${isScanning ? 'bg-green-600' : 'bg-gray-300'} flex items-center justify-center`}>
+              <div className={`h-full w-full rounded-full ${isScanning ? 'bg-gradient-to-r from-blue-600 to-purple-600' : 'bg-gray-300'} flex items-center justify-center`}>
                 <Target className={`h-6 w-6 ${isScanning ? 'text-white animate-spin' : 'text-gray-600'}`} />
               </div>
             </div>
+            {isScanning && (
+              <div className="text-center text-xs text-blue-600 mt-2 font-medium">
+                ULTRA-RAPIDE
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -458,7 +544,7 @@ const MatchFinder = () => {
       {/* Résultats */}
       <Card>
         <CardHeader>
-          <CardTitle>Résultats du Matching</CardTitle>
+          <CardTitle>Résultats du Matching ULTRA-RAPIDE ⚡</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -474,7 +560,7 @@ const MatchFinder = () => {
               </p>
               <p className="text-sm mt-2">
                 {matches.length === 0 
-                  ? 'Cliquez sur "Lancer le scan" pour rechercher des correspondances'
+                  ? 'Cliquez sur "⚡ Lancer le scan RAPIDE" pour rechercher des correspondances'
                   : 'Ajustez vos filtres de recherche'
                 }
               </p>

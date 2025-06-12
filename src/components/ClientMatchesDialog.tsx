@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -53,39 +54,54 @@ interface MatchResult {
   match_reference?: string;
 }
 
-// Fonction pour calculer la distance via Google Maps API
-const calculateGoogleMapsDistance = async (
+// Cache partagé pour les distances
+const distanceCache = new Map<string, number>();
+
+// Fonction ultra-rapide pour calculer la distance
+const calculateUltraFastDistance = async (
   fromPostal: string, 
   toPostal: string
 ): Promise<number> => {
+  const cacheKey = `${fromPostal}-${toPostal}`;
+  
+  if (distanceCache.has(cacheKey)) {
+    return distanceCache.get(cacheKey)!;
+  }
+
   const apiKey = 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
   
   try {
-    console.log(`🗺️ Calcul distance Google Maps: ${fromPostal} -> ${toPostal}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // Timeout encore plus court
     
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${fromPostal},France&destinations=${toPostal},France&units=metric&key=${apiKey}&mode=driving`
+      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${fromPostal},France&destinations=${toPostal},France&units=metric&key=${apiKey}&mode=driving`,
+      { 
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      }
     );
     
-    const data = await response.json();
+    clearTimeout(timeoutId);
     
-    if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
-      const distanceInMeters = data.rows[0].elements[0].distance.value;
-      const distanceInKm = Math.round(distanceInMeters / 1000);
-      console.log(`✅ Distance Google Maps: ${distanceInKm}km`);
-      return distanceInKm;
-    } else {
-      console.warn('⚠️ Google Maps API error:', data);
-      throw new Error('Google Maps API error');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
+        const distanceInKm = Math.round(data.rows[0].elements[0].distance.value / 1000);
+        distanceCache.set(cacheKey, distanceInKm);
+        distanceCache.set(`${toPostal}-${fromPostal}`, distanceInKm);
+        return distanceInKm;
+      }
     }
+    
+    throw new Error('API error');
   } catch (error) {
-    console.error('❌ Erreur Google Maps API:', error);
-    // Fallback vers calcul approximatif
-    return calculateFallbackDistance(fromPostal, toPostal);
+    const fallbackDistance = calculateFallbackDistance(fromPostal, toPostal);
+    distanceCache.set(cacheKey, fallbackDistance);
+    return fallbackDistance;
   }
 };
 
-// Fonction de fallback pour le calcul de distance
 const calculateFallbackDistance = (postal1: string, postal2: string): number => {
   const lat1 = parseFloat(postal1.substring(0, 2)) + parseFloat(postal1.substring(2, 5)) / 1000;
   const lon1 = parseFloat(postal1.substring(0, 2)) * 0.5;
@@ -100,9 +116,7 @@ const calculateFallbackDistance = (postal1: string, postal2: string): number => 
             Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   
-  const distance = Math.round(R * c);
-  console.log(`📏 Distance fallback: ${distance}km pour ${postal1} -> ${postal2}`);
-  return distance;
+  return Math.round(R * c);
 };
 
 export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }: ClientMatchesDialogProps) => {
@@ -122,7 +136,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
   const fetchClientAndMatches = async () => {
     try {
       setLoading(true);
-      console.log(`🔍 Recherche matches pour client ${clientId}...`);
+      console.log(`🚀 Recherche ULTRA-RAPIDE pour client ${clientId}...`);
 
       // Charger le client
       const { data: clientData, error: clientError } = await supabase
@@ -132,8 +146,6 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
         .single();
 
       if (clientError) throw clientError;
-
-      console.log('✅ Client chargé:', clientData);
       setClient(clientData);
 
       // Charger les trajets confirmés
@@ -146,59 +158,44 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
 
       if (movesError) throw movesError;
 
-      console.log('📦 Trajets confirmés chargés:', movesData?.length || 0);
-
       if (!movesData || movesData.length === 0) {
         setMatches([]);
         return;
       }
 
-      // Calculer les matches avec distances exactes Google Maps
-      const matchResults: MatchResult[] = [];
+      console.log(`⚡ Traitement ULTRA-RAPIDE de ${movesData.length} trajets...`);
+      const startTime = Date.now();
 
-      for (const move of movesData) {
+      // Traitement parallèle ultra-rapide
+      const matchPromises = movesData.map(async (move) => {
         try {
-          // Calculer la distance exacte via Google Maps pour les départs
-          const departureDistance = await calculateGoogleMapsDistance(
-            clientData.departure_postal_code,
-            move.departure_postal_code
-          );
-
-          // Calculer la distance exacte via Google Maps pour les arrivées
-          const arrivalDistance = await calculateGoogleMapsDistance(
-            clientData.arrival_postal_code,
-            move.arrival_postal_code
-          );
+          const [departureDistance, arrivalDistance] = await Promise.all([
+            calculateUltraFastDistance(clientData.departure_postal_code, move.departure_postal_code),
+            calculateUltraFastDistance(clientData.arrival_postal_code, move.arrival_postal_code)
+          ]);
 
           const totalDistance = departureDistance + arrivalDistance;
 
-          // FILTRE: Afficher uniquement les trajets ≤ 100km
-          if (totalDistance > 100) {
-            console.log(`❌ Trajet ${move.id} exclu: distance ${totalDistance}km > 100km`);
-            continue;
-          }
+          // Filtre précoce
+          if (totalDistance > 100) return null;
 
-          // Calculer la différence de dates
           const clientDate = new Date(clientData.desired_date);
           const moveDate = new Date(move.departure_date);
           const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
 
-          // Calculer la compatibilité du volume
           const volumeNeeded = clientData.estimated_volume || 0;
           const volumeAvailable = (move.max_volume || 0) - (move.used_volume || 0);
           const volumeCompatible = volumeNeeded <= volumeAvailable;
           const availableVolumeAfter = Math.max(0, volumeAvailable - volumeNeeded);
 
-          // Critères de validation
           const isValid = 
-            totalDistance <= 100 && // ≤ 100km (déjà filtré ci-dessus)
-            dateDiff <= 7 &&        // ≤ 7 jours de différence
-            volumeCompatible;       // Volume compatible
+            totalDistance <= 100 &&
+            dateDiff <= 7 &&
+            volumeCompatible;
 
-          // Calculer un score de match (plus c'est bas, mieux c'est)
           const matchScore = totalDistance + (dateDiff * 10) + (volumeCompatible ? 0 : 1000);
 
-          const matchResult: MatchResult = {
+          return {
             move: {
               ...move,
               move_reference: `TRJ-${String(move.id).padStart(6, '0')}`,
@@ -212,25 +209,25 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             is_valid: isValid,
             match_reference: `MTH-${clientId}-${move.id}`
           };
-
-          matchResults.push(matchResult);
-
-          console.log(`📊 Match ajouté: TRJ-${move.id}, Distance: ${totalDistance}km, Volume: ${volumeCompatible ? '✓' : '✗'} (${volumeNeeded}/${volumeAvailable}), Valide: ${isValid}`);
-
         } catch (error) {
-          console.error(`❌ Erreur calcul match pour trajet ${move.id}:`, error);
+          console.error(`❌ Erreur trajet ${move.id}:`, error);
+          return null;
         }
-      }
-
-      // Trier par score (meilleurs matches en premier)
-      matchResults.sort((a, b) => a.match_score - b.match_score);
-
-      console.log('✅ Matches calculés (≤100km uniquement):', {
-        total: matchResults.length,
-        valides: matchResults.filter(m => m.is_valid).length
       });
 
-      setMatches(matchResults);
+      const results = await Promise.all(matchPromises);
+      const validMatches = results.filter(Boolean) as MatchResult[];
+      
+      // Tri par score
+      validMatches.sort((a, b) => a.match_score - b.match_score);
+
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ Matching ULTRA-RAPIDE terminé en ${processingTime}ms:`, {
+        total: validMatches.length,
+        valides: validMatches.filter(m => m.is_valid).length
+      });
+
+      setMatches(validMatches);
 
     } catch (error) {
       console.error('❌ Erreur recherche matches:', error);
@@ -244,40 +241,6 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     }
   };
 
-  const saveMatch = async (matchResult: MatchResult) => {
-    try {
-      console.log('💾 Sauvegarde du match:', matchResult.match_reference);
-
-      const { error } = await supabase
-        .from('move_matches')
-        .insert({
-          client_id: clientId,
-          move_id: matchResult.move.id,
-          match_type: matchResult.is_valid ? 'perfect' : 'partial',
-          volume_ok: matchResult.volume_compatible,
-          combined_volume: matchResult.available_volume_after,
-          distance_km: matchResult.distance_km,
-          date_diff_days: matchResult.date_diff_days,
-          is_valid: matchResult.is_valid
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Match sauvegardé",
-        description: `Correspondance ${matchResult.match_reference} enregistrée`,
-      });
-
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde match:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de sauvegarder le match",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleAcceptMatch = async (match: MatchResult) => {
     const matchData = {
       ...match,
@@ -286,7 +249,6 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     
     const success = await acceptMatch(matchData);
     if (success) {
-      // Rafraîchir les données après acceptation
       await fetchClientAndMatches();
     }
   };
@@ -299,7 +261,6 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     
     const success = await rejectMatch(matchData);
     if (success) {
-      // Rafraîchir les données après rejet
       await fetchClientAndMatches();
     }
   };
@@ -324,7 +285,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Target className="h-5 w-5 text-blue-600" />
-            <span>Recherche de correspondances (≤ 100km)</span>
+            <span>Recherche ULTRA-RAPIDE ⚡ (≤ 100km)</span>
           </DialogTitle>
           <DialogDescription>
             Client: <strong>{clientName}</strong> 
@@ -332,7 +293,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
               <span className="ml-2">({client.client_reference})</span>
             )}
             <div className="text-sm text-blue-600 mt-1">
-              Filtré: trajets avec distance totale ≤ 100km uniquement
+              ⚡ Traitement parallélisé ultra-rapide avec cache intelligent
             </div>
           </DialogDescription>
         </DialogHeader>
@@ -394,7 +355,8 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p>Calcul distances exactes Google Maps (≤100km)...</p>
+                <p>⚡ Traitement ULTRA-RAPIDE en cours...</p>
+                <p className="text-xs text-gray-500 mt-1">Cache intelligent + parallélisation</p>
               </div>
             ) : filteredMatches.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
@@ -409,9 +371,14 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="text-sm text-gray-600 mb-3">
-                  {filteredMatches.length} correspondance(s) ≤ 100km • 
-                  {filteredMatches.filter(m => m.is_valid).length} valide(s)
+                <div className="text-sm text-gray-600 mb-3 flex items-center justify-between">
+                  <span>
+                    {filteredMatches.length} correspondance(s) ≤ 100km • 
+                    {filteredMatches.filter(m => m.is_valid).length} valide(s)
+                  </span>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    ⚡ ULTRA-RAPIDE
+                  </span>
                 </div>
                 
                 {filteredMatches.map((match, index) => (
@@ -477,7 +444,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t">
                         <div className="flex items-center space-x-1">
                           <MapPin className="h-4 w-4 text-blue-600" />
-                          <span><strong>{match.distance_km}km</strong> (Google Maps)</span>
+                          <span><strong>{match.distance_km}km</strong> (Cache)</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Calendar className="h-4 w-4 text-purple-600" />
