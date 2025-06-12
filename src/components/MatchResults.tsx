@@ -73,52 +73,84 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
       setLoading(true);
       console.log('🔍 Chargement des résultats de matching...');
 
-      const { data: matchesData, error } = await supabase
+      // Charger les matches d'abord
+      const { data: matchesData, error: matchesError } = await supabase
         .from('move_matches')
-        .select(`
-          *,
-          clients!move_matches_client_id_fkey (
-            id,
-            name,
-            client_reference,
-            departure_city,
-            departure_postal_code,
-            arrival_city,
-            arrival_postal_code,
-            estimated_volume,
-            desired_date
-          ),
-          confirmed_moves!move_matches_move_id_fkey (
-            id,
-            company_name,
-            mover_name,
-            departure_city,
-            departure_postal_code,
-            arrival_city,
-            arrival_postal_code,
-            departure_date,
-            max_volume,
-            used_volume,
-            available_volume
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (error) {
-        console.error('❌ Erreur Supabase:', error);
-        throw error;
+      if (matchesError) {
+        console.error('❌ Erreur chargement matches:', matchesError);
+        throw matchesError;
       }
 
-      console.log('✅ Matches chargés:', matchesData?.length || 0);
-      
-      // Transformer les données pour correspondre à notre interface
-      const transformedMatches = matchesData?.map(match => ({
-        ...match,
-        client: match.clients,
-        move: match.confirmed_moves
-      })) || [];
+      if (!matchesData || matchesData.length === 0) {
+        console.log('ℹ️ Aucun match trouvé');
+        setMatches([]);
+        return;
+      }
 
+      // Charger les clients séparément
+      const clientIds = [...new Set(matchesData.map(m => m.client_id))];
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('id, name, client_reference, departure_city, departure_postal_code, arrival_city, arrival_postal_code, estimated_volume, desired_date')
+        .in('id', clientIds);
+
+      if (clientsError) {
+        console.error('❌ Erreur chargement clients:', clientsError);
+        throw clientsError;
+      }
+
+      // Charger les moves séparément
+      const moveIds = [...new Set(matchesData.map(m => m.move_id))];
+      const { data: movesData, error: movesError } = await supabase
+        .from('confirmed_moves')
+        .select('id, company_name, mover_name, departure_city, departure_postal_code, arrival_city, arrival_postal_code, departure_date, max_volume, used_volume, available_volume')
+        .in('id', moveIds);
+
+      if (movesError) {
+        console.error('❌ Erreur chargement moves:', movesError);
+        throw movesError;
+      }
+
+      // Combiner les données
+      const transformedMatches: MatchResultData[] = matchesData.map(match => {
+        const client = clientsData?.find(c => c.id === match.client_id) || {
+          id: match.client_id,
+          name: 'Client introuvable',
+          client_reference: '',
+          departure_city: '',
+          departure_postal_code: '',
+          arrival_city: '',
+          arrival_postal_code: '',
+          estimated_volume: 0,
+          desired_date: ''
+        };
+
+        const move = movesData?.find(m => m.id === match.move_id) || {
+          id: match.move_id,
+          company_name: 'Transporteur introuvable',
+          mover_name: '',
+          departure_city: '',
+          departure_postal_code: '',
+          arrival_city: '',
+          arrival_postal_code: '',
+          departure_date: '',
+          max_volume: 0,
+          used_volume: 0,
+          available_volume: 0
+        };
+
+        return {
+          ...match,
+          client,
+          move
+        };
+      });
+
+      console.log('✅ Matches transformés:', transformedMatches.length);
       setMatches(transformedMatches);
 
     } catch (error) {
