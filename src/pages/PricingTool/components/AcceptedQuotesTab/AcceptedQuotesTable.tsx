@@ -30,6 +30,7 @@ interface AcceptedQuotesTableProps {
   onComplete: (quote: AcceptedQuoteWithDetails) => void;
   onReject: (quote: AcceptedQuoteWithDetails) => void;
   onDownloadPDF: (quote: AcceptedQuoteWithDetails) => void;
+  onDeleteAcceptedQuote?: (quote: AcceptedQuoteWithDetails) => void;
 }
 
 export const AcceptedQuotesTable = ({
@@ -37,32 +38,22 @@ export const AcceptedQuotesTable = ({
   onMarkAsValidated,
   onComplete,
   onReject,
-  onDownloadPDF
+  onDownloadPDF,
+  onDeleteAcceptedQuote
 }: AcceptedQuotesTableProps) => {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Opportunité</TableHead>
-          <TableHead>Fournisseur</TableHead>
-          <TableHead className="text-center">Prix</TableHead>
-          <TableHead className="text-center">Date</TableHead>
-          <TableHead className="text-center">Statut</TableHead>
-          <TableHead className="text-center">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {quotes.map((quote) => (
-          <AcceptedQuoteCard
-            key={quote.id}
-            quote={quote}
-            onMarkAsValidated={onMarkAsValidated}
-            onShowCompleteDialog={onComplete}
-            onShowRejectDialog={onReject}
-            onDownloadPDF={onDownloadPDF}
-          />
-        ))}
-      </TableBody>
-    </Table>
+    <div className="space-y-4">
+      {quotes.map((quote) => (
+        <AcceptedQuoteCard
+          key={quote.id}
+          quote={quote}
+          onMarkAsValidated={onMarkAsValidated}
+          onShowCompleteDialog={onComplete}
+          onShowRejectDialog={onReject}
+          onDownloadPDF={onDownloadPDF}
+          onDeleteAcceptedQuote={onDeleteAcceptedQuote}
+        />
+      ))}
+    </div>
   );
 };

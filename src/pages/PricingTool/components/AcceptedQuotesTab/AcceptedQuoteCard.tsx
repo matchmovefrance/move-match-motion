@@ -1,7 +1,8 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Package, DollarSign, User, Phone, Mail, FileText, CheckCircle, X, Eye, Flag } from 'lucide-react';
+import { Calendar, MapPin, Package, DollarSign, User, Phone, Mail, FileText, CheckCircle, X, Eye, Flag, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useState } from 'react';
@@ -36,6 +37,7 @@ interface AcceptedQuoteCardProps {
   onShowRejectDialog: (quote: AcceptedQuoteWithDetails) => void;
   onDownloadPDF: (quote: AcceptedQuoteWithDetails) => void;
   onMarkAsCompleted?: (quote: AcceptedQuoteWithDetails) => void;
+  onDeleteAcceptedQuote?: (quote: AcceptedQuoteWithDetails) => void;
 }
 
 export const AcceptedQuoteCard = ({ 
@@ -44,7 +46,8 @@ export const AcceptedQuoteCard = ({
   onShowCompleteDialog, 
   onShowRejectDialog, 
   onDownloadPDF,
-  onMarkAsCompleted 
+  onMarkAsCompleted,
+  onDeleteAcceptedQuote 
 }: AcceptedQuoteCardProps) => {
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
 
@@ -69,6 +72,8 @@ export const AcceptedQuoteCard = ({
     }
     setShowCompleteDialog(false);
   };
+
+  const isAutoAcceptedMatch = quote.notes?.includes('auto-accepté via match');
 
   const getActionButtons = () => {
     switch (quote.status) {
@@ -102,6 +107,17 @@ export const AcceptedQuoteCard = ({
               <X className="h-4 w-4 mr-1" />
               Rejeter
             </Button>
+            {onDeleteAcceptedQuote && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDeleteAcceptedQuote(quote)}
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Supprimer
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -134,6 +150,17 @@ export const AcceptedQuoteCard = ({
               <X className="h-4 w-4 mr-1" />
               Rejeter
             </Button>
+            {onDeleteAcceptedQuote && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDeleteAcceptedQuote(quote)}
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Supprimer
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -150,6 +177,17 @@ export const AcceptedQuoteCard = ({
       case 'completed':
         return (
           <div className="flex gap-2">
+            {onDeleteAcceptedQuote && quote.status !== 'completed' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDeleteAcceptedQuote(quote)}
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Supprimer
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -175,8 +213,13 @@ export const AcceptedQuoteCard = ({
             <div className="space-y-1">
               <CardTitle className="text-lg flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-green-600" />
-                {quote.bid_amount.toLocaleString()}€
+                {quote.bid_amount > 0 ? `${quote.bid_amount.toLocaleString()}€` : 'Prix à définir'}
                 {getStatusBadge(quote.status)}
+                {isAutoAcceptedMatch && (
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                    Match Auto
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
@@ -202,6 +245,11 @@ export const AcceptedQuoteCard = ({
               </h4>
               <div className="text-sm bg-gray-50 p-3 rounded-md">
                 <p className="font-medium">{quote.opportunity.title}</p>
+                {isAutoAcceptedMatch && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    ✨ Généré automatiquement via le moteur de matching
+                  </p>
+                )}
               </div>
             </div>
             
@@ -211,16 +259,24 @@ export const AcceptedQuoteCard = ({
                 Prestataire
               </h4>
               <div className="text-sm bg-gray-50 p-3 rounded-md">
-                <p className="font-medium">{quote.supplier.company_name}</p>
-                <p className="text-muted-foreground">{quote.supplier.contact_name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Mail className="h-3 w-3" />
-                  <span className="text-xs">{quote.supplier.email}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-3 w-3" />
-                  <span className="text-xs">{quote.supplier.phone}</span>
-                </div>
+                <p className="font-medium">
+                  {quote.supplier?.company_name || 'Transporteur via match'}
+                </p>
+                {quote.supplier?.contact_name && (
+                  <p className="text-muted-foreground">{quote.supplier.contact_name}</p>
+                )}
+                {quote.supplier?.email && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Mail className="h-3 w-3" />
+                    <span className="text-xs">{quote.supplier.email}</span>
+                  </div>
+                )}
+                {quote.supplier?.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-3 w-3" />
+                    <span className="text-xs">{quote.supplier.phone}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -260,7 +316,7 @@ export const AcceptedQuoteCard = ({
         onOpenChange={setShowCompleteDialog}
         title="Marquer le devis comme terminé"
         description="Êtes-vous sûr de vouloir marquer ce devis comme terminé ? Cette action indique que le service a été complètement réalisé."
-        itemName={`Devis ${quote.bid_amount.toLocaleString()}€ - ${quote.supplier.company_name}`}
+        itemName={`Devis ${quote.bid_amount > 0 ? quote.bid_amount.toLocaleString() + '€' : 'auto'} - ${quote.supplier?.company_name || 'Transporteur via match'}`}
         onConfirm={handleMarkAsCompleted}
       />
     </>

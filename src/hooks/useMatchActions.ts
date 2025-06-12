@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -20,7 +21,7 @@ export const useMatchActions = () => {
           .insert({
             client_id: matchData.client.id,
             move_id: matchData.move.id,
-            match_type: 'valid_auto',
+            match_type: 'accepted_match',
             volume_ok: matchData.volume_compatible,
             combined_volume: matchData.available_volume_after,
             distance_km: matchData.distance_km,
@@ -35,12 +36,68 @@ export const useMatchActions = () => {
         }
       }
 
-      // Insérer l'action d'acceptation (sans client_id qui n'existe pas dans match_actions)
+      // Créer une opportunité dans pricing_opportunities
+      const opportunityData = {
+        title: `Déménagement ${matchData.client.departure_postal_code} → ${matchData.client.arrival_postal_code}`,
+        description: `Match accepté pour ${matchData.client.name}`,
+        departure_address: matchData.client.departure_address || '',
+        departure_city: matchData.client.departure_city || '',
+        departure_postal_code: matchData.client.departure_postal_code,
+        departure_country: matchData.client.departure_country || 'France',
+        arrival_address: matchData.client.arrival_address || '',
+        arrival_city: matchData.client.arrival_city || '',
+        arrival_postal_code: matchData.client.arrival_postal_code,
+        arrival_country: matchData.client.arrival_country || 'France',
+        desired_date: matchData.client.desired_date,
+        estimated_volume: matchData.client.estimated_volume || 0,
+        flexible_dates: matchData.client.flexible_dates || false,
+        date_range_start: matchData.client.date_range_start,
+        date_range_end: matchData.client.date_range_end,
+        budget_range_min: matchData.client.budget_min,
+        budget_range_max: matchData.client.budget_max,
+        special_requirements: matchData.client.special_requirements,
+        status: 'active',
+        client_request_id: matchData.client.id,
+        priority: 1,
+        created_by: (await supabase.auth.getUser()).data.user?.id
+      };
+
+      const { data: opportunity, error: oppError } = await supabase
+        .from('pricing_opportunities')
+        .insert(opportunityData)
+        .select()
+        .single();
+
+      if (oppError) throw oppError;
+
+      // Créer le devis accepté dans quotes
+      const { error: quoteError } = await supabase
+        .from('quotes')
+        .insert({
+          opportunity_id: opportunity.id,
+          supplier_id: matchData.move.company_name, // Utiliser le nom comme ID temporaire
+          bid_amount: 0, // Sera calculé par le moteur de pricing
+          status: 'accepted',
+          notes: `Devis auto-accepté via match ${matchData.match_reference} - Transporteur: ${matchData.move.company_name}`,
+          cost_breakdown: {
+            match_reference: matchData.match_reference,
+            move_id: matchData.move.id,
+            distance_km: matchData.distance_km,
+            date_diff_days: matchData.date_diff_days,
+            volume_after: matchData.available_volume_after
+          },
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (quoteError) throw quoteError;
+
+      // Insérer l'action d'acceptation
       const { error: actionError } = await supabase
         .from('match_actions')
         .insert({
-          match_id: matchData.id || 0, // Utiliser l'ID du match
+          match_id: matchData.id || 0,
           action_type: 'accepted',
+          notes: `Match accepté: ${matchData.match_reference}`,
           user_id: (await supabase.auth.getUser()).data.user?.id
         });
 
@@ -74,7 +131,7 @@ export const useMatchActions = () => {
 
       toast({
         title: "Match accepté",
-        description: `Le devis ${matchData.match_reference} a été accepté avec succès`,
+        description: `Le devis ${matchData.match_reference} a été accepté et ajouté à l'historique`,
       });
 
       return true;
@@ -116,12 +173,13 @@ export const useMatchActions = () => {
         console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
       }
 
-      // Insérer l'action de rejet (sans client_id qui n'existe pas dans match_actions)
+      // Insérer l'action de rejet
       const { error: actionError } = await supabase
         .from('match_actions')
         .insert({
-          match_id: matchData.id || 0, // Utiliser l'ID du match
+          match_id: matchData.id || 0,
           action_type: 'rejected',
+          notes: `Match rejeté: ${matchData.match_reference}`,
           user_id: (await supabase.auth.getUser()).data.user?.id
         });
 
@@ -190,10 +248,56 @@ export const useMatchActions = () => {
     }
   };
 
+  const deleteAcceptedMatch = async (quoteId: string, clientId: number) => {
+    try {
+      setLoading(true);
+      console.log('🗑️ Suppression devis accepté:', quoteId);
+
+      // Supprimer le devis
+      const { error: quoteError } = await supabase
+        .from('quotes')
+        .delete()
+        .eq('id', quoteId);
+
+      if (quoteError) throw quoteError;
+
+      // Remettre le client en statut pending pour permettre de nouveaux matchs
+      const { error: clientError } = await supabase
+        .from('clients')
+        .update({ 
+          status: 'pending',
+          match_status: null,
+          is_matched: false,
+          matched_at: null
+        })
+        .eq('id', clientId);
+
+      if (clientError) throw clientError;
+
+      toast({
+        title: "Devis supprimé",
+        description: "Le devis accepté a été supprimé. Le client peut maintenant recevoir de nouveaux matchs.",
+      });
+
+      return true;
+    } catch (error) {
+      console.error('❌ Erreur suppression devis:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le devis",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     acceptMatch,
     rejectMatch,
     markAsCompleted,
+    deleteAcceptedMatch,
     loading
   };
 };

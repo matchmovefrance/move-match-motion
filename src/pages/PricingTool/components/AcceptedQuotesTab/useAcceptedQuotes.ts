@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useMatchActions } from '@/hooks/useMatchActions';
 
 interface AcceptedQuoteWithDetails {
   id: string;
@@ -30,6 +31,7 @@ export type QuoteFilter = 'all' | 'accepted' | 'validated_by_client' | 'rejected
 
 export const useAcceptedQuotes = () => {
   const { toast } = useToast();
+  const { deleteAcceptedMatch } = useMatchActions();
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<AcceptedQuoteWithDetails | null>(null);
@@ -53,7 +55,7 @@ export const useAcceptedQuotes = () => {
           statusFilter = ['rejected'];
           break;
         default:
-          statusFilter = ['accepted', 'validated_by_client', 'rejected'];
+          statusFilter = ['accepted', 'validated_by_client', 'rejected', 'completed'];
       }
 
       const { data, error } = await supabase
@@ -68,6 +70,11 @@ export const useAcceptedQuotes = () => {
       if (error) throw error;
       
       const filteredData = (data as AcceptedQuoteWithDetails[])?.filter(quote => {
+        // Inclure les devis auto-acceptés via match
+        if (quote.notes?.includes('auto-accepté via match')) {
+          return true;
+        }
+        
         const supplierName = quote.supplier?.company_name?.toLowerCase() || '';
         const isDemo = supplierName.includes('demo') || 
                       supplierName.includes('test') || 
@@ -76,7 +83,7 @@ export const useAcceptedQuotes = () => {
         return !isDemo && quote.supplier && quote.opportunity;
       }) || [];
 
-      console.log('✅ Devis chargés (sans demo):', filteredData.length);
+      console.log('✅ Devis chargés (avec matchs acceptés):', filteredData.length);
       return filteredData;
     },
     refetchInterval: 5000,
@@ -214,8 +221,24 @@ export const useAcceptedQuotes = () => {
   const handleDownloadPDF = (quote: AcceptedQuoteWithDetails) => {
     toast({
       title: "Téléchargement PDF",
-      description: `Le PDF du devis de ${quote.supplier.company_name} va être téléchargé.`,
+      description: `Le PDF du devis de ${quote.supplier?.company_name || 'le transporteur'} va être téléchargé.`,
     });
+  };
+
+  const handleDeleteAcceptedQuote = async (quote: AcceptedQuoteWithDetails) => {
+    if (!quote.opportunity?.client_request_id) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de trouver le client associé à ce devis",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const success = await deleteAcceptedMatch(quote.id, quote.opportunity.client_request_id);
+    if (success) {
+      refetch();
+    }
   };
 
   return {
@@ -235,6 +258,7 @@ export const useAcceptedQuotes = () => {
     handleShowRejectDialog,
     handleConfirmComplete,
     handleConfirmReject,
-    handleDownloadPDF
+    handleDownloadPDF,
+    handleDeleteAcceptedQuote
   };
 };

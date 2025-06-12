@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, MapPin, Calendar, Package, Truck, Target, CheckCircle, XCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Package, Truck, Target, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useMatchActions } from '@/hooks/useMatchActions';
@@ -28,6 +28,7 @@ interface Client {
   flexible_dates?: boolean;
   flexibility_days?: number;
   status?: string;
+  match_status?: string;
 }
 
 interface ConfirmedMove {
@@ -154,7 +155,14 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
       if (clientError) throw clientError;
       setClient(clientData);
 
-      // Charger les trajets confirmés
+      // Vérifier si le client a déjà un match accepté
+      if (clientData.match_status === 'accepted') {
+        console.log('⚠️ Client déjà matché - aucune nouvelle proposition');
+        setMatches([]);
+        return;
+      }
+
+      // Charger les trajets confirmés (exclure ceux qui sont terminés)
       const { data: movesData, error: movesError } = await supabase
         .from('confirmed_moves')
         .select('*')
@@ -256,6 +264,10 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     const success = await acceptMatch(matchData);
     if (success) {
       await fetchClientAndMatches();
+      // Fermer le dialogue après acceptation
+      setTimeout(() => {
+        onOpenChange(false);
+      }, 1000);
     }
   };
 
@@ -315,6 +327,11 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                   <Badge variant="outline" className="font-mono">
                     {client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`}
                   </Badge>
+                  {client.match_status === 'accepted' && (
+                    <Badge className="bg-green-100 text-green-800">
+                      Déjà matché
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -345,16 +362,33 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             </Card>
           )}
 
-          {/* Barre de recherche */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Rechercher par référence trajet (TRJ-XXXXXX), transporteur, codes postaux..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+          {/* Message si client déjà matché */}
+          {client?.match_status === 'accepted' && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-orange-800">
+                  <AlertCircle className="h-5 w-5" />
+                  <span className="font-medium">Client déjà matché</span>
+                </div>
+                <p className="text-sm text-orange-700 mt-1">
+                  Ce client a déjà un devis accepté. Consultez l'onglet "Devis Acceptés" pour plus de détails.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Barre de recherche - seulement si pas déjà matché */}
+          {client?.match_status !== 'accepted' && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Rechercher par référence trajet (TRJ-XXXXXX), transporteur, codes postaux..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          )}
 
           {/* Résultats des matches */}
           <div className="flex-1 overflow-y-auto max-h-96">
@@ -364,14 +398,21 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                 <p>⚡ Traitement ULTRA-RAPIDE en cours...</p>
                 <p className="text-xs text-gray-500 mt-1">Cache intelligent + parallélisation</p>
               </div>
-            ) : filteredMatches.length === 0 ? (
+            ) : client?.match_status === 'accepted' || filteredMatches.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="font-medium">Aucune correspondance ≤ 100km trouvée</p>
+                <p className="font-medium">
+                  {client?.match_status === 'accepted' 
+                    ? "Aucune nouvelle correspondance" 
+                    : "Aucune correspondance ≤ 100km trouvée"
+                  }
+                </p>
                 <p className="text-sm mt-2">
-                  {matches.length === 0 
-                    ? "Aucun trajet compatible dans un rayon de 100km"
-                    : "Ajustez vos critères de recherche"
+                  {client?.match_status === 'accepted'
+                    ? "Ce client a déjà un devis accepté"
+                    : matches.length === 0 
+                      ? "Aucun trajet compatible dans un rayon de 100km"
+                      : "Ajustez vos critères de recherche"
                   }
                 </p>
               </div>

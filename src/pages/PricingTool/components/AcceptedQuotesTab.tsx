@@ -25,7 +25,8 @@ const AcceptedQuotesTab = () => {
     handleShowRejectDialog,
     handleConfirmComplete,
     handleConfirmReject,
-    handleDownloadPDF
+    handleDownloadPDF,
+    handleDeleteAcceptedQuote
   } = useAcceptedQuotes();
 
   // Calculer les compteurs pour les filtres
@@ -63,7 +64,7 @@ const AcceptedQuotesTab = () => {
             Gestion des devis acceptés
           </CardTitle>
           <CardDescription>
-            Suivi et validation des devis acceptés par les clients
+            Suivi et validation des devis acceptés par les clients et via le moteur de matching
           </CardDescription>
         </CardHeader>
       </Card>
@@ -75,17 +76,20 @@ const AcceptedQuotesTab = () => {
       />
 
       {acceptedQuotes && acceptedQuotes.length > 0 ? (
-        <Card>
-          <CardContent className="p-0">
-            <AcceptedQuotesTable
-              quotes={acceptedQuotes}
-              onMarkAsValidated={handleMarkAsValidated}
-              onComplete={handleShowCompleteDialog}
-              onReject={handleShowRejectDialog}
-              onDownloadPDF={handleDownloadPDF}
-            />
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {acceptedQuotes.map((quote) => (
+            <div key={quote.id} className="border rounded-lg p-1">
+              <AcceptedQuotesTable
+                quotes={[quote]}
+                onMarkAsValidated={handleMarkAsValidated}
+                onComplete={handleShowCompleteDialog}
+                onReject={handleShowRejectDialog}
+                onDownloadPDF={handleDownloadPDF}
+                onDeleteAcceptedQuote={handleDeleteAcceptedQuote}
+              />
+            </div>
+          ))}
+        </div>
       ) : (
         <Card>
           <CardContent className="text-center py-8">
@@ -98,7 +102,7 @@ const AcceptedQuotesTab = () => {
                  'Aucun devis rejeté'}
               </h3>
               <p className="text-sm">
-                {filter === 'all' ? 'Les devis acceptés apparaîtront ici.' :
+                {filter === 'all' ? 'Les devis acceptés (manuels et automatiques) apparaîtront ici.' :
                  filter === 'accepted' ? 'Aucun devis en attente de validation client.' :
                  filter === 'validated_by_client' ? 'Aucun devis validé par le client.' :
                  'Aucun devis rejeté.'}
@@ -112,7 +116,7 @@ const AcceptedQuotesTab = () => {
         open={showCompleteDialog}
         onOpenChange={setShowCompleteDialog}
         title="Confirmer la fin du trajet"
-        description={`Êtes-vous sûr de vouloir marquer le trajet avec ${selectedQuote?.supplier?.company_name} comme terminé ? Cette action est définitive et déplacera le trajet vers l'historique.`}
+        description={`Êtes-vous sûr de vouloir marquer le trajet avec ${selectedQuote?.supplier?.company_name || 'le transporteur'} comme terminé ? Cette action est définitive et déplacera le trajet vers l'historique.`}
         confirmText="Trajet terminé"
         cancelText="Annuler"
         onConfirm={handleConfirmComplete}
@@ -123,7 +127,7 @@ const AcceptedQuotesTab = () => {
         open={showRejectDialog}
         onOpenChange={setShowRejectDialog}
         onConfirm={handleConfirmReject}
-        supplierName={selectedQuote?.supplier?.company_name || ''}
+        supplierName={selectedQuote?.supplier?.company_name || 'le transporteur'}
         rejectionReason={rejectionReason}
         onReasonChange={setRejectionReason}
       />
