@@ -1,4 +1,3 @@
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +16,37 @@ export const MatchDetailsDialog = ({ open, onOpenChange, match, onMatchUpdated }
   const { toast } = useToast();
 
   if (!match) return null;
+
+  const acceptMatch = async () => {
+    try {
+      const { error } = await supabase
+        .from('client_requests')
+        .update({ 
+          status: 'confirmed',
+          match_status: 'accepted',
+          is_matched: true,
+          matched_at: new Date().toISOString()
+        })
+        .eq('id', match.client_request_id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Match accepté",
+        description: "La correspondance a été acceptée",
+      });
+
+      onMatchUpdated();
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error accepting match:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'accepter le match",
+        variant: "destructive",
+      });
+    }
+  };
 
   const rejectMatch = async () => {
     try {
@@ -203,6 +233,13 @@ export const MatchDetailsDialog = ({ open, onOpenChange, match, onMatchUpdated }
           {/* Actions */}
           <div className="flex space-x-3 pt-4 border-t">
             <Button 
+              onClick={acceptMatch}
+              className="flex-1"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter Match
+            </Button>
+            <Button 
               variant="outline"
               onClick={rejectMatch}
               className="flex-1 text-red-600 hover:text-red-700"
@@ -211,6 +248,7 @@ export const MatchDetailsDialog = ({ open, onOpenChange, match, onMatchUpdated }
               Rejeter Match
             </Button>
             <Button 
+              variant="outline"
               onClick={markAsCompleted}
               className="flex-1"
             >

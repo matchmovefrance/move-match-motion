@@ -198,6 +198,36 @@ const MatchFinder = () => {
     }
   };
 
+  const acceptMatch = async (match: Match) => {
+    try {
+      const { error } = await supabase
+        .from('client_requests')
+        .update({ 
+          status: 'confirmed',
+          match_status: 'accepted',
+          is_matched: true,
+          matched_at: new Date().toISOString()
+        })
+        .eq('id', match.client_request_id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Match accepté",
+        description: "La correspondance a été acceptée",
+      });
+
+      fetchMatches();
+    } catch (error) {
+      console.error('Error accepting match:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'accepter le match",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleViewDetails = (match: Match) => {
     setSelectedMatch(match);
     setShowDetailsDialog(true);
@@ -375,6 +405,14 @@ const MatchFinder = () => {
 
                 <div className="flex space-x-2 pt-3">
                   <Button 
+                    size="sm"
+                    onClick={() => acceptMatch(match)}
+                    className="flex-1"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Accepter Match
+                  </Button>
+                  <Button 
                     size="sm" 
                     variant="outline" 
                     onClick={() => handleViewDetails(match)}
@@ -394,6 +432,7 @@ const MatchFinder = () => {
                   </Button>
                   <Button 
                     size="sm"
+                    variant="outline"
                     onClick={() => markAsCompleted(match)}
                     className="flex-1"
                   >

@@ -1,6 +1,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MapPin, Navigation } from 'lucide-react';
+import GoogleMapRoute from './GoogleMapRoute';
 
 interface MoveMapDialogProps {
   open: boolean;
@@ -62,16 +63,7 @@ export const MoveMapDialog = ({ open, onOpenChange, move }: MoveMapDialogProps) 
             </p>
           </div>
 
-          {/* Placeholder pour la carte - à remplacer par une vraie carte plus tard */}
-          <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-            <div className="text-center">
-              <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500">Carte du trajet</p>
-              <p className="text-sm text-gray-400 mt-1">
-                {move.departure_city} → {move.arrival_city}
-              </p>
-            </div>
-          </div>
+          <GoogleMapRoute move={move} />
         </div>
       </DialogContent>
     </Dialog>
