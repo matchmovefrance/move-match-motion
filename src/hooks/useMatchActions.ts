@@ -124,18 +124,6 @@ export const useMatchActions = () => {
 
       if (quoteError) throw quoteError;
 
-      // Insérer l'action d'acceptation
-      const { error: actionError } = await supabase
-        .from('match_actions')
-        .insert({
-          match_id: matchData.id || 0,
-          action_type: 'accepted',
-          notes: `Match accepté: ${matchData.match_reference}`,
-          user_id: (await supabase.auth.getUser()).data.user?.id
-        });
-
-      if (actionError) throw actionError;
-
       // Mettre à jour le statut du client
       const { error: clientError } = await supabase
         .from('clients')
@@ -205,18 +193,6 @@ export const useMatchActions = () => {
       if (analyticsError) {
         console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
       }
-
-      // Insérer l'action de rejet
-      const { error: actionError } = await supabase
-        .from('match_actions')
-        .insert({
-          match_id: matchData.id || 0,
-          action_type: 'rejected',
-          notes: `Match rejeté: ${matchData.match_reference}`,
-          user_id: (await supabase.auth.getUser()).data.user?.id
-        });
-
-      if (actionError) throw actionError;
 
       // Mettre à jour le statut du client
       const { error: clientError } = await supabase
