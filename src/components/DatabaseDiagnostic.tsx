@@ -74,18 +74,58 @@ const DatabaseDiagnostic = () => {
           .eq('id', insertData[0].id);
       }
 
-      // Test 3: Vérifier l'accès aux prestataires
+      // Test 3: Vérifier l'accès aux prestataires (table service_providers)
       console.log('🔍 Checking service_providers table...');
       const { data: providersData, error: providersError } = await supabase
         .from('service_providers')
         .select('id, name, company_name')
-        .limit(1);
+        .limit(10);
+
+      const serviceProvidersCount = providersData?.length || 0;
+
+      // Test 4: Compter les prestataires depuis les trajets confirmés (comme dans l'onglet prestataires)
+      console.log('🔍 Checking providers from confirmed moves...');
+      const { data: movesData, error: movesError } = await supabase
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
+
+      let uniqueProvidersFromMoves = 0;
+      if (!movesError && movesData) {
+        // Créer un Map pour éviter les doublons basés sur mover_name + company_name
+        const uniqueSuppliersMap = new Map();
+        
+        movesData.forEach((move) => {
+          const key = `${move.mover_name}-${move.company_name}`;
+          if (!uniqueSuppliersMap.has(key)) {
+            uniqueSuppliersMap.set(key, true);
+          }
+        });
+
+        uniqueProvidersFromMoves = uniqueSuppliersMap.size;
+      }
+
+      const totalProviders = serviceProvidersCount + uniqueProvidersFromMoves;
 
       diagnosticResults.push({
         test: 'Service providers accessible',
         success: !providersError,
-        message: providersError ? providersError.message : `${providersData?.length || 0} prestataires trouvés`,
+        message: providersError ? providersError.message : `${serviceProvidersCount} prestataires en DB`,
         details: providersError
+      });
+
+      diagnosticResults.push({
+        test: 'Prestataires depuis trajets confirmés',
+        success: !movesError,
+        message: movesError ? movesError.message : `${uniqueProvidersFromMoves} prestataires depuis trajets`,
+        details: movesError
+      });
+
+      diagnosticResults.push({
+        test: 'Total prestataires disponibles',
+        success: true,
+        message: `${totalProviders} prestataires au total (${serviceProvidersCount} en DB + ${uniqueProvidersFromMoves} depuis trajets)`,
+        details: null
       });
 
     } catch (error) {
