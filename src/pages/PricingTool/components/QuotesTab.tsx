@@ -2,7 +2,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Search, Loader2, TrendingUp } from 'lucide-react';
-import { pricingEngine } from './PricingEngine';
 import { ClientQuoteGroup } from './QuotesTab/ClientQuoteGroup';
 import { useQuotes } from './QuotesTab/useQuotes';
 
@@ -13,7 +12,8 @@ const QuotesTab = () => {
     isGenerating,
     generateAllQuotes,
     handleAcceptQuote,
-    handleRejectQuote
+    handleRejectQuote,
+    supplierCount
   } = useQuotes();
 
   // Grouper les devis par client
@@ -49,7 +49,7 @@ const QuotesTab = () => {
                 <div className="text-sm text-muted-foreground">Clients actifs</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{pricingEngine.getSuppliers().length}</div>
+                <div className="text-2xl font-bold text-green-600">{supplierCount}</div>
                 <div className="text-sm text-muted-foreground">Prestataires</div>
               </div>
               <div className="text-center">

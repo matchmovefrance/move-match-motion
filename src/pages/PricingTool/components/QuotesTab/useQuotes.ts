@@ -29,6 +29,7 @@ export const useQuotes = () => {
   const { toast } = useToast();
   const [generatedQuotes, setGeneratedQuotes] = useState<GeneratedQuote[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [supplierCount, setSupplierCount] = useState(0);
 
   const { data: activeClients, refetch: refetchClients } = useQuery({
     queryKey: ['active-clients'],
@@ -52,6 +53,21 @@ export const useQuotes = () => {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  // Load supplier count
+  useEffect(() => {
+    const loadSupplierCount = async () => {
+      try {
+        const suppliers = await pricingEngine.loadActiveSuppliers();
+        setSupplierCount(suppliers.length);
+      } catch (error) {
+        console.error('❌ Error loading supplier count:', error);
+        setSupplierCount(0);
+      }
+    };
+
+    loadSupplierCount();
+  }, []);
 
   useEffect(() => {
     if (activeClients?.length && generatedQuotes.length === 0) {
@@ -182,6 +198,7 @@ export const useQuotes = () => {
     isGenerating,
     generateAllQuotes,
     handleAcceptQuote,
-    handleRejectQuote
+    handleRejectQuote,
+    supplierCount
   };
 };
