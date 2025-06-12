@@ -461,6 +461,7 @@ export type Database = {
           is_valid: boolean
           match_type: string
           move_id: number
+          trip_type: string | null
           volume_ok: boolean
         }
         Insert: {
@@ -473,6 +474,7 @@ export type Database = {
           is_valid: boolean
           match_type: string
           move_id: number
+          trip_type?: string | null
           volume_ok: boolean
         }
         Update: {
@@ -485,6 +487,7 @@ export type Database = {
           is_valid?: boolean
           match_type?: string
           move_id?: number
+          trip_type?: string | null
           volume_ok?: boolean
         }
         Relationships: [
