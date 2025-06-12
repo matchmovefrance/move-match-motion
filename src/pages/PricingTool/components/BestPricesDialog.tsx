@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,6 @@ import { Loader2, TrendingUp, CheckCircle, X, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { pricingEngine } from './PricingEngine';
 import { supabase } from '@/integrations/supabase/client';
-import QuoteGenerator from '@/components/QuoteGenerator';
 
 interface BestPricesDialogProps {
   open: boolean;
@@ -335,35 +335,6 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                       </div>
                       
                       <div className="flex gap-2">
-                        <QuoteGenerator
-                          client={{
-                            id: quote.client_id,
-                            name: quote.client_name,
-                            email: quote.client_email,
-                            phone: null,
-                            departure_address: null,
-                            departure_city: quote.departure_city,
-                            departure_postal_code: opportunity?.departure_postal_code || '',
-                            departure_country: null,
-                            arrival_address: null,
-                            arrival_city: quote.arrival_city,
-                            arrival_postal_code: opportunity?.arrival_postal_code || '',
-                            arrival_country: null,
-                            desired_date: quote.desired_date,
-                            estimated_volume: quote.estimated_volume,
-                            quote_amount: quote.calculated_price,
-                          }}
-                          supplier={supplierData ? {
-                            company_name: supplierData.company_name,
-                            contact_name: supplierData.contact_name,
-                            email: supplierData.email,
-                            phone: supplierData.phone,
-                            bank_details: supplierData.bank_details
-                          } : undefined}
-                          supplierPrice={quote.supplier_price}
-                          matchMoveMargin={quote.pricing_breakdown?.marginPercentage || 0}
-                        />
-                        
                         <Button
                           variant="outline"
                           size="sm"

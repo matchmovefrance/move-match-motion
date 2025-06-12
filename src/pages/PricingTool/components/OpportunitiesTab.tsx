@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,14 +49,14 @@ const OpportunitiesTab = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [opportunityToUpdate, setOpportunityToUpdate] = useState<any>(null);
 
-  // Charger les clients depuis les demandes client requests (opportunités)
+  // Charger les clients depuis la table clients unifiée
   const { data: opportunities, isLoading, error, refetch } = useQuery({
     queryKey: ['client-opportunities', statusFilter, searchTerm],
     queryFn: async () => {
-      console.log('🔍 Chargement des opportunités depuis client_requests...');
+      console.log('🔍 Chargement des opportunités depuis clients...');
       
       let query = supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -121,10 +122,9 @@ const OpportunitiesTab = () => {
       console.log('🔄 Finalisation de l\'opportunité:', opportunityToUpdate.id);
       
       const { error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .update({ 
-          status: 'completed',
-          status_custom: 'termine'
+          status: 'completed'
         })
         .eq('id', opportunityToUpdate.id);
 
@@ -156,10 +156,9 @@ const OpportunitiesTab = () => {
       console.log('🔄 Annulation de l\'opportunité:', opportunityToUpdate.id);
       
       const { error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .update({ 
-          status: 'cancelled',
-          status_custom: 'annule'
+          status: 'cancelled'
         })
         .eq('id', opportunityToUpdate.id);
 
@@ -404,17 +403,21 @@ const OpportunitiesTab = () => {
                     <span>{opportunity.departure_city} → {opportunity.arrival_city}</span>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-green-500" />
-                    <span className="font-medium">Volume:</span>
-                    <span>{opportunity.estimated_volume}m³</span>
-                  </div>
+                  {opportunity.estimated_volume && (
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-green-500" />
+                      <span className="font-medium">Volume:</span>
+                      <span>{opportunity.estimated_volume}m³</span>
+                    </div>
+                  )}
                   
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-orange-500" />
-                    <span className="font-medium">Date:</span>
-                    <span>{format(new Date(opportunity.desired_date), 'dd/MM/yyyy', { locale: fr })}</span>
-                  </div>
+                  {opportunity.desired_date && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-orange-500" />
+                      <span className="font-medium">Date:</span>
+                      <span>{format(new Date(opportunity.desired_date), 'dd/MM/yyyy', { locale: fr })}</span>
+                    </div>
+                  )}
                   
                   {(opportunity.budget_min || opportunity.budget_max) && (
                     <div className="flex items-center gap-2">
