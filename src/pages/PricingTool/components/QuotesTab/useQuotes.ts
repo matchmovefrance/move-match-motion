@@ -38,6 +38,8 @@ export const useQuotes = () => {
         .from('client_requests')
         .select('*')
         .in('status', ['pending', 'confirmed'])
+        .not('departure_postal_code', 'is', null)
+        .not('arrival_postal_code', 'is', null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -45,8 +47,14 @@ export const useQuotes = () => {
         throw error;
       }
       
-      console.log('✅ Active clients loaded:', data?.length || 0);
-      return data || [];
+      // Ajouter les références CLI-XXXXXX
+      const clientsWithReferences = data?.map(client => ({
+        ...client,
+        client_reference: `CLI-${String(client.id + 100000).padStart(6, '0')}`
+      })) || [];
+      
+      console.log('✅ Active clients loaded:', clientsWithReferences?.length || 0);
+      return clientsWithReferences;
     },
     staleTime: 5 * 60 * 1000,
   });

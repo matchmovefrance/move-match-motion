@@ -82,10 +82,12 @@ const MatchFinder = () => {
       setLoading(true);
       console.log('🔍 Chargement des données pour le matching...');
 
-      // Charger les demandes clients
+      // Charger les demandes clients avec TOUS les champs nécessaires
       const { data: clientsData, error: clientsError } = await supabase
         .from('client_requests')
         .select('*')
+        .not('departure_postal_code', 'is', null)
+        .not('arrival_postal_code', 'is', null)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -94,11 +96,14 @@ const MatchFinder = () => {
         throw clientsError;
       }
 
-      // Charger les déménagements confirmés
+      // Charger les déménagements confirmés avec TOUS les champs nécessaires
       const { data: movesData, error: movesError } = await supabase
         .from('confirmed_moves')
         .select('*')
+        .not('departure_postal_code', 'is', null)
+        .not('arrival_postal_code', 'is', null)
         .eq('status', 'confirmed')
+        .gt('available_volume', 0)
         .order('departure_date', { ascending: true });
 
       if (movesError) {
@@ -106,12 +111,29 @@ const MatchFinder = () => {
         throw movesError;
       }
 
-      setClients(clientsData || []);
-      setMoves(movesData || []);
+      // Filtrer les données nulles côté client aussi
+      const validClients = clientsData?.filter(client => 
+        client.departure_postal_code && 
+        client.arrival_postal_code && 
+        client.estimated_volume && 
+        client.estimated_volume > 0
+      ) || [];
+
+      const validMoves = movesData?.filter(move => 
+        move.departure_postal_code && 
+        move.arrival_postal_code && 
+        move.available_volume && 
+        move.available_volume > 0
+      ) || [];
+
+      setClients(validClients);
+      setMoves(validMoves);
       
-      console.log('✅ Données chargées:', {
-        clients: clientsData?.length || 0,
-        moves: movesData?.length || 0
+      console.log('✅ Données valides chargées:', {
+        clients: validClients.length,
+        moves: validMoves.length,
+        filteredOutClients: (clientsData?.length || 0) - validClients.length,
+        filteredOutMoves: (movesData?.length || 0) - validMoves.length
       });
 
     } catch (error) {
@@ -178,11 +200,37 @@ const MatchFinder = () => {
   };
 
   const findMatches = () => {
-    console.log('🎯 Recherche de matches...');
+    console.log('🎯 Recherche de matches avec données validées...');
     const foundMatches: MatchResult[] = [];
 
+    if (clients.length === 0) {
+      console.warn('⚠️ Aucun client valide pour le matching');
+      setMatches([]);
+      return;
+    }
+
+    if (moves.length === 0) {
+      console.warn('⚠️ Aucun déménagement valide pour le matching');
+      setMatches([]);
+      return;
+    }
+
     clients.forEach(client => {
+      console.log('🔍 Analyse client:', {
+        name: client.name,
+        departure: client.departure_postal_code,
+        arrival: client.arrival_postal_code,
+        volume: client.estimated_volume
+      });
+
       moves.forEach(move => {
+        console.log('🚛 Analyse trajet:', {
+          company: move.company_name,
+          departure: move.departure_postal_code,
+          arrival: move.arrival_postal_code,
+          available: move.available_volume
+        });
+
         // Calculer distance entre départs
         const departureDistance = calculateDistance(
           client.departure_postal_code,
@@ -207,8 +255,17 @@ const MatchFinder = () => {
         // Calculer score de match
         const matchScore = calculateMatchScore(avgDistance, dateDiff, volumeMatch);
 
-        // Appliquer les filtres basiques
-        if (avgDistance <= 100 && dateDiff <= 7 && matchScore >= 70) {
+        console.log('📊 Résultat match:', {
+          client: client.name,
+          move: move.company_name,
+          avgDistance,
+          dateDiff,
+          volumeMatch,
+          matchScore
+        });
+
+        // Critères de base plus permissifs pour voir plus de résultats
+        if (avgDistance <= 150 && dateDiff <= 10 && matchScore >= 50) {
           foundMatches.push({
             client,
             move,
@@ -226,6 +283,16 @@ const MatchFinder = () => {
     
     setMatches(foundMatches);
     console.log('✅ Matches trouvés:', foundMatches.length);
+    
+    if (foundMatches.length === 0) {
+      console.warn('❌ Aucun match trouvé. Critères possibles:', {
+        clientsWithData: clients.length,
+        movesWithData: moves.length,
+        maxDistanceKm: 150,
+        maxDateDiffDays: 10,
+        minScore: 50
+      });
+    }
   };
 
   const createMatch = async (match: MatchResult) => {

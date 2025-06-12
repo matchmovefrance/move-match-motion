@@ -57,28 +57,64 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Chargement des clients depuis client_requests...');
+      console.log('📋 Chargement de TOUS les clients (clients + client_requests)...');
       
+      // Charger depuis la table clients
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (clientsError) {
+        console.error('❌ Erreur clients:', clientsError);
+      }
+
+      // Charger depuis la table client_requests
       const { data: requestsData, error: requestsError } = await supabase
         .from('client_requests')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (requestsError) {
-        console.error('❌ Erreur lors du chargement:', requestsError);
-        throw requestsError;
+        console.error('❌ Erreur client_requests:', requestsError);
       }
 
       const allClients: Client[] = [];
 
+      // Ajouter les clients de la table clients avec référence CLI-XXXXXX
+      if (clientsData) {
+        clientsData.forEach(client => {
+          allClients.push({
+            id: client.id,
+            name: client.name || 'Nom non renseigné',
+            email: client.email || 'Email non renseigné',
+            phone: client.phone || 'Téléphone non renseigné',
+            client_reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`,
+            created_at: client.created_at,
+            created_by: client.created_by,
+            source: 'clients',
+            departure_city: client.departure_city,
+            departure_postal_code: client.departure_postal_code,
+            arrival_city: client.arrival_city,
+            arrival_postal_code: client.arrival_postal_code,
+            desired_date: client.desired_date,
+            estimated_volume: client.estimated_volume,
+            flexible_dates: client.flexible_dates,
+            flexibility_days: client.flexibility_days,
+            status: client.status
+          });
+        });
+      }
+
+      // Ajouter les clients de la table client_requests avec référence CLI-XXXXXX
       if (requestsData) {
         requestsData.forEach(request => {
           allClients.push({
-            id: request.id,
+            id: request.id + 100000, // Décaler les IDs pour éviter les conflits
             name: request.name || 'Nom non renseigné',
             email: request.email || 'Email non renseigné',
             phone: request.phone || 'Téléphone non renseigné',
-            client_reference: request.client_reference || `REQ-${String(request.id).padStart(6, '0')}`,
+            client_reference: `CLI-${String(request.id + 100000).padStart(6, '0')}`,
             created_at: request.created_at,
             created_by: request.created_by,
             source: 'client_requests',
@@ -96,7 +132,11 @@ const ClientList = () => {
         });
       }
 
-      console.log('✅ Clients chargés:', allClients.length);
+      console.log('✅ Tous les clients chargés:', {
+        clients: clientsData?.length || 0,
+        requests: requestsData?.length || 0,
+        total: allClients.length
+      });
       setClients(allClients);
     } catch (error) {
       console.error('Error fetching clients:', error);
