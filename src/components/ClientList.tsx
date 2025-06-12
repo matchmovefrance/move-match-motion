@@ -375,6 +375,24 @@ const ClientList = () => {
           </p>
         </div>
       )}
+
+      {/* Dialogues */}
+      <DeleteConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Supprimer le client"
+        description="Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible."
+        itemName={clientToDelete?.name || clientToDelete?.client_reference || 'Client'}
+        onConfirm={handleDeleteClient}
+        isDeleting={isDeleting}
+      />
+
+      <ClientMatchesDialog
+        open={showMatchesDialog}
+        onOpenChange={setShowMatchesDialog}
+        clientId={selectedClient?.id || 0}
+        clientName={selectedClient?.name || 'Client'}
+      />
     </motion.div>
   );
 };

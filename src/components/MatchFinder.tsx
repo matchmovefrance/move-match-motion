@@ -415,6 +415,14 @@ const MatchFinder = () => {
           </p>
         </div>
       )}
+
+      {/* Dialogue de détails */}
+      <MatchDetailsDialog
+        open={showDetailsDialog}
+        onOpenChange={setShowDetailsDialog}
+        match={selectedMatch}
+        onMatchUpdated={fetchMatches}
+      />
     </motion.div>
   );
 };

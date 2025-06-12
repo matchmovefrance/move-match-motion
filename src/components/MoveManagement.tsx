@@ -384,6 +384,23 @@ const MoveManagement = () => {
           </p>
         </div>
       )}
+
+      {/* Dialogues */}
+      <DeleteConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Supprimer le trajet"
+        description="Êtes-vous sûr de vouloir supprimer ce trajet ? Cette action est irréversible."
+        itemName={moveToDelete?.company_name || moveToDelete?.move_reference || 'Trajet'}
+        onConfirm={handleDeleteMove}
+        isDeleting={isDeleting}
+      />
+
+      <MoveMapDialog
+        open={showMapDialog}
+        onOpenChange={setShowMapDialog}
+        move={selectedMove}
+      />
     </motion.div>
   );
 };
