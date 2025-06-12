@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, Plus, Search, MapPin } from 'lucide-react';
@@ -14,7 +15,7 @@ interface Move {
   id: number;
   mover_name: string;
   company_name: string;
-  move_reference: string;
+  move_reference?: string;
   departure_city: string;
   departure_postal_code: string;
   arrival_city: string;

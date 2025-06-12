@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target } from 'lucide-react';
@@ -15,7 +16,7 @@ interface Client {
   name: string;
   email: string;
   phone: string;
-  client_reference: string;
+  client_reference?: string;
   departure_city: string;
   departure_postal_code: string;
   arrival_city: string;
@@ -23,7 +24,7 @@ interface Client {
   desired_date: string;
   estimated_volume: number;
   flexible_dates: boolean;
-  flexibility_days: number;
+  flexibility_days?: number;
   status: string;
   created_at: string;
   // Optional properties that might come from the database but not always used
