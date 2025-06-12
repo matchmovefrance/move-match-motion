@@ -85,10 +85,15 @@ const GoogleMapRoute = ({ move }: GoogleMapRouteProps) => {
 
         // Ajouter la route
         const directionsService = new google.maps.DirectionsService();
-        const directionsRenderer = new google.maps.DirectionsRenderer({
-          strokeColor: '#2563eb',
-          strokeWeight: 4,
-          strokeOpacity: 0.8
+        const directionsRenderer = new google.maps.DirectionsRenderer();
+
+        // Configurer les options de style après la création
+        directionsRenderer.setOptions({
+          polylineOptions: {
+            strokeColor: '#2563eb',
+            strokeWeight: 4,
+            strokeOpacity: 0.8
+          }
         });
 
         directionsRenderer.setMap(map);
