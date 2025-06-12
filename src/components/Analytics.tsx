@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,9 +62,9 @@ const Analytics = () => {
     try {
       setLoading(true);
 
-      // Récupérer les demandes clients
-      const { data: clientRequests, error: clientError } = await supabase
-        .from('client_requests')
+      // Récupérer les clients
+      const { data: clients, error: clientError } = await supabase
+        .from('clients')
         .select('*');
 
       // Récupérer les déménagements confirmés
@@ -80,18 +81,18 @@ const Analytics = () => {
         throw new Error('Erreur lors du chargement des données');
       }
 
-      const clients = clientRequests || [];
+      const clientsData = clients || [];
       const moves = confirmedMoves || [];
       const matchData = matches || [];
 
       // Stocker toutes les données pour le filtrage
-      setAllClients(clients);
+      setAllClients(clientsData);
       setAllMoves(moves);
-      setFilteredClients(clients);
+      setFilteredClients(clientsData);
       setFilteredMoves(moves);
 
       // Calculer les données initiales
-      calculateAnalyticsData(clients, moves, matchData);
+      calculateAnalyticsData(clientsData, moves, matchData);
 
     } catch (error) {
       console.error('Error fetching analytics data:', error);

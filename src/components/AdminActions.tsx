@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,13 +23,11 @@ const AdminActions = () => {
 
       if (matchError) throw matchError;
 
-      // Remettre à zéro les statuts de match dans client_requests
+      // Remettre à zéro les statuts de match dans clients
       const { error: clientError } = await supabase
-        .from('client_requests')
+        .from('clients')
         .update({
-          is_matched: false,
-          matched_at: null,
-          match_status: null
+          status: 'pending'
         })
         .neq('id', 0);
 
