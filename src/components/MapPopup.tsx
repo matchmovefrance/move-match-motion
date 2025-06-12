@@ -40,32 +40,25 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
 
   useEffect(() => {
     const initMap = async () => {
-      console.log('Tentative d\'initialisation de la carte popup:', items.length);
+      console.log('Initialisation MapPopup avec:', items.length, 'éléments');
       
       if (!mapRef.current) {
-        console.log('mapRef.current est null, abandon de l\'initialisation');
+        console.log('mapRef.current est null');
         return;
       }
 
       // Attendre que Google Maps soit disponible
       if (!window.google || !window.google.maps) {
-        console.log('Google Maps pas encore chargé, attente...');
+        console.log('Google Maps pas encore chargé');
         return;
       }
 
       try {
-        console.log('Début initialisation carte popup avec mapRef:', mapRef.current);
-        
         const geocoder = new google.maps.Geocoder();
         const bounds = new google.maps.LatLngBounds();
         let hasAddedBounds = false;
 
-        // Créer la carte avec une vérification supplémentaire
-        if (!mapRef.current) {
-          console.error('mapRef.current est devenu null pendant l\'initialisation');
-          return;
-        }
-
+        // Créer la carte
         const map = new google.maps.Map(mapRef.current, {
           zoom: 7,
           center: { lat: 46.603354, lng: 1.888334 }, // Centre de la France
@@ -122,12 +115,6 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
               icon: {
                 url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
                 scaledSize: new google.maps.Size(32, 32)
-              },
-              label: {
-                text: item.reference,
-                color: 'white',
-                fontSize: '12px',
-                fontWeight: 'bold'
               }
             });
 
@@ -138,12 +125,6 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
               icon: {
                 url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
                 scaledSize: new google.maps.Size(32, 32)
-              },
-              label: {
-                text: item.reference,
-                color: 'white',
-                fontSize: '12px',
-                fontWeight: 'bold'
               }
             });
 
@@ -190,39 +171,10 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
       }
     };
 
-    // Fonction pour charger le script Google Maps
-    const loadGoogleMaps = () => {
-      if (window.google && window.google.maps) {
-        // Ajouter un délai pour s'assurer que le DOM est prêt
-        setTimeout(initMap, 100);
-        return;
-      }
-
-      if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
-        const script = document.createElement('script');
-        script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y&libraries=places';
-        script.async = true;
-        script.defer = true;
-        script.onload = () => {
-          setTimeout(initMap, 200);
-        };
-        document.head.appendChild(script);
-      } else {
-        const checkGoogleMaps = setInterval(() => {
-          if (window.google && window.google.maps) {
-            clearInterval(checkGoogleMaps);
-            setTimeout(initMap, 100);
-          }
-        }, 100);
-
-        setTimeout(() => {
-          clearInterval(checkGoogleMaps);
-        }, 10000);
-      }
-    };
-
-    // Délai pour s'assurer que le composant est monté
-    const timeout = setTimeout(loadGoogleMaps, 100);
+    // Délai pour s'assurer que le composant est monté et le DOM prêt
+    const timeout = setTimeout(() => {
+      initMap();
+    }, 200);
 
     // Cleanup function
     return () => {
@@ -298,7 +250,7 @@ const MapPopup = ({ open, onOpenChange, items, title }: MapPopupProps) => {
                   Codes postaux de départ et d'arrivée requis
                 </p>
               </div>
-            </div>
+            )}
           )}
         </div>
       </DialogContent>
