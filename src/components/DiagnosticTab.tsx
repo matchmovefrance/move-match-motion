@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, Database } from 'lucide-react';
 import DatabaseDiagnostic from './DatabaseDiagnostic';
 import SimpleClientForm from './SimpleClientForm';
-import SimpleMoveForm from './SimpleMoveForm';
+import NewMoveForm from './NewMoveForm';
 
 const DiagnosticTab = () => {
   return (
@@ -26,7 +26,7 @@ const DiagnosticTab = () => {
         {/* Test des nouveaux formulaires */}
         <div className="space-y-6">
           <SimpleClientForm onSuccess={() => console.log('Client créé!')} />
-          <SimpleMoveForm onSuccess={() => console.log('Trajet créé!')} />
+          <NewMoveForm onSuccess={() => console.log('Trajet créé!')} />
         </div>
       </div>
     </motion.div>

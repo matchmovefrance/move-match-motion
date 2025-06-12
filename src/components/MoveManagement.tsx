@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import SimpleMoveFormReplacement from './SimpleMoveFormReplacement';
+import NewMoveForm from './NewMoveForm';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { MoveMapDialog } from './MoveMapDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -184,7 +184,7 @@ const MoveManagement = () => {
             Retour à la liste
           </Button>
         </div>
-        <SimpleMoveFormReplacement 
+        <NewMoveForm 
           onSuccess={() => {
             setShowAddForm(false);
             fetchMoves();
@@ -223,7 +223,7 @@ const MoveManagement = () => {
             </Button>
           </div>
         </div>
-        <SimpleMoveFormReplacement 
+        <NewMoveForm 
           initialData={editingMove}
           isEditing={true}
           onSuccess={() => {
