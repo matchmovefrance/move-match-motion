@@ -5,9 +5,11 @@ import { Search, Users, Truck, Target, Play, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { loadGoogleMapsScript, calculateDistanceByPostalCode } from '@/lib/google-maps-config';
+import MatchResults from './MatchResults';
 
 interface Client {
   id: number;
@@ -53,6 +55,7 @@ const MatchFinder = () => {
   const [confirmedMoves, setConfirmedMoves] = useState<ConfirmedMove[]>([]);
   const [loading, setLoading] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -336,6 +339,9 @@ const MatchFinder = () => {
           title: "Matching terminé avec succès",
           description: `${matches.length} correspondances trouvées (${matches.filter(m => m.trip_type === 'direct').length} directes, ${matches.filter(m => m.trip_type === 'return').length} retours) dont ${validMatches} valides`,
         });
+
+        // Déclencher le rafraîchissement des résultats
+        setRefreshTrigger(prev => prev + 1);
       } else {
         toast({
           title: "Aucun match trouvé",
@@ -369,103 +375,122 @@ const MatchFinder = () => {
         <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching Optimisé</h2>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-        <div className="flex items-center gap-2 text-blue-800 mb-2">
-          <Target className="h-5 w-5" />
-          <span className="font-semibold">Algorithme de Matching Rapide</span>
-        </div>
-        <div className="text-sm text-blue-700">
-          • <strong>Trajets directs</strong> : correspondance départ-départ + arrivée-arrivée<br/>
-          • <strong>Trajets retour</strong> : utilisation des retours à vide (départ-arrivée + arrivée-départ)<br/>
-          • <strong>Distances Google Maps</strong> avec fallback rapide (≤100km max)<br/>
-          • <strong>Critères</strong> : ≤7 jours d'écart, volume compatible
-        </div>
-      </div>
+      <Tabs defaultValue="engine" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="engine" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Moteur de Matching
+          </TabsTrigger>
+          <TabsTrigger value="results" className="flex items-center gap-2">
+            <Search className="h-4 w-4" />
+            Résultats ({refreshTrigger > 0 ? 'Mis à jour' : 'Vide'})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Users className="h-4 w-4 mr-2 text-blue-600" />
-              Clients actifs
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{clients.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Status: pending, confirmed
-            </p>
-          </CardContent>
-        </Card>
+        <TabsContent value="engine" className="space-y-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-2 text-blue-800 mb-2">
+              <Target className="h-5 w-5" />
+              <span className="font-semibold">Algorithme de Matching Rapide</span>
+            </div>
+            <div className="text-sm text-blue-700">
+              • <strong>Trajets directs</strong> : correspondance départ-départ + arrivée-arrivée<br/>
+              • <strong>Trajets retour</strong> : utilisation des retours à vide (départ-arrivée + arrivée-départ)<br/>
+              • <strong>Distances Google Maps</strong> avec fallback rapide (≤100km max)<br/>
+              • <strong>Critères</strong> : ≤7 jours d'écart, volume compatible
+            </div>
+          </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Truck className="h-4 w-4 mr-2 text-green-600" />
-              Trajets disponibles
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{confirmedMoves.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Avec volume disponible: {confirmedMoves.filter(m => m.available_volume > 0).length}
-            </p>
-          </CardContent>
-        </Card>
+          {/* Statistiques */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center">
+                  <Users className="h-4 w-4 mr-2 text-blue-600" />
+                  Clients actifs
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{clients.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  Status: pending, confirmed
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Target className="h-4 w-4 mr-2 text-purple-600" />
-              Action
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={findMatches}
-              disabled={loading || isMatching || clients.length === 0 || confirmedMoves.length === 0}
-              className="w-full"
-            >
-              {isMatching ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Matching en cours...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Lancer le matching
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center">
+                  <Truck className="h-4 w-4 mr-2 text-green-600" />
+                  Trajets disponibles
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{confirmedMoves.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  Avec volume disponible: {confirmedMoves.filter(m => m.available_volume > 0).length}
+                </p>
+              </CardContent>
+            </Card>
 
-      {/* Messages d'état */}
-      {loading && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-blue-700">Chargement des données...</p>
-          </CardContent>
-        </Card>
-      )}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center">
+                  <Target className="h-4 w-4 mr-2 text-purple-600" />
+                  Action
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={findMatches}
+                  disabled={loading || isMatching || clients.length === 0 || confirmedMoves.length === 0}
+                  className="w-full"
+                >
+                  {isMatching ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Matching en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      Lancer le matching
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
 
-      {!loading && (clients.length === 0 || confirmedMoves.length === 0) && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="text-center py-8">
-            <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-orange-800 mb-2">Données insuffisantes</h3>
-            <p className="text-orange-700">
-              {clients.length === 0 && "Aucun client actif trouvé. "}
-              {confirmedMoves.length === 0 && "Aucun trajet confirmé trouvé. "}
-              Veuillez ajouter des données pour pouvoir lancer le matching.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+          {/* Messages d'état */}
+          {loading && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-blue-700">Chargement des données...</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!loading && (clients.length === 0 || confirmedMoves.length === 0) && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="text-center py-8">
+                <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-orange-800 mb-2">Données insuffisantes</h3>
+                <p className="text-orange-700">
+                  {clients.length === 0 && "Aucun client actif trouvé. "}
+                  {confirmedMoves.length === 0 && "Aucun trajet confirmé trouvé. "}
+                  Veuillez ajouter des données pour pouvoir lancer le matching.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="results" className="space-y-6">
+          <MatchResults refreshTrigger={refreshTrigger} />
+        </TabsContent>
+      </Tabs>
     </motion.div>
   );
 };
