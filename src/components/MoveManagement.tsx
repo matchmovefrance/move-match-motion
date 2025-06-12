@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Truck, Plus, Search, MapPin } from 'lucide-react';
+import { Truck, Plus, Search, MapPin, Trash2, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +9,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import SimpleMoveFormReplacement from './SimpleMoveFormReplacement';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { MoveMapDialog } from './MoveMapDialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface Move {
   id: number;
@@ -69,6 +71,13 @@ const MoveManagement = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingMove, setEditingMove] = useState<Move | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // États pour les dialogues
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [moveToDelete, setMoveToDelete] = useState<Move | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showMapDialog, setShowMapDialog] = useState(false);
+  const [selectedMove, setSelectedMove] = useState<Move | null>(null);
 
   useEffect(() => {
     fetchMoves();
@@ -122,6 +131,43 @@ const MoveManagement = () => {
     }
   };
 
+  const handleDeleteMove = async () => {
+    if (!moveToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .delete()
+        .eq('id', moveToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Trajet supprimé",
+        description: `Le trajet ${moveToDelete.company_name || moveToDelete.move_reference} a été supprimé`,
+      });
+
+      setShowDeleteDialog(false);
+      setMoveToDelete(null);
+      fetchMoves();
+    } catch (error) {
+      console.error('Error deleting move:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le trajet",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleShowMap = (move: Move) => {
+    setSelectedMove(move);
+    setShowMapDialog(true);
+  };
+
   if (showAddForm) {
     return (
       <motion.div
@@ -157,12 +203,25 @@ const MoveManagement = () => {
       >
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-800">Modifier Trajet</h2>
-          <Button 
-            variant="outline" 
-            onClick={() => setEditingMove(null)}
-          >
-            Retour à la liste
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setMoveToDelete(editingMove);
+                setShowDeleteDialog(true);
+              }}
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Supprimer
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setEditingMove(null)}
+            >
+              Retour à la liste
+            </Button>
+          </div>
         </div>
         <SimpleMoveFormReplacement 
           initialData={editingMove}
@@ -215,12 +274,38 @@ const MoveManagement = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{move.company_name}</CardTitle>
-                  <Badge className={getStatusColor(move.status)}>
-                    {move.status}
-                  </Badge>
+                  <div className="flex items-center space-x-1">
+                    <Badge className={getStatusColor(move.status)}>
+                      {move.status}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <span className="sr-only">Ouvrir menu</span>
+                          <div className="h-4 w-4">⋮</div>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditingMove(move)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setMoveToDelete(move);
+                            setShowDeleteDialog(true);
+                          }}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-600">
-                  <strong>Réf:</strong> {move.move_reference}
+                  <strong>Réf:</strong> {move.move_reference || `TRJ-${String(move.id).padStart(6, '0')}`}
                 </div>
                 <div className="text-sm text-gray-600">
                   <strong>Déménageur:</strong> {move.mover_name}
@@ -278,6 +363,7 @@ const MoveManagement = () => {
                   <Button 
                     size="sm"
                     variant="outline"
+                    onClick={() => handleShowMap(move)}
                     className="flex-1"
                   >
                     <MapPin className="h-4 w-4 mr-1" />

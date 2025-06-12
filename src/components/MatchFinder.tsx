@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Target, Search, MapPin, Calendar, Volume2, Users, Truck, Filter } from 'lucide-react';
+import { Target, Search, MapPin, Calendar, Volume2, Users, Truck, Filter, Eye, XCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { MatchDetailsDialog } from './MatchDetailsDialog';
 
 interface Match {
   id: number;
@@ -49,6 +49,10 @@ const MatchFinder = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  
+  // États pour le dialogue de détails
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     fetchMatches();
@@ -144,6 +148,61 @@ const MatchFinder = () => {
     }
   };
 
+  const rejectMatch = async (matchId: number) => {
+    try {
+      const { error } = await supabase
+        .from('move_matches')
+        .delete()
+        .eq('id', matchId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Match rejeté",
+        description: "La correspondance a été supprimée",
+      });
+
+      fetchMatches();
+    } catch (error) {
+      console.error('Error rejecting match:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de rejeter le match",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const markAsCompleted = async (match: Match) => {
+    try {
+      const { error } = await supabase
+        .from('client_requests')
+        .update({ status: 'completed' })
+        .eq('id', match.client_request_id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Trajet terminé",
+        description: "Le match a été marqué comme terminé",
+      });
+
+      fetchMatches();
+    } catch (error) {
+      console.error('Error marking as completed:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de marquer comme terminé",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleViewDetails = (match: Match) => {
+    setSelectedMatch(match);
+    setShowDetailsDialog(true);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -208,7 +267,7 @@ const MatchFinder = () => {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center space-x-2">
                     <Target className="h-5 w-5 text-blue-600" />
-                    <span>Match {match.match_reference}</span>
+                    <span>Match {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}</span>
                   </CardTitle>
                   <div className="flex space-x-2">
                     <Badge className={getMatchStatusColor(match.is_valid)}>
@@ -315,11 +374,31 @@ const MatchFinder = () => {
                 </div>
 
                 <div className="flex space-x-2 pt-3">
-                  <Button size="sm" variant="outline" className="flex-1">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleViewDetails(match)}
+                    className="flex-1"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
                     Voir Détails
                   </Button>
-                  <Button size="sm" className="flex-1">
-                    Approuver Match
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => rejectMatch(match.id)}
+                    className="flex-1 text-red-600 hover:text-red-700"
+                  >
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Rejeter
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => markAsCompleted(match)}
+                    className="flex-1"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Trajet terminé
                   </Button>
                 </div>
               </CardContent>

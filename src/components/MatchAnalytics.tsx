@@ -1,157 +1,76 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Target, TrendingUp, Users, Truck, Calendar, Search, Filter } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Truck, Target, Eye, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-interface AnalyticsData {
-  totalMatches: number;
-  validMatches: number;
-  invalidMatches: number;
-  matchRate: number;
-  averageDistance: number;
-  averageDateDiff: number;
-  matchTypeDistribution: Array<{ name: string; value: number }>;
-  monthlyMatches: Array<{ month: string; matches: number; valid: number }>;
-}
+import { MatchDetailsDialog } from './MatchDetailsDialog';
 
 interface Match {
   id: number;
-  match_type: string;
-  is_valid: boolean;
-  distance_km: number;
-  date_diff_days: number;
-  created_at: string;
   client_request_id: number;
   move_id: number;
-  // Propriété générée côté client
-  match_reference?: string;
+  match_type: string;
+  volume_ok: boolean;
+  combined_volume: number;
+  distance_km: number;
+  date_diff_days: number;
+  is_valid: boolean;
+  created_at: string;
   client_request?: {
     name?: string;
-  } | null;
+  };
   confirmed_move?: {
     company_name?: string;
-  } | null;
+  };
 }
 
 const MatchAnalytics = () => {
   const { toast } = useToast();
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  
+  // États pour le dialogue de détails
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   useEffect(() => {
-    fetchAnalytics();
+    fetchMatches();
   }, []);
 
-  const fetchAnalytics = async () => {
+  const fetchMatches = async () => {
     try {
       setLoading(true);
-      
-      // Récupérer tous les matchs avec les références
-      const { data: matchesData, error } = await supabase
+      const { data, error } = await supabase
         .from('move_matches')
         .select(`
           *,
-          client_request:client_requests(
-            name
-          ),
-          confirmed_move:confirmed_moves(
-            company_name
-          )
+          client_request:client_requests(name),
+          confirmed_move:confirmed_moves(company_name)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Générer des références pour les matchs qui n'en ont pas et nettoyer les données
-      const matchesWithReferences = matchesData?.map(match => ({
+      // Nettoyer les données
+      const cleanedMatches = data?.map(match => ({
         ...match,
-        match_reference: `MTH-${String(match.id).padStart(6, '0')}`,
         client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
         confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
       })) || [];
 
-      setMatches(matchesWithReferences);
-
-      // Calculer les analytics
-      const totalMatches = matchesWithReferences.length;
-      const validMatches = matchesWithReferences.filter(m => m.is_valid).length;
-      const invalidMatches = totalMatches - validMatches;
-      const matchRate = totalMatches > 0 ? (validMatches / totalMatches) * 100 : 0;
-
-      const averageDistance = totalMatches > 0 
-        ? matchesWithReferences.reduce((sum, m) => sum + m.distance_km, 0) / totalMatches 
-        : 0;
-
-      const averageDateDiff = totalMatches > 0 
-        ? matchesWithReferences.reduce((sum, m) => sum + Math.abs(m.date_diff_days), 0) / totalMatches 
-        : 0;
-
-      // Distribution par type
-      const typeCount: Record<string, number> = {};
-      matchesWithReferences.forEach(match => {
-        typeCount[match.match_type] = (typeCount[match.match_type] || 0) + 1;
-      });
-
-      const matchTypeDistribution = Object.entries(typeCount).map(([name, value]) => ({
-        name: name === 'perfect' ? 'Parfait' : 
-              name === 'partial' ? 'Partiel' : 
-              name === 'compatible' ? 'Compatible' : name,
-        value
-      }));
-
-      // Matchs par mois
-      const monthlyData: Record<string, { total: number; valid: number }> = {};
-      matchesWithReferences.forEach(match => {
-        const month = new Date(match.created_at).toLocaleDateString('fr-FR', { 
-          year: 'numeric', 
-          month: 'short' 
-        });
-        if (!monthlyData[month]) {
-          monthlyData[month] = { total: 0, valid: 0 };
-        }
-        monthlyData[month].total++;
-        if (match.is_valid) {
-          monthlyData[month].valid++;
-        }
-      });
-
-      const monthlyMatches = Object.entries(monthlyData)
-        .map(([month, data]) => ({
-          month,
-          matches: data.total,
-          valid: data.valid
-        }))
-        .slice(-6); // Derniers 6 mois
-
-      setAnalytics({
-        totalMatches,
-        validMatches,
-        invalidMatches,
-        matchRate,
-        averageDistance,
-        averageDateDiff,
-        matchTypeDistribution,
-        monthlyMatches
-      });
-
+      setMatches(cleanedMatches);
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      console.error('Error fetching matches:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les analytics",
+        description: "Impossible de charger les correspondances",
         variant: "destructive",
       });
     } finally {
@@ -159,53 +78,26 @@ const MatchAnalytics = () => {
     }
   };
 
-  const getFilteredMatches = () => {
-    return matches.filter(match => {
-      const matchesSearch = 
-        match.match_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        match.client_request?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        match.confirmed_move?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        `CLI-${String(match.client_request_id).padStart(6, '0')}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        `TRJ-${String(match.move_id).padStart(6, '0')}`.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesStatus = statusFilter === 'all' || 
-        (statusFilter === 'valid' && match.is_valid) ||
-        (statusFilter === 'invalid' && !match.is_valid);
-
-      let matchesDate = true;
-      if (dateFilter !== 'all') {
-        const matchDate = new Date(match.created_at);
-        const now = new Date();
-        
-        switch (dateFilter) {
-          case 'week':
-            matchesDate = (now.getTime() - matchDate.getTime()) <= 7 * 24 * 60 * 60 * 1000;
-            break;
-          case 'month':
-            matchesDate = (now.getTime() - matchDate.getTime()) <= 30 * 24 * 60 * 60 * 1000;
-            break;
-          case 'quarter':
-            matchesDate = (now.getTime() - matchDate.getTime()) <= 90 * 24 * 60 * 60 * 1000;
-            break;
-        }
-      }
-
-      return matchesSearch && matchesStatus && matchesDate;
-    });
+  const stats = {
+    total: matches.length,
+    valid: matches.filter(match => match.is_valid).length,
+    uniqueClients: [...new Set(matches.map(match => match.client_request_id))].length,
+    uniqueMoves: [...new Set(matches.map(match => match.move_id))].length,
   };
 
-  const filteredMatches = getFilteredMatches();
+  const filteredMatches = matches.filter(match => {
+    const matchesSearch =
+      match.client_request?.name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      match.confirmed_move?.company_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      String(match.id).includes(searchFilter);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Chargement des analytics...</p>
-        </div>
-      </div>
-    );
-  }
+    return matchesSearch;
+  });
+
+  const handleViewMatch = (match: Match) => {
+    setSelectedMatch(match);
+    setShowDetailsDialog(true);
+  };
 
   return (
     <motion.div
@@ -213,202 +105,139 @@ const MatchAnalytics = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <TrendingUp className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Analytics Matchs</h2>
-        </div>
-        <Badge variant="secondary">
-          {analytics?.totalMatches || 0} matchs total
-        </Badge>
+      <div className="flex items-center space-x-3">
+        <BarChart3 className="h-6 w-6 text-blue-600" />
+        <h2 className="text-2xl font-bold text-gray-800">Analytics des Matchs</h2>
+      </div>
+
+      {/* Cartes de statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Matchs</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Matchs Valides</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.valid}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.total > 0 ? Math.round((stats.valid / stats.total) * 100) : 0}% du total
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Clients Matchés</CardTitle>
+            <Users className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.uniqueClients}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Trajets Matchés</CardTitle>
+            <Truck className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.uniqueMoves}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filtres */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Rechercher par référence client/trajet ou nom..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            placeholder="Filtrer par référence, nom ou date..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
           />
         </div>
         
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={dateFilter} onValueChange={setDateFilter}>
           <SelectTrigger className="w-full sm:w-48">
             <Filter className="h-4 w-4 mr-2" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="valid">Valides</SelectItem>
-            <SelectItem value="invalid">Non valides</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={dateFilter} onValueChange={setDateFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
             <SelectItem value="all">Toutes les dates</SelectItem>
-            <SelectItem value="week">Dernière semaine</SelectItem>
-            <SelectItem value="month">Dernier mois</SelectItem>
-            <SelectItem value="quarter">Dernier trimestre</SelectItem>
+            <SelectItem value="today">Aujourd'hui</SelectItem>
+            <SelectItem value="week">Cette semaine</SelectItem>
+            <SelectItem value="month">Ce mois</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Target className="h-4 w-4 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium leading-none">Total Matchs</p>
-                <p className="text-2xl font-bold">{filteredMatches.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Users className="h-4 w-4 text-green-600" />
-              <div>
-                <p className="text-sm font-medium leading-none">Matchs Valides</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {filteredMatches.filter(m => m.is_valid).length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Truck className="h-4 w-4 text-orange-600" />
-              <div>
-                <p className="text-sm font-medium leading-none">Taux de Réussite</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {filteredMatches.length > 0 
-                    ? Math.round((filteredMatches.filter(m => m.is_valid).length / filteredMatches.length) * 100)
-                    : 0}%
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-purple-600" />
-              <div>
-                <p className="text-sm font-medium leading-none">Distance Moy.</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {filteredMatches.length > 0 
-                    ? Math.round(filteredMatches.reduce((sum, m) => sum + m.distance_km, 0) / filteredMatches.length)
-                    : 0}km
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Graphiques */}
-      {analytics && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Distribution par type */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Distribution par Type de Match</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={analytics.matchTypeDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {analytics.matchTypeDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Évolution mensuelle */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Évolution Mensuelle</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={analytics.monthlyMatches}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="matches" fill="#8884d8" name="Total" />
-                  <Bar dataKey="valid" fill="#82ca9d" name="Valides" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Liste des matchs filtrés */}
+      {/* Liste des matchs */}
       <Card>
         <CardHeader>
-          <CardTitle>Matchs Récents ({filteredMatches.length})</CardTitle>
+          <CardTitle>Détail des Correspondances</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredMatches.slice(0, 10).map((match) => (
-              <div key={match.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                    {match.match_reference}
-                  </Badge>
-                  <div>
-                    <p className="font-medium">
-                      {match.client_request?.name} → {match.confirmed_move?.company_name}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Réf Client: CLI-{String(match.client_request_id).padStart(6, '0')} | 
-                      Réf Trajet: TRJ-{String(match.move_id).padStart(6, '0')}
-                    </p>
+          {loading ? (
+            <div className="text-center py-8">Chargement...</div>
+          ) : filteredMatches.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Aucun match trouvé
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredMatches.map((match) => (
+                <div
+                  key={match.id}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <Badge variant="outline">
+                        {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}
+                      </Badge>
+                      <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                        {match.is_valid ? 'Valide' : 'Non valide'}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium">{match.client_request?.name}</span>
+                      {' → '}
+                      <span className="font-medium">{match.confirmed_move?.company_name}</span>
+                      <span className="ml-4">Distance: {match.distance_km}km</span>
+                    </div>
                   </div>
+                  
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleViewMatch(match)}
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Voir
+                  </Button>
                 </div>
-                <div className="text-right text-sm">
-                  <p>{match.distance_km}km</p>
-                  <p className="text-gray-600">
-                    {new Date(match.created_at).toLocaleDateString('fr-FR')}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Dialogue de détails */}
+      <MatchDetailsDialog
+        open={showDetailsDialog}
+        onOpenChange={setShowDetailsDialog}
+        match={selectedMatch}
+        onMatchUpdated={fetchMatches}
+      />
     </motion.div>
   );
 };

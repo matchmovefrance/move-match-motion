@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Plus, Search, Target } from 'lucide-react';
+import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +9,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import SimpleClientFormReplacement from './SimpleClientFormReplacement';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { ClientMatchesDialog } from './ClientMatchesDialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface Client {
   id: number;
@@ -63,6 +65,13 @@ const ClientList = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // États pour les dialogues
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showMatchesDialog, setShowMatchesDialog] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -111,12 +120,41 @@ const ClientList = () => {
     new Date(client.desired_date).toLocaleDateString('fr-FR').includes(searchTerm)
   );
 
+  const handleDeleteClient = async () => {
+    if (!clientToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('client_requests')
+        .delete()
+        .eq('id', clientToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Client supprimé",
+        description: `Le client ${clientToDelete.name || clientToDelete.client_reference} a été supprimé`,
+      });
+
+      setShowDeleteDialog(false);
+      setClientToDelete(null);
+      fetchClients();
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le client",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleFindMatch = async (client: Client) => {
-    toast({
-      title: "Recherche de match",
-      description: `Recherche de trajets compatibles pour ${client.name} (${client.client_reference})`,
-    });
-    // TODO: Implémenter la logique de matching
+    setSelectedClient(client);
+    setShowMatchesDialog(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -163,12 +201,25 @@ const ClientList = () => {
       >
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-800">Modifier Client</h2>
-          <Button 
-            variant="outline" 
-            onClick={() => setEditingClient(null)}
-          >
-            Retour à la liste
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setClientToDelete(editingClient);
+                setShowDeleteDialog(true);
+              }}
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Supprimer
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setEditingClient(null)}
+            >
+              Retour à la liste
+            </Button>
+          </div>
         </div>
         <SimpleClientFormReplacement 
           initialData={editingClient}
@@ -221,12 +272,38 @@ const ClientList = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{client.name}</CardTitle>
-                  <Badge className={getStatusColor(client.status)}>
-                    {client.status}
-                  </Badge>
+                  <div className="flex items-center space-x-1">
+                    <Badge className={getStatusColor(client.status)}>
+                      {client.status}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <span className="sr-only">Ouvrir menu</span>
+                          <div className="h-4 w-4">⋮</div>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditingClient(client)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setClientToDelete(client);
+                            setShowDeleteDialog(true);
+                          }}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-600">
-                  <strong>Réf:</strong> {client.client_reference}
+                  <strong>Réf:</strong> {client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
