@@ -33,13 +33,19 @@ export const useQuotes = () => {
   const { data: activeClients, refetch: refetchClients } = useQuery({
     queryKey: ['active-clients'],
     queryFn: async () => {
+      console.log('🔍 Fetching active clients from client_requests...');
       const { data, error } = await supabase
         .from('client_requests')
         .select('*')
         .in('status', ['pending', 'confirmed'])
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching clients:', error);
+        throw error;
+      }
+      
+      console.log('✅ Active clients loaded:', data?.length || 0);
       return data || [];
     },
     staleTime: 5 * 60 * 1000,
@@ -52,7 +58,10 @@ export const useQuotes = () => {
   }, [activeClients]);
 
   const generateAllQuotes = async () => {
-    if (!activeClients?.length) return;
+    if (!activeClients?.length) {
+      console.log('⚠️ No active clients to generate quotes for');
+      return;
+    }
     
     setIsGenerating(true);
     console.log('🔄 Génération des devis avec distances exactes Google Maps...');

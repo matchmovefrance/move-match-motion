@@ -100,10 +100,14 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       let clientId;
       if (isEditing && initialData?.client_id) {
         clientId = initialData.client_id;
-        await supabase
+        const { error: updateClientError } = await supabase
           .from('clients')
           .update(clientData)
           .eq('id', clientId);
+        
+        if (updateClientError) {
+          console.error('Erreur mise à jour client:', updateClientError);
+        }
       } else {
         const { data: newClient, error: clientError } = await supabase
           .from('clients')
@@ -139,14 +143,18 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       };
 
       if (isEditing && initialData?.id) {
-        await supabase
+        const { error } = await supabase
           .from('client_requests')
           .update(requestData)
           .eq('id', initialData.id);
+        
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('client_requests')
           .insert(requestData);
+        
+        if (error) throw error;
       }
 
       toast({

@@ -1,105 +1,122 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Target, Search, MapPin, Calendar, Volume2, Users, Truck, Filter, Eye, XCircle, CheckCircle } from 'lucide-react';
+import { Search, MapPin, Calendar, Volume2, Target, Users, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { MatchDetailsDialog } from './MatchDetailsDialog';
+import MatchFilters from './MatchFilters';
+import MatchDetailsDialog from './MatchDetailsDialog';
 
-interface Match {
+interface ClientRequest {
   id: number;
-  client_request_id: number;
-  move_id: number;
-  match_type: string;
-  volume_ok: boolean;
-  combined_volume: number;
-  distance_km: number;
-  date_diff_days: number;
-  is_valid: boolean;
+  name: string;
+  departure_city: string;
+  departure_postal_code: string;
+  arrival_city: string;
+  arrival_postal_code: string;
+  desired_date: string;
+  estimated_volume: number;
+  flexible_dates: boolean;
+  status: string;
   created_at: string;
-  // Propriété générée côté client
-  match_reference?: string;
-  client_request?: {
-    name?: string;
-    departure_postal_code?: string;
-    arrival_postal_code?: string;
-    desired_date?: string;
-    estimated_volume?: number;
-  } | null;
-  confirmed_move?: {
-    company_name?: string;
-    mover_name?: string;
-    departure_postal_code?: string;
-    arrival_postal_code?: string;
-    departure_date?: string;
-    available_volume?: number;
-  } | null;
+}
+
+interface ConfirmedMove {
+  id: number;
+  mover_name: string;
+  company_name: string;
+  departure_city: string;
+  departure_postal_code: string;
+  arrival_city: string;
+  arrival_postal_code: string;
+  departure_date: string;
+  max_volume: number;
+  used_volume: number;
+  available_volume: number;
+  price_per_m3: number;
+  status: string;
+}
+
+interface MatchResult {
+  client: ClientRequest;
+  move: ConfirmedMove;
+  distance: number;
+  dateDiff: number;
+  volumeMatch: boolean;
+  matchScore: number;
 }
 
 const MatchFinder = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [clients, setClients] = useState<ClientRequest[]>([]);
+  const [moves, setMoves] = useState<ConfirmedMove[]>([]);
+  const [matches, setMatches] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  
-  // États pour le dialogue de détails
+  const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
-  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
+  // Filtres
+  const [maxDistance, setMaxDistance] = useState(100);
+  const [maxDateDiff, setMaxDateDiff] = useState(7);
+  const [minMatchScore, setMinMatchScore] = useState(70);
 
   useEffect(() => {
-    fetchMatches();
+    fetchData();
   }, []);
 
-  const fetchMatches = async () => {
+  useEffect(() => {
+    if (clients.length > 0 && moves.length > 0) {
+      findMatches();
+    }
+  }, [clients, moves, maxDistance, maxDateDiff, minMatchScore]);
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('move_matches')
-        .select(`
-          *,
-          client_request:client_requests(
-            name,
-            departure_postal_code,
-            arrival_postal_code,
-            desired_date,
-            estimated_volume
-          ),
-          confirmed_move:confirmed_moves(
-            company_name,
-            mover_name,
-            departure_postal_code,
-            arrival_postal_code,
-            departure_date,
-            available_volume
-          )
-        `)
+      console.log('🔍 Chargement des données pour le matching...');
+
+      // Charger les demandes clients
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('client_requests')
+        .select('*')
+        .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (clientsError) {
+        console.error('❌ Erreur chargement clients:', clientsError);
+        throw clientsError;
+      }
+
+      // Charger les déménagements confirmés
+      const { data: movesData, error: movesError } = await supabase
+        .from('confirmed_moves')
+        .select('*')
+        .eq('status', 'confirmed')
+        .order('departure_date', { ascending: true });
+
+      if (movesError) {
+        console.error('❌ Erreur chargement déménagements:', movesError);
+        throw movesError;
+      }
+
+      setClients(clientsData || []);
+      setMoves(movesData || []);
       
-      // Générer des références pour les matchs qui n'en ont pas et nettoyer les données
-      const matchesWithReferences = data?.map(match => ({
-        ...match,
-        match_reference: `MTH-${String(match.id).padStart(6, '0')}`,
-        client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
-        confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
-      })) || [];
-      
-      setMatches(matchesWithReferences);
+      console.log('✅ Données chargées:', {
+        clients: clientsData?.length || 0,
+        moves: movesData?.length || 0
+      });
+
     } catch (error) {
-      console.error('Error fetching matches:', error);
+      console.error('❌ Erreur lors du chargement:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les correspondances",
+        description: "Impossible de charger les données",
         variant: "destructive",
       });
     } finally {
@@ -107,132 +124,165 @@ const MatchFinder = () => {
     }
   };
 
-  const filteredMatches = matches.filter(match => {
-    const matchesSearch = 
-      match.match_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      match.client_request?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      match.confirmed_move?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      match.client_request?.departure_postal_code?.includes(searchTerm) ||
-      match.client_request?.arrival_postal_code?.includes(searchTerm) ||
-      match.confirmed_move?.departure_postal_code?.includes(searchTerm) ||
-      match.confirmed_move?.arrival_postal_code?.includes(searchTerm) ||
-      new Date(match.client_request?.desired_date || '').toLocaleDateString('fr-FR').includes(searchTerm) ||
-      new Date(match.confirmed_move?.departure_date || '').toLocaleDateString('fr-FR').includes(searchTerm);
+  const calculateDistance = (postalCode1: string, postalCode2: string): number => {
+    // Simulation de calcul de distance basé sur les codes postaux
+    // Dans une vraie application, on utiliserait l'API Google Maps
+    const code1 = parseInt(postalCode1.substring(0, 2));
+    const code2 = parseInt(postalCode2.substring(0, 2));
+    return Math.abs(code1 - code2) * 10; // Distance approximative en km
+  };
 
-    const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'valid' && match.is_valid) ||
-      (statusFilter === 'invalid' && !match.is_valid);
+  const calculateDateDiff = (date1: string, date2: string): number => {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+  };
 
-    const matchesType = typeFilter === 'all' || match.match_type === typeFilter;
+  const calculateMatchScore = (distance: number, dateDiff: number, volumeMatch: boolean): number => {
+    let score = 100;
+    
+    // Pénalité distance (max 30 points)
+    score -= Math.min(distance / 10, 30);
+    
+    // Pénalité différence de dates (max 20 points)
+    score -= Math.min(dateDiff * 3, 20);
+    
+    // Bonus volume compatible (15 points)
+    if (volumeMatch) score += 15;
+    
+    // Bonus départ proche (10 points si < 20km)
+    if (distance < 20) score += 10;
+    
+    return Math.max(0, Math.round(score));
+  };
 
-    return matchesSearch && matchesStatus && matchesType;
-  });
+  const findMatches = () => {
+    console.log('🎯 Recherche de matches...');
+    const foundMatches: MatchResult[] = [];
 
-  const handleCreateMatch = async () => {
-    toast({
-      title: "Recherche de correspondances",
-      description: "Recherche de nouvelles correspondances en cours...",
+    clients.forEach(client => {
+      moves.forEach(move => {
+        // Calculer distance entre départs
+        const departureDistance = calculateDistance(
+          client.departure_postal_code,
+          move.departure_postal_code
+        );
+
+        // Calculer distance entre arrivées
+        const arrivalDistance = calculateDistance(
+          client.arrival_postal_code,
+          move.arrival_postal_code
+        );
+
+        // Distance moyenne
+        const avgDistance = (departureDistance + arrivalDistance) / 2;
+
+        // Différence de dates
+        const dateDiff = calculateDateDiff(client.desired_date, move.departure_date);
+
+        // Vérifier compatibilité volume
+        const volumeMatch = move.available_volume >= client.estimated_volume;
+
+        // Calculer score de match
+        const matchScore = calculateMatchScore(avgDistance, dateDiff, volumeMatch);
+
+        // Appliquer les filtres
+        if (avgDistance <= maxDistance && 
+            dateDiff <= maxDateDiff && 
+            matchScore >= minMatchScore) {
+          
+          foundMatches.push({
+            client,
+            move,
+            distance: avgDistance,
+            dateDiff,
+            volumeMatch,
+            matchScore
+          });
+        }
+      });
     });
-    // TODO: Implémenter la logique de création de matchs automatiques
+
+    // Trier par score décroissant
+    foundMatches.sort((a, b) => b.matchScore - a.matchScore);
+    
+    setMatches(foundMatches);
+    console.log('✅ Matches trouvés:', foundMatches.length);
   };
 
-  const getMatchStatusColor = (isValid: boolean) => {
-    return isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-  };
+  const createMatch = async (match: MatchResult) => {
+    if (!user) return;
 
-  const getMatchTypeColor = (type: string) => {
-    switch (type) {
-      case 'perfect': return 'bg-blue-100 text-blue-800';
-      case 'partial': return 'bg-yellow-100 text-yellow-800';
-      case 'compatible': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const rejectMatch = async (matchId: number) => {
     try {
+      console.log('🔗 Création du match...', match);
+
       const { error } = await supabase
         .from('move_matches')
-        .delete()
-        .eq('id', matchId);
+        .insert({
+          client_request_id: match.client.id,
+          move_id: match.move.id,
+          match_type: 'automatic',
+          distance_km: match.distance,
+          date_diff_days: match.dateDiff,
+          volume_ok: match.volumeMatch,
+          combined_volume: match.client.estimated_volume + match.move.used_volume,
+          is_valid: true
+        });
 
       if (error) throw error;
 
-      toast({
-        title: "Match rejeté",
-        description: "La correspondance a été supprimée",
-      });
-
-      fetchMatches();
-    } catch (error) {
-      console.error('Error rejecting match:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de rejeter le match",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const markAsCompleted = async (match: Match) => {
-    try {
-      const { error } = await supabase
+      // Mettre à jour le statut du client
+      await supabase
         .from('client_requests')
-        .update({ status: 'completed' })
-        .eq('id', match.client_request_id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Trajet terminé",
-        description: "Le match a été marqué comme terminé",
-      });
-
-      fetchMatches();
-    } catch (error) {
-      console.error('Error marking as completed:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de marquer comme terminé",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const acceptMatch = async (match: Match) => {
-    try {
-      const { error } = await supabase
-        .from('client_requests')
-        .update({ 
-          status: 'confirmed',
-          match_status: 'accepted',
+        .update({
           is_matched: true,
-          matched_at: new Date().toISOString()
+          matched_at: new Date().toISOString(),
+          match_status: 'matched'
         })
-        .eq('id', match.client_request_id);
-
-      if (error) throw error;
+        .eq('id', match.client.id);
 
       toast({
-        title: "Match accepté",
-        description: "La correspondance a été acceptée",
+        title: "Match créé",
+        description: `Match créé entre ${match.client.name} et ${match.move.company_name}`,
       });
 
-      fetchMatches();
+      // Recharger les données
+      fetchData();
+
     } catch (error) {
-      console.error('Error accepting match:', error);
+      console.error('❌ Erreur création match:', error);
       toast({
         title: "Erreur",
-        description: "Impossible d'accepter le match",
+        description: "Impossible de créer le match",
         variant: "destructive",
       });
     }
   };
 
-  const handleViewDetails = (match: Match) => {
-    setSelectedMatch(match);
-    setShowDetailsDialog(true);
+  const getMatchTypeColor = (score: number) => {
+    if (score >= 90) return 'bg-green-100 text-green-800 border-green-200';
+    if (score >= 75) return 'bg-blue-100 text-blue-800 border-blue-200';
+    if (score >= 60) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    return 'bg-gray-100 text-gray-800 border-gray-200';
   };
+
+  const getMatchTypeLabel = (score: number) => {
+    if (score >= 90) return 'Excellent';
+    if (score >= 75) return 'Très bon';
+    if (score >= 60) return 'Bon';
+    return 'Moyen';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des données...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -243,232 +293,134 @@ const MatchFinder = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Target className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Correspondances</h2>
-          <Badge variant="secondary">{filteredMatches.length}</Badge>
+          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances</h2>
+          <Badge variant="secondary">{matches.length} match(es) trouvé(s)</Badge>
         </div>
-        <Button onClick={handleCreateMatch}>
-          <Target className="h-4 w-4 mr-2" />
-          Rechercher Matchs
+        <Button onClick={fetchData} disabled={loading}>
+          <Search className="h-4 w-4 mr-2" />
+          Actualiser
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Rechercher par référence client/trajet, nom, code postal, date..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="valid">Valides</SelectItem>
-            <SelectItem value="invalid">Non valides</SelectItem>
-          </SelectContent>
-        </Select>
+      <MatchFilters
+        maxDistance={maxDistance}
+        setMaxDistance={setMaxDistance}
+        maxDateDiff={maxDateDiff}
+        setMaxDateDiff={setMaxDateDiff}
+        minMatchScore={minMatchScore}
+        setMinMatchScore={setMinMatchScore}
+      />
 
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les types</SelectItem>
-            <SelectItem value="perfect">Parfait</SelectItem>
-            <SelectItem value="partial">Partiel</SelectItem>
-            <SelectItem value="compatible">Compatible</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {matches.map((match, index) => (
+          <Card key={`${match.client.id}-${match.move.id}`} className="hover:shadow-lg transition-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Match #{index + 1}</CardTitle>
+                <Badge className={getMatchTypeColor(match.matchScore)}>
+                  {getMatchTypeLabel(match.matchScore)} ({match.matchScore}%)
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Informations client */}
+              <div className="bg-blue-50 rounded-lg p-3">
+                <div className="flex items-center mb-2">
+                  <Users className="h-4 w-4 text-blue-600 mr-2" />
+                  <span className="font-medium text-blue-800">Client: {match.client.name}</span>
+                </div>
+                <div className="space-y-1 text-sm text-blue-700">
+                  <div className="flex items-center">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    {match.client.departure_postal_code} → {match.client.arrival_postal_code}
+                  </div>
+                  <div className="flex items-center">
+                    <Calendar className="h-3 w-3 mr-1" />
+                    {new Date(match.client.desired_date).toLocaleDateString('fr-FR')}
+                  </div>
+                  <div className="flex items-center">
+                    <Volume2 className="h-3 w-3 mr-1" />
+                    {match.client.estimated_volume} m³
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations déménagement */}
+              <div className="bg-green-50 rounded-lg p-3">
+                <div className="flex items-center mb-2">
+                  <Truck className="h-4 w-4 text-green-600 mr-2" />
+                  <span className="font-medium text-green-800">{match.move.company_name}</span>
+                </div>
+                <div className="space-y-1 text-sm text-green-700">
+                  <div className="flex items-center">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    {match.move.departure_postal_code} → {match.move.arrival_postal_code}
+                  </div>
+                  <div className="flex items-center">
+                    <Calendar className="h-3 w-3 mr-1" />
+                    {new Date(match.move.departure_date).toLocaleDateString('fr-FR')}
+                  </div>
+                  <div className="flex items-center">
+                    <Volume2 className="h-3 w-3 mr-1" />
+                    {match.move.available_volume} m³ disponible
+                  </div>
+                </div>
+              </div>
+
+              {/* Métriques du match */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="text-center">
+                  <div className="font-medium text-gray-700">Distance</div>
+                  <div className="text-lg font-bold text-gray-900">{Math.round(match.distance)} km</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-medium text-gray-700">Écart dates</div>
+                  <div className="text-lg font-bold text-gray-900">{Math.round(match.dateDiff)} jours</div>
+                </div>
+              </div>
+
+              <div className="flex space-x-2 pt-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedMatch(match);
+                    setShowDetailsDialog(true);
+                  }}
+                  className="flex-1"
+                >
+                  Détails
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => createMatch(match)}
+                  className="flex-1"
+                >
+                  Créer le match
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {loading ? (
-        <div className="text-center py-8">Chargement...</div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6">
-          {filteredMatches.map((match) => (
-            <Card key={match.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center space-x-2">
-                    <Target className="h-5 w-5 text-blue-600" />
-                    <span>Match {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}</span>
-                    <Badge variant="outline" className="ml-2">
-                      {match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`}
-                    </Badge>
-                  </CardTitle>
-                  <div className="flex space-x-2">
-                    <Badge className={getMatchStatusColor(match.is_valid)}>
-                      {match.is_valid ? 'Valide' : 'Non valide'}
-                    </Badge>
-                    <Badge className={getMatchTypeColor(match.match_type)}>
-                      {match.match_type}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Client */}
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Users className="h-4 w-4 text-green-600" />
-                      <span className="font-semibold">Client</span>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <strong>Nom:</strong> {match.client_request?.name}
-                      </div>
-                      <div>
-                        <strong>Réf:</strong> CLI-{String(match.client_request_id).padStart(6, '0')}
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <MapPin className="h-3 w-3 text-blue-500" />
-                        <span>
-                          {match.client_request?.departure_postal_code} → {match.client_request?.arrival_postal_code}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-3 w-3 text-purple-500" />
-                        <span>
-                          {match.client_request?.desired_date ? 
-                            new Date(match.client_request.desired_date).toLocaleDateString('fr-FR') : 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Volume2 className="h-3 w-3 text-orange-500" />
-                        <span>{match.client_request?.estimated_volume}m³</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Trajet */}
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Truck className="h-4 w-4 text-blue-600" />
-                      <span className="font-semibold">Trajet</span>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <strong>Entreprise:</strong> {match.confirmed_move?.company_name}
-                      </div>
-                      <div>
-                        <strong>Réf:</strong> TRJ-{String(match.move_id).padStart(6, '0')}
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <MapPin className="h-3 w-3 text-blue-500" />
-                        <span>
-                          {match.confirmed_move?.departure_postal_code} → {match.confirmed_move?.arrival_postal_code}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-3 w-3 text-purple-500" />
-                        <span>
-                          {match.confirmed_move?.departure_date ? 
-                            new Date(match.confirmed_move.departure_date).toLocaleDateString('fr-FR') : 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Volume2 className="h-3 w-3 text-green-500" />
-                        <span>{match.confirmed_move?.available_volume}m³ disponible</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Métriques du match */}
-                <div className="border-t pt-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Distance:</span>
-                      <span className="font-medium ml-2">{match.distance_km}km</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Différence dates:</span>
-                      <span className="font-medium ml-2">{match.date_diff_days} jours</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Volume combiné:</span>
-                      <span className="font-medium ml-2">{match.combined_volume}m³</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Volume OK:</span>
-                      <span className={`font-medium ml-2 ${match.volume_ok ? 'text-green-600' : 'text-red-600'}`}>
-                        {match.volume_ok ? 'Oui' : 'Non'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex space-x-2 pt-3">
-                  <Button 
-                    size="sm"
-                    onClick={() => acceptMatch(match)}
-                    className="flex-1"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Accepter Match
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={() => handleViewDetails(match)}
-                    className="flex-1"
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    Voir Détails
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => rejectMatch(match.id)}
-                    className="flex-1 text-red-600 hover:text-red-700"
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Rejeter
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant="outline"
-                    onClick={() => markAsCompleted(match)}
-                    className="flex-1"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Trajet terminé
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {filteredMatches.length === 0 && !loading && (
+      {matches.length === 0 && !loading && (
         <div className="text-center py-12">
           <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">
-            {searchTerm ? 'Aucune correspondance trouvée pour cette recherche' : 'Aucune correspondance disponible'}
+          <p className="text-gray-600 mb-2">Aucune correspondance trouvée</p>
+          <p className="text-sm text-gray-500">
+            Essayez d'ajuster les filtres de recherche
           </p>
         </div>
       )}
 
-      {/* Dialogue de détails */}
       <MatchDetailsDialog
         open={showDetailsDialog}
         onOpenChange={setShowDetailsDialog}
         match={selectedMatch}
-        onMatchUpdated={fetchMatches}
       />
     </motion.div>
   );
 };
 
 export default MatchFinder;
-
