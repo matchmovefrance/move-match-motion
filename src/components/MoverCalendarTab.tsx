@@ -40,21 +40,48 @@ export const MoverCalendarTab = () => {
     try {
       const formattedDate = selectedDate?.toISOString().split('T')[0];
       
-      // For déménageur role, get their own moves
-      // For admin/agent, get all moves for the selected date
-      let query = supabase
-        .from('confirmed_moves')
-        .select('*')
-        .eq('departure_date', formattedDate);
-
+      // For déménageur role, get their mover ID first
       if (profile.role === 'demenageur') {
-        query = query.eq('mover_id', profile.id);
+        // First get the mover ID from the movers table
+        const { data: moverData, error: moverError } = await supabase
+          .from('movers')
+          .select('id')
+          .eq('created_by', profile.id)
+          .single();
+
+        if (moverError) {
+          console.error('Error fetching mover:', moverError);
+          setConfirmedMoves([]);
+          return;
+        }
+
+        if (!moverData) {
+          console.log('No mover found for this user');
+          setConfirmedMoves([]);
+          return;
+        }
+
+        // Then get their moves using the mover ID
+        const { data, error } = await supabase
+          .from('confirmed_moves')
+          .select('*')
+          .eq('departure_date', formattedDate)
+          .eq('mover_id', moverData.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setConfirmedMoves(data || []);
+      } else {
+        // For admin/agent, get all moves for the selected date
+        const { data, error } = await supabase
+          .from('confirmed_moves')
+          .select('*')
+          .eq('departure_date', formattedDate)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setConfirmedMoves(data || []);
       }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setConfirmedMoves(data || []);
     } catch (error) {
       console.error('Error fetching confirmed moves:', error);
     } finally {
