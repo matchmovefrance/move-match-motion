@@ -127,6 +127,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         arrival_country: 'France',
         desired_date: formData.desired_date,
         flexible_dates: formData.flexible_dates,
+        flexibility_days: formData.flexibility_days,
         date_range_start: dateRangeStart ? dateRangeStart.toISOString().split('T')[0] : null,
         date_range_end: dateRangeEnd ? dateRangeEnd.toISOString().split('T')[0] : null,
         estimated_volume: parseFloat(formData.estimated_volume),

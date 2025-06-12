@@ -67,6 +67,11 @@ const ClientList = () => {
     fetchClients();
   }, []);
 
+  const generateClientReference = () => {
+    const timestamp = Date.now().toString().slice(-6);
+    return `CLI-${timestamp}`;
+  };
+
   const fetchClients = async () => {
     try {
       setLoading(true);
@@ -76,7 +81,14 @@ const ClientList = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setClients(data || []);
+      
+      // Générer des références pour les clients qui n'en ont pas
+      const clientsWithReferences = data?.map(client => ({
+        ...client,
+        client_reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`
+      })) || [];
+      
+      setClients(clientsWithReferences);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -93,7 +105,9 @@ const ClientList = () => {
     client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.client_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.departure_postal_code?.includes(searchTerm) ||
-    client.arrival_postal_code?.includes(searchTerm)
+    client.arrival_postal_code?.includes(searchTerm) ||
+    client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    new Date(client.desired_date).toLocaleDateString('fr-FR').includes(searchTerm)
   );
 
   const handleFindMatch = async (client: Client) => {
@@ -189,7 +203,7 @@ const ClientList = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Rechercher par nom, référence, ou code postal..."
+            placeholder="Rechercher par nom, référence, email, code postal ou date..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"

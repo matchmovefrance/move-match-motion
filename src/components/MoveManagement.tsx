@@ -82,7 +82,14 @@ const MoveManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setMoves(data || []);
+      
+      // Générer des références pour les trajets qui n'en ont pas
+      const movesWithReferences = data?.map(move => ({
+        ...move,
+        move_reference: move.move_reference || `TRJ-${String(move.id).padStart(6, '0')}`
+      })) || [];
+      
+      setMoves(movesWithReferences);
     } catch (error) {
       console.error('Error fetching moves:', error);
       toast({
@@ -100,7 +107,9 @@ const MoveManagement = () => {
     move.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     move.move_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     move.departure_postal_code?.includes(searchTerm) ||
-    move.arrival_postal_code?.includes(searchTerm)
+    move.arrival_postal_code?.includes(searchTerm) ||
+    move.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    new Date(move.departure_date).toLocaleDateString('fr-FR').includes(searchTerm)
   );
 
   const getStatusColor = (status: string) => {
@@ -188,7 +197,7 @@ const MoveManagement = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Rechercher par référence, déménageur, ou code postal..."
+            placeholder="Rechercher par référence, déménageur, email, code postal ou date..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
