@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -24,19 +25,20 @@ interface AnalyticsData {
 
 interface Match {
   id: number;
-  match_reference?: string;
   match_type: string;
   is_valid: boolean;
   distance_km: number;
   date_diff_days: number;
   created_at: string;
+  client_request_id: number;
+  move_id: number;
+  // Propriété générée côté client
+  match_reference?: string;
   client_request?: {
     name?: string;
-    client_reference?: string;
   } | null;
   confirmed_move?: {
     company_name?: string;
-    move_reference?: string;
   } | null;
 }
 
@@ -76,7 +78,7 @@ const MatchAnalytics = () => {
       // Générer des références pour les matchs qui n'en ont pas et nettoyer les données
       const matchesWithReferences = matchesData?.map(match => ({
         ...match,
-        match_reference: match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`,
+        match_reference: `MTH-${String(match.id).padStart(6, '0')}`,
         client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
         confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
       })) || [];
@@ -162,9 +164,9 @@ const MatchAnalytics = () => {
       const matchesSearch = 
         match.match_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         match.client_request?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        match.client_request?.client_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         match.confirmed_move?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        match.confirmed_move?.move_reference?.toLowerCase().includes(searchTerm.toLowerCase());
+        `CLI-${String(match.client_request_id).padStart(6, '0')}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `TRJ-${String(match.move_id).padStart(6, '0')}`.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === 'all' || 
         (statusFilter === 'valid' && match.is_valid) ||
@@ -391,8 +393,8 @@ const MatchAnalytics = () => {
                       {match.client_request?.name} → {match.confirmed_move?.company_name}
                     </p>
                     <p className="text-sm text-gray-600">
-                      Réf Client: {match.client_request?.client_reference} | 
-                      Réf Trajet: {match.confirmed_move?.move_reference}
+                      Réf Client: CLI-{String(match.client_request_id).padStart(6, '0')} | 
+                      Réf Trajet: TRJ-{String(match.move_id).padStart(6, '0')}
                     </p>
                   </div>
                 </div>

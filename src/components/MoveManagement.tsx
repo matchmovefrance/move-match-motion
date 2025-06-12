@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, Plus, Search, MapPin } from 'lucide-react';
@@ -14,7 +15,6 @@ interface Move {
   id: number;
   mover_name: string;
   company_name: string;
-  move_reference?: string;
   departure_city: string;
   departure_postal_code: string;
   arrival_city: string;
@@ -27,6 +27,8 @@ interface Move {
   contact_phone: string;
   contact_email: string;
   created_at: string;
+  // Propriété générée côté client
+  move_reference?: string;
   // Optional properties that might come from the database
   mover_id?: number;
   truck_id?: number;
@@ -85,7 +87,7 @@ const MoveManagement = () => {
       // Générer des références pour les trajets qui n'en ont pas
       const movesWithReferences = data?.map(move => ({
         ...move,
-        move_reference: move.move_reference || `TRJ-${String(move.id).padStart(6, '0')}`
+        move_reference: `TRJ-${String(move.id).padStart(6, '0')}`
       })) || [];
       
       setMoves(movesWithReferences);

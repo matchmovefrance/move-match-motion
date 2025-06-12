@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Target, Search, MapPin, Calendar, Volume2, Users, Truck, Filter } from 'lucide-react';
@@ -12,7 +13,6 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface Match {
   id: number;
-  match_reference?: string;
   client_request_id: number;
   move_id: number;
   match_type: string;
@@ -22,9 +22,10 @@ interface Match {
   date_diff_days: number;
   is_valid: boolean;
   created_at: string;
+  // Propriété générée côté client
+  match_reference?: string;
   client_request?: {
     name?: string;
-    client_reference?: string;
     departure_postal_code?: string;
     arrival_postal_code?: string;
     desired_date?: string;
@@ -33,7 +34,6 @@ interface Match {
   confirmed_move?: {
     company_name?: string;
     mover_name?: string;
-    move_reference?: string;
     departure_postal_code?: string;
     arrival_postal_code?: string;
     departure_date?: string;
@@ -84,7 +84,7 @@ const MatchFinder = () => {
       // Générer des références pour les matchs qui n'en ont pas et nettoyer les données
       const matchesWithReferences = data?.map(match => ({
         ...match,
-        match_reference: match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`,
+        match_reference: `MTH-${String(match.id).padStart(6, '0')}`,
         client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
         confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
       })) || [];
@@ -106,9 +106,7 @@ const MatchFinder = () => {
     const matchesSearch = 
       match.match_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       match.client_request?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      match.client_request?.client_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       match.confirmed_move?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      match.confirmed_move?.move_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       match.client_request?.departure_postal_code?.includes(searchTerm) ||
       match.client_request?.arrival_postal_code?.includes(searchTerm) ||
       match.confirmed_move?.departure_postal_code?.includes(searchTerm) ||
@@ -236,7 +234,7 @@ const MatchFinder = () => {
                         <strong>Nom:</strong> {match.client_request?.name}
                       </div>
                       <div>
-                        <strong>Réf:</strong> {match.client_request?.client_reference}
+                        <strong>Réf:</strong> CLI-{String(match.client_request_id).padStart(6, '0')}
                       </div>
                       <div className="flex items-center space-x-1">
                         <MapPin className="h-3 w-3 text-blue-500" />
@@ -269,7 +267,7 @@ const MatchFinder = () => {
                         <strong>Entreprise:</strong> {match.confirmed_move?.company_name}
                       </div>
                       <div>
-                        <strong>Réf:</strong> {match.confirmed_move?.move_reference}
+                        <strong>Réf:</strong> TRJ-{String(match.move_id).padStart(6, '0')}
                       </div>
                       <div className="flex items-center space-x-1">
                         <MapPin className="h-3 w-3 text-blue-500" />

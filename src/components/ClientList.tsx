@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target } from 'lucide-react';
@@ -15,7 +16,6 @@ interface Client {
   name: string;
   email: string;
   phone: string;
-  client_reference?: string;
   departure_city: string;
   departure_postal_code: string;
   arrival_city: string;
@@ -26,6 +26,8 @@ interface Client {
   flexibility_days?: number;
   status: string;
   created_at: string;
+  // Propriété générée côté client
+  client_reference?: string;
   // Optional properties that might come from the database but not always used
   departure_address?: string;
   arrival_address?: string;
@@ -84,7 +86,7 @@ const ClientList = () => {
       // Générer des références pour les clients qui n'en ont pas
       const clientsWithReferences = data?.map(client => ({
         ...client,
-        client_reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`
+        client_reference: `CLI-${String(client.id).padStart(6, '0')}`
       })) || [];
       
       setClients(clientsWithReferences);
