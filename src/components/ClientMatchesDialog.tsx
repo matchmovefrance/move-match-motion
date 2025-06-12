@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -57,7 +56,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
   const fetchClientData = async () => {
     try {
       const { data, error } = await supabase
-        .from('clients')
+        .from('client_requests')
         .select('departure_postal_code, arrival_postal_code, departure_city, arrival_city, desired_date, name')
         .eq('id', clientId)
         .single();
@@ -118,9 +117,12 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
   const acceptMatch = async (matchId: number) => {
     try {
       const { error } = await supabase
-        .from('clients')
+        .from('client_requests')
         .update({ 
-          status: 'confirmed'
+          status: 'confirmed',
+          match_status: 'accepted',
+          is_matched: true,
+          matched_at: new Date().toISOString()
         })
         .eq('id', clientId);
 
@@ -171,7 +173,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     try {
       // Mettre à jour le statut du client
       const { error } = await supabase
-        .from('clients')
+        .from('client_requests')
         .update({ status: 'completed' })
         .eq('id', clientId);
 

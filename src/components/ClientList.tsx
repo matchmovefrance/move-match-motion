@@ -22,6 +22,8 @@ interface Client {
   client_reference?: string;
   created_at: string;
   created_by: string;
+  source?: 'clients' | 'client_requests';
+  // Propriétés optionnelles pour la compatibilité
   departure_city?: string;
   departure_postal_code?: string;
   arrival_city?: string;
@@ -56,54 +58,77 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Rechargement complet des clients depuis la table clients...');
+      console.log('📋 Chargement des clients depuis les deux tables...');
       
-      // Charger tous les clients depuis la table clients avec tri par date de création
+      // Charger les clients de la table clients
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (clientsError) {
-        console.error('❌ Erreur lors du chargement des clients:', clientsError);
-        throw clientsError;
+        console.error('❌ Erreur lors du chargement de la table clients:', clientsError);
       }
 
-      console.log('📊 Données brutes récupérées:', clientsData);
+      // Charger les clients de la table client_requests qui ne sont pas dans la table clients
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('client_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (requestsError) {
+        console.error('❌ Erreur lors du chargement de la table client_requests:', requestsError);
+      }
 
       const allClients: Client[] = [];
 
-      // Ajouter tous les clients
+      // Ajouter les clients de la table clients
       if (clientsData) {
         clientsData.forEach(client => {
-          const clientRef = client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`;
-          const flexDays = client.flexibility_days || 0;
-          
           allClients.push({
-            id: client.id,
-            name: client.name || 'Client sans nom',
-            email: client.email || 'Email manquant',
-            phone: client.phone || 'Téléphone manquant',
-            client_reference: clientRef,
-            created_at: client.created_at,
-            created_by: client.created_by,
-            departure_city: client.departure_city,
-            departure_postal_code: client.departure_postal_code,
-            arrival_city: client.arrival_city,
-            arrival_postal_code: client.arrival_postal_code,
-            desired_date: client.desired_date,
-            estimated_volume: client.estimated_volume,
-            flexible_dates: client.flexible_dates,
-            flexibility_days: flexDays,
-            status: client.status
+            ...client,
+            source: 'clients'
           });
         });
       }
 
-      console.log('✅ Clients traités et chargés:', allClients.length, allClients);
+      // Ajouter les clients de client_requests qui ont des infos client et qui ne sont pas déjà dans la table clients
+      if (requestsData) {
+        requestsData.forEach(request => {
+          if (request.name && request.email && request.phone) {
+            // Vérifier si ce client existe déjà dans la table clients
+            const existsInClients = clientsData?.some(client => 
+              client.email === request.email || 
+              (client.name === request.name && client.phone === request.phone)
+            );
+
+            if (!existsInClients) {
+              allClients.push({
+                id: request.id,
+                name: request.name,
+                email: request.email,
+                phone: request.phone,
+                client_reference: `REQ-${String(request.id).padStart(6, '0')}`,
+                created_at: request.created_at,
+                created_by: request.created_by,
+                source: 'client_requests',
+                departure_city: request.departure_city,
+                departure_postal_code: request.departure_postal_code,
+                arrival_city: request.arrival_city,
+                arrival_postal_code: request.arrival_postal_code,
+                desired_date: request.desired_date,
+                estimated_volume: request.estimated_volume,
+                status: request.status
+              });
+            }
+          }
+        });
+      }
+
+      console.log('✅ Clients chargés:', allClients.length, allClients);
       setClients(allClients);
     } catch (error) {
-      console.error('❌ Erreur dans fetchClients:', error);
+      console.error('Error fetching clients:', error);
       toast({
         title: "Erreur",
         description: "Impossible de charger les clients",
@@ -126,15 +151,35 @@ const ClientList = () => {
 
     setIsDeleting(true);
     try {
-      console.log('🗑️ Suppression du client:', clientToDelete.id);
+      console.log('🗑️ Suppression du client:', clientToDelete.id, 'source:', clientToDelete.source);
       
-      // Supprimer de la table clients
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', clientToDelete.id);
+      if (clientToDelete.source === 'clients') {
+        // Supprimer d'abord les demandes client associées
+        const { error: requestError } = await supabase
+          .from('client_requests')
+          .delete()
+          .eq('client_id', clientToDelete.id);
 
-      if (error) throw error;
+        if (requestError) {
+          console.error('❌ Erreur suppression demandes:', requestError);
+        }
+
+        // Puis supprimer le client
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', clientToDelete.id);
+
+        if (error) throw error;
+      } else {
+        // Supprimer de client_requests
+        const { error } = await supabase
+          .from('client_requests')
+          .delete()
+          .eq('id', clientToDelete.id);
+
+        if (error) throw error;
+      }
 
       toast({
         title: "Client supprimé",
@@ -143,9 +188,9 @@ const ClientList = () => {
 
       setShowDeleteDialog(false);
       setClientToDelete(null);
-      fetchClients(); // Recharger la liste
+      fetchClients();
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression du client:', error);
+      console.error('Error deleting client:', error);
       toast({
         title: "Erreur",
         description: "Impossible de supprimer le client",
@@ -180,7 +225,7 @@ const ClientList = () => {
         <SimpleClientFormReplacement 
           onSuccess={() => {
             setShowAddForm(false);
-            fetchClients(); // Recharger la liste après création
+            fetchClients();
           }}
         />
       </motion.div>
@@ -221,7 +266,7 @@ const ClientList = () => {
           isEditing={true}
           onSuccess={() => {
             setEditingClient(null);
-            fetchClients(); // Recharger la liste après modification
+            fetchClients();
           }}
         />
       </motion.div>
@@ -263,13 +308,13 @@ const ClientList = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map((client) => (
-            <Card key={client.id} className="hover:shadow-lg transition-shadow">
+            <Card key={`${client.source}-${client.id}`} className="hover:shadow-lg transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{client.name}</CardTitle>
                   <div className="flex items-center space-x-1">
                     <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                      Client
+                      {client.source === 'clients' ? 'Client' : 'Demande'}
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -298,64 +343,71 @@ const ClientList = () => {
                   </div>
                 </div>
                 <div className="text-sm text-gray-600">
-                  <strong>Réf:</strong> {client.client_reference}
+                  <strong>Réf:</strong> {client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Afficher les informations de déménagement */}
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Départ:</span>
-                    <span className="font-medium">
-                      {client.departure_postal_code} {client.departure_city}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Arrivée:</span>
-                    <span className="font-medium">
-                      {client.arrival_postal_code} {client.arrival_city}
-                    </span>
-                  </div>
-                </div>
-
-                {client.desired_date && (
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Date souhaitée:</span>
-                      <span className="font-medium">
-                        {new Date(client.desired_date).toLocaleDateString('fr-FR')}
-                      </span>
+                {/* Informations de déménagement */}
+                {client.source === 'client_requests' && (
+                  <>
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Départ:</span>
+                        <span className="font-medium">
+                          {client.departure_postal_code} {client.departure_city}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                    
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Arrivée:</span>
+                        <span className="font-medium">
+                          {client.arrival_postal_code} {client.arrival_city}
+                        </span>
+                      </div>
+                    </div>
+
+                    {client.desired_date && (
+                      <div className="text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Date souhaitée:</span>
+                          <span className="font-medium">
+                            {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {client.estimated_volume && (
+                      <div className="text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Volume estimé:</span>
+                          <span className="font-medium">{client.estimated_volume} m³</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {client.estimated_volume && (
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Volume estimé:</span>
-                      <span className="font-medium">{client.estimated_volume} m³</span>
+                {/* Informations client de base pour les clients sans demande */}
+                {client.source === 'clients' && (
+                  <>
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium">{client.email}</span>
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {client.flexible_dates && client.flexibility_days && (
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Flexibilité:</span>
-                      <span className="font-medium">±{client.flexibility_days} jours</span>
+                    
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Téléphone:</span>
+                        <span className="font-medium">{client.phone}</span>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
-
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Contact:</span>
-                    <span className="font-medium text-xs">{client.email}</span>
-                  </div>
-                </div>
 
                 <div className="text-sm">
                   <div className="flex items-center justify-between">

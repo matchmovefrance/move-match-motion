@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, MapPin } from 'lucide-react';
@@ -105,21 +106,33 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false, clientId }: Clie
             name: formData.name || null,
             email: formData.email || null,
             phone: formData.phone || null,
+            departure_address: formData.departure_address || null,
             departure_city: formData.departure_city,
             departure_postal_code: formData.departure_postal_code,
             departure_country: formData.departure_country || 'France',
+            departure_time: formData.departure_time || null,
+            arrival_address: formData.arrival_address || null,
             arrival_city: formData.arrival_city,
             arrival_postal_code: formData.arrival_postal_code,
             arrival_country: formData.arrival_country || 'France',
             desired_date: formData.desired_date,
+            estimated_arrival_date: formData.estimated_arrival_date || null,
+            estimated_arrival_time: formData.estimated_arrival_time || null,
             estimated_volume: formData.estimated_volume ? parseFloat(formData.estimated_volume) : null,
+            description: formData.description || null,
             flexible_dates: formData.flexible_dates,
-            flexibility_days: formData.date_range_start && formData.date_range_end ? 
-              Math.ceil((new Date(formData.date_range_end).getTime() - new Date(formData.date_range_start).getTime()) / (1000 * 60 * 60 * 24)) : 0
+            date_range_start: formData.date_range_start || null,
+            date_range_end: formData.date_range_end || null,
+            budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
+            budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
+            quote_amount: formData.quote_amount ? parseFloat(formData.quote_amount) : null,
+            special_requirements: formData.special_requirements || null,
+            access_conditions: formData.access_conditions || null,
+            inventory_list: formData.inventory_list || null,
           };
 
           const { error } = await supabase
-            .from('clients')
+            .from('client_requests')
             .update(updateData)
             .eq('id', clientId);
 

@@ -61,8 +61,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       return;
     }
 
-    if (!formData.name || !formData.departure_postal_code || 
-        !formData.arrival_postal_code || !formData.desired_date || !formData.estimated_volume) {
+    if (!formData.name || !formData.departure_postal_code || !formData.arrival_postal_code || 
+        !formData.desired_date || !formData.estimated_volume) {
       toast({
         title: "Erreur",
         description: "Tous les champs sont obligatoires",
@@ -74,13 +74,51 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
     try {
       setLoading(true);
 
+      const desiredDate = new Date(formData.desired_date);
+      let dateRangeStart = null;
+      let dateRangeEnd = null;
+
+      if (formData.flexible_dates && formData.flexibility_days > 0) {
+        dateRangeStart = new Date(desiredDate);
+        dateRangeStart.setDate(dateRangeStart.getDate() - formData.flexibility_days);
+        
+        dateRangeEnd = new Date(desiredDate);
+        dateRangeEnd.setDate(dateRangeEnd.getDate() + formData.flexibility_days);
+      }
+
       const clientReference = isEditing ? initialData?.client_reference : generateClientReference();
 
-      // Créer directement dans la table clients
+      // Créer le client d'abord
       const clientData = {
         name: formData.name,
-        email: `${clientReference.toLowerCase()}@temp.com`, // Email temporaire basé sur référence
-        phone: 'A renseigner', // Téléphone par défaut
+        email: `${clientReference.toLowerCase()}@temp.com`,
+        phone: 'A renseigner',
+        client_reference: clientReference,
+        created_by: user.id,
+      };
+
+      let clientId;
+      if (isEditing && initialData?.client_id) {
+        clientId = initialData.client_id;
+        await supabase
+          .from('clients')
+          .update(clientData)
+          .eq('id', clientId);
+      } else {
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
+          .insert(clientData)
+          .select('id')
+          .single();
+
+        if (clientError) throw clientError;
+        clientId = newClient.id;
+      }
+
+      // Créer/mettre à jour la demande client
+      const requestData = {
+        name: formData.name,
+        client_id: clientId,
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         departure_country: 'France',
@@ -90,34 +128,25 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         desired_date: formData.desired_date,
         flexible_dates: formData.flexible_dates,
         flexibility_days: formData.flexibility_days,
+        date_range_start: dateRangeStart ? dateRangeStart.toISOString().split('T')[0] : null,
+        date_range_end: dateRangeEnd ? dateRangeEnd.toISOString().split('T')[0] : null,
         estimated_volume: parseFloat(formData.estimated_volume),
         status: 'pending',
+        is_matched: false,
+        match_status: 'pending',
         created_by: user.id,
         client_reference: clientReference
       };
 
-      console.log('🔧 Données à insérer dans clients:', clientData);
-
-      let result;
       if (isEditing && initialData?.id) {
-        result = await supabase
-          .from('clients')
-          .update(clientData)
-          .eq('id', initialData.id)
-          .select();
-        
-        console.log('📝 Client mis à jour:', result);
+        await supabase
+          .from('client_requests')
+          .update(requestData)
+          .eq('id', initialData.id);
       } else {
-        result = await supabase
-          .from('clients')
-          .insert(clientData)
-          .select();
-        
-        console.log('✅ Nouveau client créé:', result);
-      }
-
-      if (result.error) {
-        throw result.error;
+        await supabase
+          .from('client_requests')
+          .insert(requestData);
       }
 
       toast({
@@ -142,7 +171,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       }
 
     } catch (error: any) {
-      console.error('❌ Erreur lors de la sauvegarde du client:', error);
+      console.error('Error saving client:', error);
       toast({
         title: "Erreur",
         description: `Impossible de sauvegarder: ${error.message}`,
