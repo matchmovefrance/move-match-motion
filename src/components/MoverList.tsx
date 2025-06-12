@@ -56,15 +56,19 @@ const MoverList = () => {
     try {
       setLoading(true);
       
+      console.log('🔍 Chargement des trajets confirmés...');
       const { data, error } = await supabase
         .from('confirmed_moves')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur lors du chargement des trajets:', error);
+        throw error;
+      }
       
+      console.log('📋 Trajets confirmés chargés:', data?.length || 0, data);
       setMoves(data || []);
-      console.log('📋 Trajets confirmés chargés:', data?.length || 0);
     } catch (error) {
       console.error('Error loading moves:', error);
       toast({
@@ -79,6 +83,10 @@ const MoverList = () => {
 
   const handleDeleteMove = async (moveId: number) => {
     if (!user) return;
+    
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce trajet ?')) {
+      return;
+    }
     
     try {
       const { error } = await supabase
@@ -175,7 +183,7 @@ const MoverList = () => {
       <Card>
         <CardContent className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300 mx-auto"></div>
-          <p className="text-gray-600 mt-2">Chargement...</p>
+          <p className="text-gray-600 mt-2">Chargement des trajets...</p>
         </CardContent>
       </Card>
     );
@@ -212,6 +220,9 @@ const MoverList = () => {
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">
               {searchTerm ? 'Aucun trajet trouvé pour cette recherche' : 'Aucun trajet confirmé'}
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Cliquez sur "Nouveau Trajet" pour ajouter un trajet
             </p>
           </div>
         ) : (
@@ -299,6 +310,15 @@ const MoverList = () => {
                       <span className="font-medium">{move.truck_type}</span>
                     </div>
                   </div>
+
+                  {move.contact_phone && (
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Contact:</span>
+                        <span className="font-medium">{move.contact_phone}</span>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex space-x-2 pt-3">
                     <Button 
