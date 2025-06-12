@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -40,14 +39,33 @@ const CreateSupplierDialog = ({ open, onOpenChange, onSuccess }: CreateSupplierD
     try {
       setLoading(true);
 
-      const { error } = await supabase
+      // Créer le fournisseur dans la table suppliers
+      const { error: supplierError } = await supabase
         .from('suppliers')
         .insert({
           ...formData,
           created_by: user.id,
         });
 
-      if (error) throw error;
+      if (supplierError) throw supplierError;
+
+      // Synchroniser avec service_providers
+      const { error: serviceProviderError } = await supabase
+        .from('service_providers')
+        .insert({
+          name: formData.contact_name,
+          company_name: formData.company_name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          postal_code: formData.postal_code,
+          created_by: user.id,
+        });
+
+      if (serviceProviderError) {
+        console.warn('Erreur lors de la synchronisation avec service_providers:', serviceProviderError);
+      }
 
       toast({
         title: "Succès",

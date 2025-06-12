@@ -142,10 +142,46 @@ const NewMoveForm = ({ onSuccess, initialData, isEditing = false }: NewMoveFormP
     }
   }, [initialData]);
 
-  // Génération d'une référence de trajet unique
-  const generateMoveReference = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    return `TRJ-${timestamp}`;
+  // Fonction pour synchroniser le prestataire dans service_providers
+  const syncServiceProvider = async (selectedProvider: Provider) => {
+    try {
+      // Si le prestataire vient déjà de service_providers, pas besoin de synchroniser
+      if (selectedProvider.source === 'service_providers') {
+        return;
+      }
+
+      // Vérifier si le prestataire existe déjà
+      const { data: existingProvider } = await supabase
+        .from('service_providers')
+        .select('id')
+        .eq('name', selectedProvider.name)
+        .eq('company_name', selectedProvider.company_name)
+        .maybeSingle();
+
+      if (!existingProvider) {
+        // Ajouter le prestataire à service_providers s'il n'existe pas
+        const { error: providerError } = await supabase
+          .from('service_providers')
+          .insert({
+            name: selectedProvider.name,
+            company_name: selectedProvider.company_name,
+            email: selectedProvider.email || '',
+            phone: selectedProvider.phone || '',
+            address: '',
+            city: '',
+            postal_code: '',
+            created_by: user?.id
+          });
+
+        if (providerError) {
+          console.warn('Erreur lors de la synchronisation du prestataire:', providerError);
+        } else {
+          console.log('Prestataire synchronisé dans service_providers');
+        }
+      }
+    } catch (error) {
+      console.warn('Erreur lors de la synchronisation:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -198,6 +234,9 @@ const NewMoveForm = ({ onSuccess, initialData, isEditing = false }: NewMoveFormP
         });
         return;
       }
+
+      // Synchroniser le prestataire dans service_providers
+      await syncServiceProvider(selectedProvider);
 
       const availableVolume = maxVolume - usedVolume;
 

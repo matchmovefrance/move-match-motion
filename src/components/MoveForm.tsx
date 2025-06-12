@@ -107,6 +107,43 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
     });
   };
 
+  // Fonction pour synchroniser le prestataire dans service_providers
+  const syncServiceProvider = async (moverData: MoveFormData) => {
+    try {
+      // Vérifier si le prestataire existe déjà
+      const { data: existingProvider } = await supabase
+        .from('service_providers')
+        .select('id')
+        .eq('name', moverData.mover_name)
+        .eq('company_name', moverData.company_name)
+        .maybeSingle();
+
+      if (!existingProvider) {
+        // Ajouter le prestataire à service_providers s'il n'existe pas
+        const { error: providerError } = await supabase
+          .from('service_providers')
+          .insert({
+            name: moverData.mover_name,
+            company_name: moverData.company_name,
+            email: moverData.contact_email || '',
+            phone: moverData.contact_phone || '',
+            address: moverData.departure_address || '',
+            city: moverData.departure_city || '',
+            postal_code: moverData.departure_postal_code || '',
+            created_by: user?.id
+          });
+
+        if (providerError) {
+          console.warn('Erreur lors de la synchronisation du prestataire:', providerError);
+        } else {
+          console.log('Prestataire synchronisé dans service_providers');
+        }
+      }
+    } catch (error) {
+      console.warn('Erreur lors de la synchronisation:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -126,6 +163,9 @@ const MoveForm: React.FC<MoveFormProps> = ({ onSuccess, onSubmit, initialData, i
         await onSubmit(formData);
         return;
       }
+
+      // Synchroniser le prestataire dans service_providers
+      await syncServiceProvider(formData);
 
       // Calculer le volume disponible
       const available_volume = calculateAvailableVolume();

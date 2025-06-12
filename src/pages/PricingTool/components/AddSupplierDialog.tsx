@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -150,7 +149,7 @@ const AddSupplierDialog = ({ open, onOpenChange, supplier, onSuccess }: AddSuppl
           description: "Le fournisseur a été ajouté avec succès",
         });
 
-        // Ajouter aussi à la table service_providers pour la synchronisation
+        // Synchroniser avec service_providers
         await supabase.from('service_providers').insert({
           name: data.contact_name,
           company_name: data.company_name,

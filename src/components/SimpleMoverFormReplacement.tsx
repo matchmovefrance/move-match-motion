@@ -32,6 +32,43 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
     return Math.max(0, maxVol - usedVol);
   };
 
+  // Fonction pour synchroniser le prestataire dans service_providers
+  const syncServiceProvider = async (moverData: typeof formData) => {
+    try {
+      // Vérifier si le prestataire existe déjà
+      const { data: existingProvider } = await supabase
+        .from('service_providers')
+        .select('id')
+        .eq('name', moverData.mover_name)
+        .eq('company_name', moverData.company_name)
+        .maybeSingle();
+
+      if (!existingProvider) {
+        // Ajouter le prestataire à service_providers s'il n'existe pas
+        const { error: providerError } = await supabase
+          .from('service_providers')
+          .insert({
+            name: moverData.mover_name,
+            company_name: moverData.company_name,
+            email: '',
+            phone: moverData.contact_phone || '',
+            address: `CP ${moverData.departure_postal_code}`,
+            city: `CP ${moverData.departure_postal_code}`,
+            postal_code: moverData.departure_postal_code,
+            created_by: null
+          });
+
+        if (providerError) {
+          console.warn('Erreur lors de la synchronisation du prestataire:', providerError);
+        } else {
+          console.log('Prestataire synchronisé dans service_providers');
+        }
+      }
+    } catch (error) {
+      console.warn('Erreur lors de la synchronisation:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -52,6 +89,9 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
       const maxVolume = parseFloat(formData.max_volume);
       const usedVolume = parseFloat(formData.used_volume) || 0;
       const availableVolume = Math.max(0, maxVolume - usedVolume);
+
+      // Synchroniser le prestataire dans service_providers
+      await syncServiceProvider(formData);
 
       const moveData = {
         company_name: formData.company_name,
