@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,9 +87,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
 
       const clientReference = isEditing ? initialData?.client_reference : generateClientReference();
 
-      // Créer directement dans client_requests avec toutes les informations
+      // Créer directement dans client_requests SANS client_id
       const requestData = {
-        client_id: 1, // Valeur par défaut requise
         name: formData.name,
         email: `${clientReference.toLowerCase()}@temp.com`, // Email temporaire basé sur référence
         phone: 'A renseigner', // Téléphone par défaut
@@ -113,7 +111,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         client_reference: clientReference
       };
 
-      console.log('🔧 Données à insérer:', requestData);
+      console.log('🔧 Données à insérer (sans client_id):', requestData);
 
       let result;
       if (isEditing && initialData?.id) {
