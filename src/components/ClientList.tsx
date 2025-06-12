@@ -18,43 +18,19 @@ interface Client {
   name: string;
   email: string;
   phone: string;
-  departure_city: string;
-  departure_postal_code: string;
-  arrival_city: string;
-  arrival_postal_code: string;
-  desired_date: string;
-  estimated_volume: number;
-  flexible_dates: boolean;
-  flexibility_days?: number;
-  status: string;
-  created_at: string;
-  // Propriété générée côté client
   client_reference?: string;
-  // Optional properties that might come from the database but not always used
-  departure_address?: string;
-  arrival_address?: string;
-  departure_country?: string;
-  arrival_country?: string;
-  budget_min?: number;
-  budget_max?: number;
-  special_requirements?: string;
-  access_conditions?: string;
-  description?: string;
-  departure_time?: string;
-  arrival_time?: string;
-  estimated_arrival_date?: string;
-  estimated_arrival_time?: string;
-  status_custom?: string;
-  match_status?: string;
-  is_matched?: boolean;
-  matched_at?: string;
-  quote_amount?: number;
-  inventory_list?: string;
-  estimated_volume_backup?: number;
-  date_range_start?: string;
-  date_range_end?: string;
-  client_id?: number;
-  created_by?: string;
+  created_at: string;
+  created_by: string;
+  // Propriétés optionnelles pour la compatibilité
+  departure_city?: string;
+  departure_postal_code?: string;
+  arrival_city?: string;
+  arrival_postal_code?: string;
+  desired_date?: string;
+  estimated_volume?: number;
+  flexible_dates?: boolean;
+  flexibility_days?: number;
+  status?: string;
 }
 
 const ClientList = () => {
@@ -77,28 +53,23 @@ const ClientList = () => {
     fetchClients();
   }, []);
 
-  const generateClientReference = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    return `CLI-${timestamp}`;
-  };
-
   const fetchClients = async () => {
     try {
       setLoading(true);
+      console.log('📋 Chargement des clients depuis la table clients...');
+      
       const { data, error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur lors du chargement des clients:', error);
+        throw error;
+      }
       
-      // Générer des références pour les clients qui n'en ont pas
-      const clientsWithReferences = data?.map(client => ({
-        ...client,
-        client_reference: `CLI-${String(client.id).padStart(6, '0')}`
-      })) || [];
-      
-      setClients(clientsWithReferences);
+      console.log('✅ Clients chargés:', data?.length || 0, data);
+      setClients(data || []);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -114,10 +85,8 @@ const ClientList = () => {
   const filteredClients = clients.filter(client =>
     client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.client_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.departure_postal_code?.includes(searchTerm) ||
-    client.arrival_postal_code?.includes(searchTerm) ||
     client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    new Date(client.desired_date).toLocaleDateString('fr-FR').includes(searchTerm)
+    client.phone?.includes(searchTerm)
   );
 
   const handleDeleteClient = async () => {
@@ -125,8 +94,21 @@ const ClientList = () => {
 
     setIsDeleting(true);
     try {
-      const { error } = await supabase
+      console.log('🗑️ Suppression du client:', clientToDelete.id);
+      
+      // Supprimer d'abord les demandes client associées
+      const { error: requestError } = await supabase
         .from('client_requests')
+        .delete()
+        .eq('client_id', clientToDelete.id);
+
+      if (requestError) {
+        console.error('❌ Erreur suppression demandes:', requestError);
+      }
+
+      // Puis supprimer le client
+      const { error } = await supabase
+        .from('clients')
         .delete()
         .eq('id', clientToDelete.id);
 
@@ -155,15 +137,6 @@ const ClientList = () => {
   const handleFindMatch = async (client: Client) => {
     setSelectedClient(client);
     setShowMatchesDialog(true);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'matched': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   if (showAddForm) {
@@ -255,7 +228,7 @@ const ClientList = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Rechercher par nom, référence, email, code postal ou date..."
+            placeholder="Rechercher par nom, référence, email ou téléphone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -273,8 +246,8 @@ const ClientList = () => {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{client.name}</CardTitle>
                   <div className="flex items-center space-x-1">
-                    <Badge className={getStatusColor(client.status)}>
-                      {client.status}
+                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                      Actif
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -309,37 +282,24 @@ const ClientList = () => {
               <CardContent className="space-y-3">
                 <div className="text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Trajet:</span>
-                    <span className="font-medium">
-                      {client.departure_postal_code} → {client.arrival_postal_code}
-                    </span>
+                    <span className="text-gray-600">Email:</span>
+                    <span className="font-medium">{client.email}</span>
                   </div>
                 </div>
                 
                 <div className="text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Date:</span>
-                    <span className="font-medium">
-                      {new Date(client.desired_date).toLocaleDateString('fr-FR')}
-                    </span>
+                    <span className="text-gray-600">Téléphone:</span>
+                    <span className="font-medium">{client.phone}</span>
                   </div>
                 </div>
 
-                {client.flexible_dates && client.flexibility_days && (
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Flexibilité:</span>
-                      <span className="font-medium text-blue-600">
-                        ±{client.flexibility_days} jours
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
                 <div className="text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Volume:</span>
-                    <span className="font-medium">{client.estimated_volume}m³</span>
+                    <span className="text-gray-600">Créé le:</span>
+                    <span className="font-medium">
+                      {new Date(client.created_at).toLocaleDateString('fr-FR')}
+                    </span>
                   </div>
                 </div>
 
@@ -358,7 +318,7 @@ const ClientList = () => {
                     className="flex-1"
                   >
                     <Target className="h-4 w-4 mr-1" />
-                    Match
+                    Demandes
                   </Button>
                 </div>
               </CardContent>
