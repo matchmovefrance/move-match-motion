@@ -57,8 +57,8 @@ export const AcceptedQuotesTable = ({
             key={quote.id}
             quote={quote}
             onMarkAsValidated={onMarkAsValidated}
-            onComplete={onComplete}
-            onReject={onReject}
+            onShowCompleteDialog={onComplete}
+            onShowRejectDialog={onReject}
             onDownloadPDF={onDownloadPDF}
           />
         ))}

@@ -96,33 +96,53 @@ class PricingEngine {
   }
 
   private calculatePrice(distance: number, volume: number, supplier: Supplier, quoteType: 'competitive' | 'standard' | 'premium'): { supplierPrice: number; margin: number; finalPrice: number } {
-    const supplierModel = supplier.pricing_model || {};
-    let pricePerKm = supplierModel.price_per_km || 1.2;
-    let pricePerM3 = supplierModel.price_per_m3 || 45;
-    let baseMargin = supplierModel.base_margin || 0.15;
+    console.log(`💰 Calcul prix avec modèle prestataire ${supplier.company_name} (type: ${quoteType})`);
     
-    // Apply different pricing strategies for 3 quotes with more variation
+    const supplierModel = supplier.pricing_model || {};
+    
+    // Utiliser les vraies variables de pricing du prestataire ou des valeurs par défaut réalistes
+    let basePrice = supplierModel.basePrice || 150;
+    let volumeRate = supplierModel.volumeRate || 12;
+    let distanceRate = supplierModel.distanceRate || 1.2;
+    let minimumPrice = supplierModel.minimumPrice || 200;
+    
+    // Marge MatchMove fixée à 40% comme demandé
+    let matchMoveMargin = 0.40;
+    
+    console.log(`📊 Variables de base: basePrice=${basePrice}€, volumeRate=${volumeRate}€/m³, distanceRate=${distanceRate}€/km, marge=${matchMoveMargin * 100}%`);
+    
+    // Appliquer les stratégies de pricing pour avoir 3 devis variés
     switch (quoteType) {
       case 'competitive':
-        // Most competitive pricing - lower margins
-        pricePerKm *= 0.80;
-        pricePerM3 *= 0.85;
-        baseMargin *= 0.70;
+        // Prix compétitif - réduction de 15%
+        basePrice *= 0.85;
+        volumeRate *= 0.85;
+        distanceRate *= 0.85;
+        matchMoveMargin *= 0.75; // Marge réduite pour être compétitif
         break;
       case 'standard':
-        // Standard pricing - no modifications
+        // Prix standard - pas de modification
         break;
       case 'premium':
-        // Premium pricing - higher service level
-        pricePerKm *= 1.25;
-        pricePerM3 *= 1.20;
-        baseMargin *= 1.30;
+        // Prix premium - augmentation de 20%
+        basePrice *= 1.20;
+        volumeRate *= 1.20;
+        distanceRate *= 1.20;
+        matchMoveMargin *= 1.10; // Marge légèrement augmentée
         break;
     }
     
-    const supplierPrice = Math.round(distance * pricePerKm + volume * pricePerM3);
-    const margin = Math.round(supplierPrice * baseMargin);
+    // Calcul du prix prestataire
+    const supplierPrice = Math.max(
+      Math.round(basePrice + (volume * volumeRate) + (distance * distanceRate)),
+      minimumPrice
+    );
+    
+    // Calcul de la marge MatchMove
+    const margin = Math.round(supplierPrice * matchMoveMargin);
     const finalPrice = supplierPrice + margin;
+    
+    console.log(`✅ Prix calculé: prestataire=${supplierPrice}€, marge=${margin}€ (${Math.round(matchMoveMargin * 100)}%), final=${finalPrice}€`);
     
     return { supplierPrice, margin, finalPrice };
   }
@@ -147,7 +167,7 @@ class PricingEngine {
 
   async generateQuotesForClient(client: Client): Promise<GeneratedQuote[]> {
     try {
-      console.log(`💰 Génération de 3 devis OBLIGATOIRES pour client ${client.name} (${client.client_reference})`);
+      console.log(`💰 Génération de 3 devis avec vraies variables pricing pour client ${client.name} (${client.client_reference})`);
       
       const suppliers = await this.loadActiveSuppliers();
       if (suppliers.length === 0) {
@@ -194,13 +214,12 @@ class PricingEngine {
               marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
-              pricePerKm: quoteType === 'competitive' ? (supplier.pricing_model?.price_per_km || 1.2) * 0.80 : 
-                          quoteType === 'standard' ? (supplier.pricing_model?.price_per_km || 1.2) : 
-                          (supplier.pricing_model?.price_per_km || 1.2) * 1.25,
-              pricePerM3: quoteType === 'competitive' ? (supplier.pricing_model?.price_per_m3 || 45) * 0.85 : 
-                         quoteType === 'standard' ? (supplier.pricing_model?.price_per_m3 || 45) : 
-                         (supplier.pricing_model?.price_per_m3 || 45) * 1.20,
-              quoteType: quoteType
+              basePrice: supplier.pricing_model?.basePrice || 150,
+              volumeRate: supplier.pricing_model?.volumeRate || 12,
+              distanceRate: supplier.pricing_model?.distanceRate || 1.2,
+              matchMoveMargin: 40, // Marge fixe à 40%
+              quoteType: quoteType,
+              supplierPricingModel: supplier.pricing_model
             },
             rank: i + 1
           };
@@ -238,13 +257,12 @@ class PricingEngine {
               marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
-              pricePerKm: quoteType === 'competitive' ? (supplier.pricing_model?.price_per_km || 1.2) * 0.80 : 
-                          quoteType === 'standard' ? (supplier.pricing_model?.price_per_km || 1.2) : 
-                          (supplier.pricing_model?.price_per_km || 1.2) * 1.25,
-              pricePerM3: quoteType === 'competitive' ? (supplier.pricing_model?.price_per_m3 || 45) * 0.85 : 
-                         quoteType === 'standard' ? (supplier.pricing_model?.price_per_m3 || 45) : 
-                         (supplier.pricing_model?.price_per_m3 || 45) * 1.20,
-              quoteType: quoteType
+              basePrice: supplier.pricing_model?.basePrice || 150,
+              volumeRate: supplier.pricing_model?.volumeRate || 12,
+              distanceRate: supplier.pricing_model?.distanceRate || 1.2,
+              matchMoveMargin: 40, // Marge fixe à 40%
+              quoteType: quoteType,
+              supplierPricingModel: supplier.pricing_model
             },
             rank: i + 1
           };
@@ -261,7 +279,7 @@ class PricingEngine {
         quote.rank = index + 1;
       });
 
-      console.log(`✅ TOUJOURS 3 devis générés avec distance exacte ${exactDistance}km:`, quotes.map(q => `${q.rank}. ${q.calculated_price}€ (${q.quote_type})`));
+      console.log(`✅ 3 devis générés avec vraies variables pricing (marge 40%):`, quotes.map(q => `${q.rank}. ${q.calculated_price}€ (${q.quote_type})`));
       return quotes;
 
     } catch (error) {

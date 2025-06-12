@@ -1,66 +1,26 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Truck, Plus, Search, MapPin, Trash2, Edit } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Trash2, Edit, Plus, Calendar, MapPin, Package, Users, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import NewMoveForm from './NewMoveForm';
-import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { MoveCardDialog } from './MoveCardDialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import MoveCardDialog from './MoveCardDialog';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface Move {
-  id: number;
-  mover_name: string;
-  company_name: string;
+  id: string;
+  title: string;
   departure_city: string;
-  departure_postal_code: string;
   arrival_city: string;
-  arrival_postal_code: string;
   departure_date: string;
-  max_volume: number;
-  used_volume: number;
-  available_volume: number;
+  estimated_volume: number;
   status: string;
-  contact_phone: string;
-  contact_email: string;
   created_at: string;
-  // Propriété générée côté client
-  move_reference?: string;
-  // Optional properties that might come from the database
-  mover_id?: number;
-  truck_id?: number;
-  departure_address?: string;
-  arrival_address?: string;
-  departure_country?: string;
-  arrival_country?: string;
-  departure_time?: string;
-  arrival_time?: string;
-  estimated_arrival_date?: string;
-  estimated_arrival_time?: string;
-  route_type?: string;
-  price_per_m3?: number;
-  total_price?: number;
-  status_custom?: string;
-  number_of_clients?: number;
-  max_weight?: number;
-  base_rate?: number;
-  fuel_surcharge?: number;
-  additional_fees?: number;
-  total_cost?: number;
-  truck_type?: string;
-  truck_identifier?: string;
-  access_conditions?: string;
-  special_requirements?: string;
-  description?: string;
-  insurance_details?: string;
-  equipment_available?: string;
-  special_conditions?: string;
-  created_by?: string;
+  client_request_id?: number;
 }
 
 const MoveManagement = () => {
@@ -68,43 +28,42 @@ const MoveManagement = () => {
   const { toast } = useToast();
   const [moves, setMoves] = useState<Move[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingMove, setEditingMove] = useState<Move | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  // États pour les dialogues
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [moveToDelete, setMoveToDelete] = useState<Move | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showMapDialog, setShowMapDialog] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedMove, setSelectedMove] = useState<Move | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [newMove, setNewMove] = useState<Omit<Move, 'id' | 'created_at'>>({
+    title: '',
+    departure_city: '',
+    arrival_city: '',
+    departure_date: new Date().toISOString().split('T')[0],
+    estimated_volume: 0,
+    status: 'pending',
+    client_request_id: undefined
+  });
 
   useEffect(() => {
-    fetchMoves();
-  }, []);
+    loadMoves();
+  }, [user]);
 
-  const fetchMoves = async () => {
+  const loadMoves = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
+      
       const { data, error } = await supabase
-        .from('confirmed_moves')
+        .from('opportunities')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Générer des références pour les trajets qui n'en ont pas
-      const movesWithReferences = data?.map(move => ({
-        ...move,
-        move_reference: `TRJ-${String(move.id).padStart(6, '0')}`
-      })) || [];
-      
-      setMoves(movesWithReferences);
+      setMoves(data || []);
     } catch (error) {
-      console.error('Error fetching moves:', error);
+      console.error('Error loading moves:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les trajets",
+        description: "Impossible de charger les déménagements",
         variant: "destructive",
       });
     } finally {
@@ -112,296 +71,229 @@ const MoveManagement = () => {
     }
   };
 
-  const filteredMoves = moves.filter(move =>
-    move.mover_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.move_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.departure_postal_code?.includes(searchTerm) ||
-    move.arrival_postal_code?.includes(searchTerm) ||
-    move.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    new Date(move.departure_date).toLocaleDateString('fr-FR').includes(searchTerm)
-  );
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const handleOpenDialog = () => {
+    setIsDialogOpen(true);
+    setIsEditMode(false);
+    setSelectedMove(null);
   };
 
-  const handleDeleteMove = async () => {
-    if (!moveToDelete) return;
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedMove(null);
+    setIsEditMode(false);
+  };
 
-    setIsDeleting(true);
+  const handleSelectMove = (move: Move) => {
+    setSelectedMove(move);
+    setIsDialogOpen(true);
+    setIsEditMode(true);
+  };
+
+  const handleCreateMove = async () => {
+    if (!user) return;
+    
     try {
       const { error } = await supabase
-        .from('confirmed_moves')
-        .delete()
-        .eq('id', moveToDelete.id);
+        .from('opportunities')
+        .insert({
+          ...newMove,
+          created_by: user.id,
+        });
 
       if (error) throw error;
 
       toast({
-        title: "Trajet supprimé",
-        description: `Le trajet ${moveToDelete.company_name || moveToDelete.move_reference} a été supprimé`,
+        title: "Déménagement créé",
+        description: "Le déménagement a été créé avec succès",
       });
+      
+      loadMoves();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Error creating move:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer le déménagement",
+        variant: "destructive",
+      });
+    }
+  };
 
-      setShowDeleteDialog(false);
-      setMoveToDelete(null);
-      fetchMoves();
+  const handleUpdateMove = async () => {
+    if (!user || !selectedMove) return;
+    
+    try {
+      const { error } = await supabase
+        .from('opportunities')
+        .update({
+          ...selectedMove,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedMove.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Déménagement mis à jour",
+        description: "Le déménagement a été mis à jour avec succès",
+      });
+      
+      loadMoves();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Error updating move:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le déménagement",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteMove = async (moveId: string) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('opportunities')
+        .delete()
+        .eq('id', moveId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Déménagement supprimé",
+        description: "Le déménagement a été supprimé avec succès",
+      });
+      
+      loadMoves();
     } catch (error) {
       console.error('Error deleting move:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le trajet",
+        description: "Impossible de supprimer le déménagement",
         variant: "destructive",
       });
-    } finally {
-      setIsDeleting(false);
     }
   };
 
-  const handleShowMap = (move: Move) => {
-    setSelectedMove(move);
-    setShowMapDialog(true);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (isEditMode && selectedMove) {
+      setSelectedMove({ ...selectedMove, [name]: value });
+    } else {
+      setNewMove({ ...newMove, [name]: value });
+    }
   };
 
-  if (showAddForm) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">Nouveau Trajet</h2>
-          <Button 
-            variant="outline" 
-            onClick={() => setShowAddForm(false)}
-          >
-            Retour à la liste
-          </Button>
-        </div>
-        <NewMoveForm 
-          onSuccess={() => {
-            setShowAddForm(false);
-            fetchMoves();
-          }}
-        />
-      </motion.div>
-    );
-  }
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="outline">En attente</Badge>;
+      case 'confirmed':
+        return <Badge className="bg-green-100 text-green-800">Confirmé</Badge>;
+      case 'completed':
+        return <Badge className="bg-blue-100 text-blue-800">Terminé</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive">Annulé</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
 
-  if (editingMove) {
+  if (loading) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">Modifier Trajet</h2>
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline"
-              onClick={() => {
-                setMoveToDelete(editingMove);
-                setShowDeleteDialog(true);
-              }}
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Supprimer
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => setEditingMove(null)}
-            >
-              Retour à la liste
-            </Button>
-          </div>
-        </div>
-        <NewMoveForm 
-          initialData={editingMove}
-          isEditing={true}
-          onSuccess={() => {
-            setEditingMove(null);
-            fetchMoves();
-          }}
-        />
-      </motion.div>
+      <Card>
+        <CardContent className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300 mx-auto"></div>
+          <p className="text-gray-600 mt-2">Chargement...</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Truck className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Trajets Déménageurs</h2>
-          <Badge variant="secondary">{filteredMoves.length}</Badge>
-        </div>
-        <Button onClick={() => setShowAddForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nouveau Trajet
-        </Button>
-      </div>
-
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Rechercher par référence, déménageur, email, code postal ou date..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-8">Chargement...</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMoves.map((move) => (
-            <Card key={move.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{move.company_name}</CardTitle>
-                  <div className="flex items-center space-x-1">
-                    <Badge className={getStatusColor(move.status)}>
-                      {move.status}
-                    </Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <span className="sr-only">Ouvrir menu</span>
-                          <div className="h-4 w-4">⋮</div>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditingMove(move)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Modifier
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setMoveToDelete(move);
-                            setShowDeleteDialog(true);
-                          }}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600">
-                  <strong>Réf:</strong> {move.move_reference || `TRJ-${String(move.id).padStart(6, '0')}`}
-                </div>
-                <div className="text-sm text-gray-600">
-                  <strong>Déménageur:</strong> {move.mover_name}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Trajet:</span>
-                    <span className="font-medium">
-                      {move.departure_postal_code} → {move.arrival_postal_code}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Date:</span>
-                    <span className="font-medium">
-                      {new Date(move.departure_date).toLocaleDateString('fr-FR')}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Volume total:</span>
-                    <span className="font-medium">{move.max_volume}m³</span>
-                  </div>
-                </div>
-
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Volume utilisé:</span>
-                    <span className="font-medium">{move.used_volume}m³</span>
-                  </div>
-                </div>
-
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Disponible:</span>
-                    <span className="font-medium text-green-600">{move.available_volume}m³</span>
-                  </div>
-                </div>
-
-                <div className="flex space-x-2 pt-3">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => setEditingMove(move)}
-                    className="flex-1"
-                  >
-                    Modifier
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleShowMap(move)}
-                    className="flex-1"
-                  >
-                    <MapPin className="h-4 w-4 mr-1" />
-                    Carte
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {filteredMoves.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">
-            {searchTerm ? 'Aucun trajet trouvé pour cette recherche' : 'Aucun trajet enregistré'}
-          </p>
-        </div>
-      )}
-
-      {/* Dialogues */}
-      <DeleteConfirmDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Supprimer le trajet"
-        description="Êtes-vous sûr de vouloir supprimer ce trajet ? Cette action est irréversible."
-        itemName={moveToDelete?.company_name || moveToDelete?.move_reference || 'Trajet'}
-        onConfirm={handleDeleteMove}
-        isDeleting={isDeleting}
-      />
+    <>
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle className="flex items-center">
+            <Package className="h-5 w-5 mr-2" />
+            Déménagements
+          </CardTitle>
+          <Button size="sm" onClick={handleOpenDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {moves.length === 0 ? (
+            <p className="text-center text-gray-500">Aucun déménagement trouvé.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {moves.map((move) => (
+                <Card key={move.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {move.title}
+                          {getStatusBadge(move.status)}
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          {move.departure_city} → {move.arrival_city}
+                        </p>
+                      </div>
+                      
+                      <div className="text-right text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4" />
+                          {format(new Date(move.departure_date), 'dd/MM/yyyy', { locale: fr })}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4" />
+                          {move.estimated_volume} m³
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex justify-end gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSelectMove(move)}
+                      className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Modifier
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteMove(move.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Supprimer
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <MoveCardDialog
-        open={showMapDialog}
-        onOpenChange={setShowMapDialog}
-        move={selectedMove}
+        open={isDialogOpen}
+        onOpenChange={handleCloseDialog}
+        isEditMode={isEditMode}
+        move={selectedMove || newMove}
+        onInputChange={handleInputChange}
+        onCreate={handleCreateMove}
+        onUpdate={handleUpdateMove}
+        onShowCompleteDialog={() => {}}
       />
-    </motion.div>
+    </>
   );
 };
 
