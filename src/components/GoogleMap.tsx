@@ -257,7 +257,7 @@ const GoogleMap = () => {
       const id = parseInt(cleanRef.replace('CLI-', ''));
       if (!isNaN(id)) {
         const { data: client, error } = await supabase
-          .from('client_requests')
+          .from('clients')
           .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
           .eq('id', id)
           .single();
@@ -316,7 +316,7 @@ const GoogleMap = () => {
           .select(`
             id,
             created_at,
-            client_request:client_requests(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
+            client_request:clients(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
             confirmed_move:confirmed_moves(company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city)
           `)
           .eq('id', id)
