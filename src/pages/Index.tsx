@@ -9,7 +9,7 @@ import MatchFinder from '@/components/MatchFinder';
 import MatchAnalytics from '@/components/MatchAnalytics';
 import ServiceProviders from '@/components/ServiceProviders';
 import GoogleMap from '@/components/GoogleMap';
-import MoverCalendar from '@/components/MoverCalendar';
+import { MoverCalendar } from '@/components/MoverCalendar';
 import UserManagement from '@/components/UserManagement';
 import PublicLinkManager from '@/components/PublicLinkManager';
 import AdminActions from '@/components/AdminActions';
