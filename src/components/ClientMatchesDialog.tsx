@@ -54,6 +54,12 @@ interface MatchResult {
   match_reference?: string;
 }
 
+// Fonction pour formater les volumes avec maximum 2 décimales
+const formatVolume = (volume: number): string => {
+  if (volume === 0) return '0';
+  return Number(volume.toFixed(2)).toString();
+};
+
 // Cache partagé pour les distances
 const distanceCache = new Map<string, number>();
 
@@ -327,7 +333,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                   </div>
                   <div className="flex items-center space-x-2">
                     <Package className="h-4 w-4 text-orange-600" />
-                    <span><strong>Volume:</strong> {client.estimated_volume}m³</span>
+                    <span><strong>Volume:</strong> {formatVolume(client.estimated_volume)}m³</span>
                   </div>
                 </div>
                 {client.flexible_dates && client.flexibility_days && (
@@ -457,12 +463,12 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                             <XCircle className="h-4 w-4 text-red-600" />
                           )}
                           <span>
-                            <strong>Volume:</strong> {client?.estimated_volume || 0}m³ / {match.move.available_volume}m³
+                            <strong>Volume:</strong> {formatVolume(client?.estimated_volume || 0)}m³ / {formatVolume(match.move.available_volume)}m³
                           </span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Package className="h-4 w-4 text-orange-600" />
-                          <span><strong>Reste:</strong> {match.available_volume_after}m³</span>
+                          <span><strong>Reste:</strong> {formatVolume(match.available_volume_after)}m³</span>
                         </div>
                       </div>
 
