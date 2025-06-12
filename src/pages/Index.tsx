@@ -13,6 +13,7 @@ import MoverCalendar from '@/components/MoverCalendar';
 import UserManagement from '@/components/UserManagement';
 import PublicLinkManager from '@/components/PublicLinkManager';
 import AdminActions from '@/components/AdminActions';
+import DiagnosticTab from '@/components/DiagnosticTab';
 import Header from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -47,6 +48,7 @@ const Index = () => {
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
       case 'calendar': return <MoverCalendar />;
+      case 'diagnostic': return <DiagnosticTab />;
       case 'admin-actions': return <AdminActions />;
       case 'management': 
         return (
@@ -91,6 +93,7 @@ const Index = () => {
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
+      { id: 'diagnostic', label: 'Diagnostic', icon: Shield }, // Nouvel onglet pour diagnostic
     ];
 
     // Les agents et admins voient la gestion (mais contenu différent)
