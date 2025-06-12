@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,7 @@ interface ServiceProvider {
   company_name: string;
   phone: string;
   email: string;
+  service_provider_id: number | null;
 }
 
 interface SimpleMoveFormProps {
@@ -55,33 +57,43 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
   const fetchProviders = async () => {
     try {
       setProvidersLoading(true);
-      console.log('🏢 Récupération des prestataires depuis service_providers...');
+      console.log('🏢 Chargement des prestataires depuis les trajets...');
       
       const { data, error } = await supabase
-        .from('service_providers')
-        .select('id, name, company_name, phone, email')
-        .order('company_name');
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
 
       if (error) {
-        console.error('❌ Erreur lors de la récupération des prestataires:', error);
+        console.error('❌ Erreur chargement prestataires:', error);
         throw error;
       }
 
-      const formattedProviders = data?.map(provider => ({
-        id: provider.id.toString(),
-        name: provider.name,
-        company_name: provider.company_name,
-        phone: provider.phone || '',
-        email: provider.email || ''
-      })) || [];
-
-      console.log('✅ Prestataires récupérés:', formattedProviders.length);
-      setProviders(formattedProviders);
+      // Créer un Map pour éviter les doublons basés sur mover_name + company_name
+      const uniqueSuppliersMap = new Map();
       
-      if (formattedProviders.length === 0) {
+      data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueSuppliersMap.has(key)) {
+          uniqueSuppliersMap.set(key, {
+            id: `move-supplier-${move.mover_id}`,
+            company_name: move.company_name,
+            name: move.mover_name,
+            email: move.contact_email || '',
+            phone: move.contact_phone || '',
+            service_provider_id: move.mover_id,
+          });
+        }
+      });
+
+      const uniqueProviders = Array.from(uniqueSuppliersMap.values());
+      console.log('✅ Prestataires uniques chargés depuis les trajets:', uniqueProviders.length);
+      setProviders(uniqueProviders);
+      
+      if (uniqueProviders.length === 0) {
         toast({
           title: "Aucun prestataire",
-          description: "Aucun prestataire trouvé. Ajoutez-en dans l'onglet Prestataires.",
+          description: "Aucun prestataire trouvé. Créez des trajets ou ajoutez des prestataires.",
           variant: "destructive",
         });
       }
@@ -142,14 +154,10 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     try {
       setLoading(true);
 
-      // Récupérer les infos du prestataire sélectionné depuis service_providers
-      const { data: selectedProvider, error: providerError } = await supabase
-        .from('service_providers')
-        .select('*')
-        .eq('id', parseInt(formData.provider_id))
-        .single();
+      // Récupérer les infos du prestataire sélectionné
+      const selectedProvider = providers.find(p => p.id === formData.provider_id);
       
-      if (providerError || !selectedProvider) {
+      if (!selectedProvider) {
         throw new Error('Prestataire sélectionné non trouvé');
       }
 
@@ -175,7 +183,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
         contact_email: selectedProvider.email,
         created_by: user.id,
         move_reference: moveReference,
-        mover_id: selectedProvider.id,
+        mover_id: selectedProvider.service_provider_id || 1,
         truck_id: 1
       };
 
@@ -276,7 +284,10 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
                 type="button" 
                 variant="outline" 
                 size="sm"
-                onClick={() => window.open('/pricing-tool#suppliers', '_blank')}
+                onClick={() => {
+                  const currentUrl = window.location.origin;
+                  window.open(`${currentUrl}/pricing-tool#suppliers`, '_blank');
+                }}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -284,7 +295,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
             {providers.length === 0 && !providersLoading && (
               <p className="text-xs text-red-600 mt-1 flex items-center">
                 <AlertCircle className="h-3 w-3 mr-1" />
-                Aucun prestataire trouvé. Ajoutez-en dans l'onglet Prestataires.
+                Aucun prestataire trouvé. Créez des trajets ou ajoutez des prestataires dans le Pricing Tool.
               </p>
             )}
             {providers.length > 0 && (
