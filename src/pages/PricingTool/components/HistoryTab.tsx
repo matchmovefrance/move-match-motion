@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,7 @@ const HistoryTab = () => {
       console.log('📚 Chargement de l\'historique...');
       
       let query = supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
         .in('status', ['completed', 'cancelled', 'closed'])
         .order('created_at', { ascending: false });
@@ -132,13 +133,13 @@ const HistoryTab = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const handleDeleteHistoryItem = async (itemId: string | number, itemType: 'client_request' | 'quote') => {
+  const handleDeleteHistoryItem = async (itemId: string | number, itemType: 'client' | 'quote') => {
     try {
-      if (itemType === 'client_request') {
-        // client_requests.id is integer, so convert to number
+      if (itemType === 'client') {
+        // clients.id is integer, so convert to number
         const id = typeof itemId === 'string' ? parseInt(itemId, 10) : itemId;
         const { error } = await supabase
-          .from('client_requests')
+          .from('clients')
           .delete()
           .eq('id', id);
 
@@ -378,7 +379,7 @@ const HistoryTab = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDeleteHistoryItem(item.id, 'client_request')}
+                    onClick={() => handleDeleteHistoryItem(item.id, 'client')}
                     className="text-red-600 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -394,17 +395,21 @@ const HistoryTab = () => {
                     <span>{item.departure_city} → {item.arrival_city}</span>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-green-500" />
-                    <span className="font-medium">Volume:</span>
-                    <span>{item.estimated_volume}m³</span>
-                  </div>
+                  {item.estimated_volume && (
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-green-500" />
+                      <span className="font-medium">Volume:</span>
+                      <span>{item.estimated_volume}m³</span>
+                    </div>
+                  )}
                   
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-orange-500" />
-                    <span className="font-medium">Date:</span>
-                    <span>{format(new Date(item.desired_date), 'dd/MM/yyyy', { locale: fr })}</span>
-                  </div>
+                  {item.desired_date && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-orange-500" />
+                      <span className="font-medium">Date:</span>
+                      <span>{format(new Date(item.desired_date), 'dd/MM/yyyy', { locale: fr })}</span>
+                    </div>
+                  )}
                   
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-gray-500" />
