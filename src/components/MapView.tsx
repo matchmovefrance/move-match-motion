@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X } from 'lucide-react';
@@ -620,7 +619,11 @@ const MapView = () => {
 
               console.log('✅ Match trouvé avec 2 trajets:', foundItem);
               console.log('🗺️ Routes du match:', foundMatchRoutes);
+            } else {
+              console.error('❌ Erreur lors du chargement des données du match:', { clientError, moveError });
             }
+          } else {
+            console.error('❌ Match non trouvé ou erreur:', error);
           }
         }
       }
