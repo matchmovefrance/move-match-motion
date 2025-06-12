@@ -27,6 +27,22 @@ interface Supplier {
   is_active: boolean;
 }
 
+// Interface for pricing model
+interface PricingModel {
+  basePrice?: number;
+  volumeRate?: number;
+  distanceRate?: number;
+  minimumPrice?: number;
+  floorRate?: number;
+  packingRate?: number;
+  heavyItemsFee?: number;
+  carryingDistanceFee?: number;
+  volumeSupplementFee1?: number;
+  volumeSupplementThreshold1?: number;
+  timeMultiplier?: number;
+  matchMoveMargin?: number;
+}
+
 // Interface for generated quote
 interface GeneratedQuote {
   id: string;
@@ -98,7 +114,8 @@ class PricingEngine {
   private calculateSupplierPrice(distance: number, volume: number, supplier: Supplier): number {
     console.log(`💰 Calcul prix prestataire ${supplier.company_name} avec modèle de tarification`);
     
-    const pricingModel = supplier.pricing_model || {};
+    // Safely parse pricing model
+    const pricingModel: PricingModel = this.parsePricingModel(supplier.pricing_model);
     console.log(`📊 Modèle de tarification prestataire:`, pricingModel);
     
     // Utiliser les vraies variables du modèle de tarification du prestataire
@@ -146,14 +163,34 @@ class PricingEngine {
     return finalSupplierPrice;
   }
 
+  private parsePricingModel(pricingModel: any): PricingModel {
+    // Handle different types of pricing model data
+    if (!pricingModel) return {};
+    
+    if (typeof pricingModel === 'string') {
+      try {
+        return JSON.parse(pricingModel);
+      } catch (error) {
+        console.warn('Error parsing pricing model string:', error);
+        return {};
+      }
+    }
+    
+    if (typeof pricingModel === 'object' && pricingModel !== null) {
+      return pricingModel as PricingModel;
+    }
+    
+    return {};
+  }
+
   private applyMatchMoveMargin(supplierPrice: number, supplier: Supplier): { margin: number; finalPrice: number; marginPercentage: number } {
     console.log(`📊 Application marge MatchMove sur prix prestataire: ${supplierPrice}€`);
     
-    // Vérifier si le prestataire a une marge MatchMove spécifique dans son modèle
-    const supplierMatchMoveMargin = supplier.pricing_model?.matchMoveMargin;
+    // Safely parse pricing model to get matchMoveMargin
+    const pricingModel: PricingModel = this.parsePricingModel(supplier.pricing_model);
     
     // Utiliser la marge du prestataire ou 40% par défaut
-    const marginPercentage = supplierMatchMoveMargin || 40;
+    const marginPercentage = pricingModel.matchMoveMargin || 40;
     
     console.log(`🎯 Marge MatchMove appliquée: ${marginPercentage}%`);
     
@@ -236,6 +273,8 @@ class PricingEngine {
           // Appliquer la marge MatchMove (40% par défaut ou celle du prestataire)
           const { margin, finalPrice, marginPercentage } = this.applyMatchMoveMargin(supplierPrice, supplier);
           
+          const pricingModel: PricingModel = this.parsePricingModel(supplier.pricing_model);
+          
           const quote: GeneratedQuote = {
             id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
             client_id: client.id,
@@ -258,16 +297,16 @@ class PricingEngine {
               marginPercentage,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
-              supplierPricingModel: supplier.pricing_model,
-              basePrice: supplier.pricing_model?.basePrice || 150,
-              volumeRate: supplier.pricing_model?.volumeRate || 12,
-              distanceRate: supplier.pricing_model?.distanceRate || 1.2,
+              supplierPricingModel: pricingModel,
+              basePrice: pricingModel.basePrice || 150,
+              volumeRate: pricingModel.volumeRate || 12,
+              distanceRate: pricingModel.distanceRate || 1.2,
               matchMoveMarginUsed: marginPercentage,
               quoteType: quoteType,
               calculationDetails: {
-                baseCalculation: (supplier.pricing_model?.basePrice || 150) + 
-                               (client.estimated_volume * (supplier.pricing_model?.volumeRate || 12)) + 
-                               (exactDistance * (supplier.pricing_model?.distanceRate || 1.2)),
+                baseCalculation: (pricingModel.basePrice || 150) + 
+                               (client.estimated_volume * (pricingModel.volumeRate || 12)) + 
+                               (exactDistance * (pricingModel.distanceRate || 1.2)),
                 finalSupplierPrice: supplierPrice,
                 marginAmount: margin,
                 finalClientPrice: finalPrice
@@ -304,6 +343,8 @@ class PricingEngine {
           
           const { margin, finalPrice, marginPercentage } = this.applyMatchMoveMargin(supplierPrice, supplier);
           
+          const pricingModel: PricingModel = this.parsePricingModel(supplier.pricing_model);
+          
           const quote: GeneratedQuote = {
             id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
             client_id: client.id,
@@ -326,16 +367,16 @@ class PricingEngine {
               marginPercentage,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
-              supplierPricingModel: supplier.pricing_model,
-              basePrice: supplier.pricing_model?.basePrice || 150,
-              volumeRate: supplier.pricing_model?.volumeRate || 12,
-              distanceRate: supplier.pricing_model?.distanceRate || 1.2,
+              supplierPricingModel: pricingModel,
+              basePrice: pricingModel.basePrice || 150,
+              volumeRate: pricingModel.volumeRate || 12,
+              distanceRate: pricingModel.distanceRate || 1.2,
               matchMoveMarginUsed: marginPercentage,
               quoteType: quoteType,
               calculationDetails: {
-                baseCalculation: (supplier.pricing_model?.basePrice || 150) + 
-                               (client.estimated_volume * (supplier.pricing_model?.volumeRate || 12)) + 
-                               (exactDistance * (supplier.pricing_model?.distanceRate || 1.2)),
+                baseCalculation: (pricingModel.basePrice || 150) + 
+                               (client.estimated_volume * (pricingModel.volumeRate || 12)) + 
+                               (exactDistance * (pricingModel.distanceRate || 1.2)),
                 finalSupplierPrice: supplierPrice,
                 marginAmount: margin,
                 finalClientPrice: finalPrice
