@@ -70,12 +70,45 @@ export const useMatchActions = () => {
 
       if (oppError) throw oppError;
 
+      // Chercher ou créer un fournisseur pour le transporteur
+      const { data: existingSupplier, error: supplierSearchError } = await supabase
+        .from('suppliers')
+        .select('id')
+        .eq('company_name', matchData.move.company_name)
+        .maybeSingle();
+
+      if (supplierSearchError) throw supplierSearchError;
+
+      let supplierId = existingSupplier?.id;
+
+      // Si le fournisseur n'existe pas, le créer
+      if (!supplierId) {
+        const { data: newSupplier, error: supplierCreateError } = await supabase
+          .from('suppliers')
+          .insert({
+            company_name: matchData.move.company_name,
+            contact_name: matchData.move.mover_name || 'Contact transporteur',
+            email: matchData.move.contact_email || 'contact@example.com',
+            phone: matchData.move.contact_phone || 'À renseigner',
+            address: 'Adresse à renseigner',
+            city: 'Ville à renseigner',
+            postal_code: '00000',
+            country: 'France',
+            created_by: (await supabase.auth.getUser()).data.user?.id
+          })
+          .select('id')
+          .single();
+
+        if (supplierCreateError) throw supplierCreateError;
+        supplierId = newSupplier.id;
+      }
+
       // Créer le devis accepté dans quotes
       const { error: quoteError } = await supabase
         .from('quotes')
         .insert({
           opportunity_id: opportunity.id,
-          supplier_id: matchData.move.company_name, // Utiliser le nom comme ID temporaire
+          supplier_id: supplierId,
           bid_amount: 0, // Sera calculé par le moteur de pricing
           status: 'accepted',
           notes: `Devis auto-accepté via match ${matchData.match_reference} - Transporteur: ${matchData.move.company_name}`,
