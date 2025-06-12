@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -79,7 +78,7 @@ const ClientList = () => {
             name: request.name || 'Client sans nom',
             email: request.email || 'Email manquant',
             phone: request.phone || 'Téléphone manquant',
-            client_reference: request.client_reference || `REQ-${String(request.id).padStart(6, '0')}`,
+            client_reference: request.client_reference || `CLI-${String(request.id).padStart(6, '0')}`,
             created_at: request.created_at,
             created_by: request.created_by,
             departure_city: request.departure_city,
@@ -89,7 +88,7 @@ const ClientList = () => {
             desired_date: request.desired_date,
             estimated_volume: request.estimated_volume,
             flexible_dates: request.flexible_dates,
-            flexibility_days: request.flexibility_days,
+            flexibility_days: request.flexibility_days || 0,
             status: request.status
           });
         });

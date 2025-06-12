@@ -94,6 +94,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
 
       // Créer directement dans client_requests avec toutes les informations
       const requestData = {
+        client_id: 1, // Valeur par défaut requise
         name: formData.name,
         email: formData.email,
         phone: formData.phone,

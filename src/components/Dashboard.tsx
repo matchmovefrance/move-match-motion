@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ClientList from './ClientList';
 import ServiceProviders from './ServiceProviders';
@@ -11,8 +11,9 @@ import DatabaseTestPanel from './DatabaseTestPanel';
 import MatchAnalytics from './MatchAnalytics';
 import AdminActions from './AdminActions';
 import RoleDebugPanel from './RoleDebugPanel';
-import { useAuth, useToast } from '@/hooks';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const Dashboard = () => {
   const { user } = useAuth();
