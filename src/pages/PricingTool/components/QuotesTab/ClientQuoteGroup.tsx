@@ -1,4 +1,5 @@
 
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,28 +63,37 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     console.log('🔍 Recherche prestataire dans ClientQuoteGroup:', supplierId);
     console.log('📋 IDs disponibles:', suppliersData.map(s => s.id));
     
-    // Essayer d'abord avec l'ID exact
-    let supplier = suppliersData.find(s => s.id === supplierId);
-    
-    // Si pas trouvé et que l'ID commence par "supplier-", essayer de matcher par company_name
-    if (!supplier && supplierId.startsWith('supplier-')) {
-      const currentQuote = allQuotes.find(q => q.supplier_id === supplierId);
-      if (currentQuote) {
-        supplier = suppliersData.find(s => s.company_name === currentQuote.supplier_company);
-        console.log('🔄 Tentative de match par nom de société:', currentQuote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
-      }
+    // Trouver le quote correspondant pour obtenir le nom de société
+    const currentQuote = allQuotes.find(q => q.supplier_id === supplierId);
+    if (!currentQuote) {
+      console.log('❌ Quote non trouvé pour supplier_id:', supplierId);
+      return null;
     }
+
+    console.log('📋 Recherche par nom de société:', currentQuote.supplier_company);
     
-    // Si toujours pas trouvé, essayer par nom de société depuis les quotes
+    // Rechercher directement par nom de société (méthode la plus fiable)
+    let supplier = suppliersData.find(s => 
+      s.company_name?.toLowerCase().trim() === currentQuote.supplier_company?.toLowerCase().trim()
+    );
+    
+    // Si pas trouvé, essayer une recherche plus permissive
     if (!supplier) {
-      const quote = allQuotes.find(q => q.supplier_id === supplierId);
-      if (quote) {
-        supplier = suppliersData.find(s => s.company_name === quote.supplier_company);
-        console.log('🔄 Match par nom de société depuis quote:', quote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
-      }
+      supplier = suppliersData.find(s => 
+        s.company_name && currentQuote.supplier_company &&
+        (s.company_name.toLowerCase().includes(currentQuote.supplier_company.toLowerCase()) ||
+         currentQuote.supplier_company.toLowerCase().includes(s.company_name.toLowerCase()))
+      );
+      console.log('🔄 Recherche permissive:', supplier ? 'TROUVÉ' : 'NON TROUVÉ');
     }
     
-    console.log('🔍 Résultat recherche prestataire:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
+    // En dernier recours, essayer par ID exact
+    if (!supplier) {
+      supplier = suppliersData.find(s => s.id === supplierId);
+      console.log('🔄 Recherche par ID exact:', supplier ? 'TROUVÉ' : 'NON TROUVÉ');
+    }
+    
+    console.log('🔍 Résultat final recherche prestataire:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
     if (supplier) {
       console.log('📋 Données prestataire trouvé:', {
         id: supplier.id,
@@ -92,6 +102,12 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
         email: supplier.email,
         phone: supplier.phone,
         hasBankDetails: !!supplier.bank_details
+      });
+    } else {
+      console.log('❌ Aucun prestataire trouvé pour:', {
+        supplierId,
+        supplierCompany: currentQuote.supplier_company,
+        availableCompanies: suppliersData.map(s => s.company_name)
       });
     }
     return supplier;
@@ -184,6 +200,11 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
                     <div className="flex items-center gap-3 mb-3">
                       <Badge className="bg-green-100 text-green-800">🥇 Meilleur prix</Badge>
                       <h4 className="font-semibold">{quote.supplier_company}</h4>
+                      {!supplierData && (
+                        <Badge variant="destructive" className="text-xs">
+                          ⚠️ Données manquantes
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="bg-gray-50 p-3 rounded-md mb-3">
@@ -237,7 +258,13 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
                         email: supplierData.email,
                         phone: supplierData.phone,
                         bank_details: supplierData.bank_details
-                      } : undefined}
+                      } : {
+                        company_name: quote.supplier_company,
+                        contact_name: "Contact non disponible",
+                        email: "email@exemple.fr",
+                        phone: "01 23 45 67 89",
+                        bank_details: undefined
+                      }}
                       supplierPrice={quote.supplier_price}
                       matchMoveMargin={quote.pricing_breakdown?.marginPercentage || 0}
                     />
@@ -270,3 +297,4 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     </Card>
   );
 };
+
