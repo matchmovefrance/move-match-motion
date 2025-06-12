@@ -40,7 +40,48 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     used_volume: ''
   });
 
-  // Récupérer les prestataires depuis service_providers (comme dans ServiceProviders.tsx)
+  // Utiliser exactement la même query que SuppliersTab pour récupérer les prestataires
+  const { data: suppliers, isLoading: suppliersLoading } = useQuery({
+    queryKey: ['suppliers-from-moves'],
+    queryFn: async () => {
+      console.log('🏢 Chargement des prestataires depuis les trajets...');
+      
+      const { data, error } = await supabase
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
+
+      if (error) {
+        console.error('❌ Erreur chargement prestataires:', error);
+        throw error;
+      }
+
+      // Créer un Map pour éviter les doublons basés sur mover_name + company_name
+      const uniqueSuppliersMap = new Map();
+      
+      data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueSuppliersMap.has(key)) {
+          uniqueSuppliersMap.set(key, {
+            id: `move-supplier-${move.mover_id}`,
+            company_name: move.company_name,
+            name: move.mover_name,
+            email: move.contact_email || '',
+            phone: move.contact_phone || '',
+            service_provider_id: move.mover_id,
+            source: 'moves'
+          });
+        }
+      });
+
+      const uniqueSuppliers = Array.from(uniqueSuppliersMap.values());
+      console.log('✅ Prestataires uniques chargés depuis les trajets:', uniqueSuppliers.length);
+      return uniqueSuppliers;
+    },
+    enabled: !!user,
+  });
+
+  // Récupérer aussi les prestataires depuis service_providers
   const { data: dbProviders = [], isLoading: dbProvidersLoading } = useQuery({
     queryKey: ['service-providers'],
     queryFn: async () => {
@@ -63,52 +104,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     enabled: !!user
   });
 
-  // Récupérer les prestataires depuis les trajets confirmés (comme dans ServiceProviders.tsx)
-  const { data: providersFromMoves = [], isLoading: movesLoading } = useQuery({
-    queryKey: ['providers-from-confirmed-moves'],
-    queryFn: async () => {
-      console.log('🔍 Chargement des prestataires depuis les trajets confirmés...');
-      
-      const { data: moves, error } = await supabase
-        .from('confirmed_moves')
-        .select(`
-          mover_id,
-          mover_name,
-          company_name,
-          contact_email,
-          contact_phone
-        `)
-        .not('mover_id', 'is', null);
-
-      if (error) {
-        console.error('❌ Erreur lors du chargement des trajets:', error);
-        return [];
-      }
-
-      // Créer un Map pour éviter les doublons par mover_id
-      const uniqueProviders = new Map();
-      
-      moves?.forEach(move => {
-        if (move.mover_id && !uniqueProviders.has(move.mover_id)) {
-          uniqueProviders.set(move.mover_id, {
-            id: `move-${move.mover_id}`,
-            name: move.mover_name || 'Nom non défini',
-            company_name: move.company_name || 'Entreprise non définie',
-            email: move.contact_email || '',
-            phone: move.contact_phone || '',
-            service_provider_id: move.mover_id,
-            source: 'moves'
-          });
-        }
-      });
-
-      const providers = Array.from(uniqueProviders.values());
-      console.log('✅ Prestataires uniques depuis les trajets:', providers.length);
-      return providers;
-    },
-  });
-
-  // Combiner les prestataires des deux sources (comme dans ServiceProviders.tsx)
+  // Combiner les prestataires des deux sources exactement comme dans SuppliersTab
   const allProviders = [
     // Prestataires de la DB avec formatage
     ...(dbProviders?.map(provider => ({
@@ -121,10 +117,10 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
       source: 'database'
     })) || []),
     // Prestataires des trajets
-    ...(providersFromMoves || [])
+    ...(suppliers || [])
   ];
 
-  const providersLoading = dbProvidersLoading || movesLoading;
+  const providersLoading = suppliersLoading || dbProvidersLoading;
 
   useEffect(() => {
     if (initialData) {
@@ -264,9 +260,9 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     ? parseFloat(formData.max_volume) - parseFloat(formData.used_volume)
     : parseFloat(formData.max_volume) || 0;
 
-  console.log('📊 Providers summary:', {
+  console.log('📊 Providers summary dans SimpleMoveForm:', {
     dbProviders: dbProviders?.length || 0,
-    providersFromMoves: providersFromMoves?.length || 0,
+    suppliersFromMoves: suppliers?.length || 0,
     allProviders: allProviders.length,
     loading: providersLoading
   });
@@ -342,7 +338,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
             {allProviders.length > 0 && (
               <p className="text-xs text-gray-600 mt-1">
                 {allProviders.length} prestataire(s) disponible(s) 
-                ({dbProviders?.length || 0} depuis DB + {providersFromMoves?.length || 0} depuis trajets)
+                ({dbProviders?.length || 0} depuis DB + {suppliers?.length || 0} depuis trajets)
               </p>
             )}
           </div>
