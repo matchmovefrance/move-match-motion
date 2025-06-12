@@ -40,7 +40,12 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
 
   useEffect(() => {
     const initMap = async () => {
-      if (!mapRef.current) return;
+      console.log('Tentative d\'initialisation de la carte popup:', items.length);
+      
+      if (!mapRef.current) {
+        console.log('mapRef.current est null, abandon de l\'initialisation');
+        return;
+      }
 
       // Attendre que Google Maps soit disponible
       if (!window.google || !window.google.maps) {
@@ -49,13 +54,18 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
       }
 
       try {
-        console.log('Initialisation de la carte popup:', items.length);
+        console.log('Début initialisation carte popup avec mapRef:', mapRef.current);
         
         const geocoder = new google.maps.Geocoder();
         const bounds = new google.maps.LatLngBounds();
         let hasAddedBounds = false;
 
-        // Créer la carte
+        // Créer la carte avec une vérification supplémentaire
+        if (!mapRef.current) {
+          console.error('mapRef.current est devenu null pendant l\'initialisation');
+          return;
+        }
+
         const map = new google.maps.Map(mapRef.current, {
           zoom: 7,
           center: { lat: 46.603354, lng: 1.888334 }, // Centre de la France
@@ -72,7 +82,10 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           
-          if (!item.departure_postal_code || !item.arrival_postal_code) continue;
+          if (!item.departure_postal_code || !item.arrival_postal_code) {
+            console.log(`Skipping item ${item.reference} - missing postal codes`);
+            continue;
+          }
 
           const departureQuery = `${item.departure_postal_code}, ${item.departure_city || ''}, France`;
           const arrivalQuery = `${item.arrival_postal_code}, ${item.arrival_city || ''}, France`;
@@ -173,14 +186,15 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
         console.log('Carte popup initialisée avec succès');
 
       } catch (error) {
-        console.error('Erreur lors de l\'initialisation de la carte:', error);
+        console.error('Erreur lors de l\'initialisation de la carte popup:', error);
       }
     };
 
     // Fonction pour charger le script Google Maps
     const loadGoogleMaps = () => {
       if (window.google && window.google.maps) {
-        initMap();
+        // Ajouter un délai pour s'assurer que le DOM est prêt
+        setTimeout(initMap, 100);
         return;
       }
 
@@ -190,14 +204,14 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
         script.async = true;
         script.defer = true;
         script.onload = () => {
-          setTimeout(initMap, 100);
+          setTimeout(initMap, 200);
         };
         document.head.appendChild(script);
       } else {
         const checkGoogleMaps = setInterval(() => {
           if (window.google && window.google.maps) {
             clearInterval(checkGoogleMaps);
-            initMap();
+            setTimeout(initMap, 100);
           }
         }, 100);
 
@@ -207,10 +221,12 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
       }
     };
 
-    loadGoogleMaps();
+    // Délai pour s'assurer que le composant est monté
+    const timeout = setTimeout(loadGoogleMaps, 100);
 
     // Cleanup function
     return () => {
+      clearTimeout(timeout);
       directionsRenderers.current.forEach(renderer => renderer.setMap(null));
       directionsRenderers.current = [];
     };
