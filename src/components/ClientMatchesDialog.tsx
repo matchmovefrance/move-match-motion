@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -30,6 +31,8 @@ interface Match {
     mover_name: string;
     departure_postal_code: string;
     arrival_postal_code: string;
+    departure_city: string;
+    arrival_city: string;
     departure_date: string;
     available_volume: number;
   } | null;
@@ -83,6 +86,8 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             mover_name,
             departure_postal_code,
             arrival_postal_code,
+            departure_city,
+            arrival_city,
             departure_date,
             available_volume
           )
