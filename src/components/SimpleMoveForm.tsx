@@ -11,11 +11,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface ServiceProvider {
-  id: number;
+  id: string;
   name: string;
   company_name: string;
   phone: string;
   email: string;
+  mover_id: number;
 }
 
 interface SimpleMoveFormProps {
@@ -56,25 +57,43 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
   const fetchProviders = async () => {
     try {
       setProvidersLoading(true);
-      console.log('Récupération des prestataires...');
+      console.log('🏢 Récupération des prestataires depuis les trajets confirmés...');
       
       const { data, error } = await supabase
-        .from('service_providers')
-        .select('id, name, company_name, phone, email')
-        .order('company_name');
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null);
 
       if (error) {
-        console.error('Erreur lors de la récupération des prestataires:', error);
+        console.error('❌ Erreur lors de la récupération des prestataires:', error);
         throw error;
       }
+
+      // Créer un Map pour éviter les doublons basés sur mover_name + company_name
+      const uniqueProvidersMap = new Map();
       
-      console.log('Prestataires récupérés:', data);
-      setProviders(data || []);
+      data?.forEach((move) => {
+        const key = `${move.mover_name}-${move.company_name}`;
+        if (!uniqueProvidersMap.has(key)) {
+          uniqueProvidersMap.set(key, {
+            id: `move-provider-${move.mover_id}`,
+            name: move.mover_name,
+            company_name: move.company_name,
+            phone: move.contact_phone || '',
+            email: move.contact_email || '',
+            mover_id: move.mover_id,
+          });
+        }
+      });
+
+      const uniqueProviders = Array.from(uniqueProvidersMap.values());
+      console.log('✅ Prestataires uniques récupérés:', uniqueProviders.length);
+      setProviders(uniqueProviders);
       
-      if (!data || data.length === 0) {
+      if (uniqueProviders.length === 0) {
         toast({
           title: "Aucun prestataire",
-          description: "Aucun prestataire trouvé. Ajoutez-en un dans l'onglet Prestataires.",
+          description: "Aucun prestataire trouvé dans les trajets confirmés.",
           variant: "destructive",
         });
       }
@@ -135,25 +154,23 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     try {
       setLoading(true);
 
-      // Récupérer les infos du prestataire
-      const { data: provider, error: providerError } = await supabase
-        .from('service_providers')
-        .select('*')
-        .eq('id', parseInt(formData.provider_id))
-        .single();
-
-      if (providerError) throw providerError;
+      // Récupérer les infos du prestataire sélectionné
+      const selectedProvider = providers.find(p => p.id === formData.provider_id);
+      
+      if (!selectedProvider) {
+        throw new Error('Prestataire sélectionné non trouvé');
+      }
 
       const moveReference = isEditing ? initialData?.move_reference : generateMoveReference();
       const availableVolume = maxVolume - usedVolume;
 
       const moveData = {
-        mover_name: provider.name,
-        company_name: provider.company_name,
-        departure_city: `CP ${formData.departure_postal_code}`, // Sera mis à jour via Google Maps
+        mover_name: selectedProvider.name,
+        company_name: selectedProvider.company_name,
+        departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         departure_country: 'France',
-        arrival_city: `CP ${formData.arrival_postal_code}`, // Sera mis à jour via Google Maps
+        arrival_city: `CP ${formData.arrival_postal_code}`,
         arrival_postal_code: formData.arrival_postal_code,
         arrival_country: 'France',
         departure_date: formData.departure_date,
@@ -162,12 +179,11 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
         available_volume: availableVolume,
         status: 'confirmed',
         status_custom: 'en_cours',
-        contact_phone: provider.phone,
-        contact_email: provider.email,
+        contact_phone: selectedProvider.phone,
+        contact_email: selectedProvider.email,
         created_by: user.id,
         move_reference: moveReference,
-        // Valeurs par défaut requises
-        mover_id: 1,
+        mover_id: selectedProvider.mover_id,
         truck_id: 1
       };
 
@@ -257,7 +273,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
                     </div>
                   ) : (
                     providers.map((provider) => (
-                      <SelectItem key={provider.id} value={provider.id.toString()}>
+                      <SelectItem key={provider.id} value={provider.id}>
                         {provider.company_name} - {provider.name}
                       </SelectItem>
                     ))
@@ -268,7 +284,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
                 type="button" 
                 variant="outline" 
                 size="sm"
-                onClick={() => window.open('/#', '_blank')} // TODO: Link to providers tab
+                onClick={() => window.open('/#', '_blank')}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -276,12 +292,12 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
             {providers.length === 0 && !providersLoading && (
               <p className="text-xs text-red-600 mt-1 flex items-center">
                 <AlertCircle className="h-3 w-3 mr-1" />
-                Aucun prestataire trouvé. Ajoutez-en un dans l'onglet "Prestataires"
+                Aucun prestataire trouvé dans les trajets confirmés
               </p>
             )}
             {providers.length > 0 && (
               <p className="text-xs text-gray-600 mt-1">
-                {providers.length} prestataire(s) disponible(s)
+                {providers.length} prestataire(s) disponible(s) depuis les trajets confirmés
               </p>
             )}
           </div>
