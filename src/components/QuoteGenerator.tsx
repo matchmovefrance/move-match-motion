@@ -1,4 +1,3 @@
-
 import jsPDF from 'jspdf';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -272,7 +271,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     console.log('✅ PDF personnalisé généré et téléchargé:', fileName);
   };
 
-  // Logique de validation simplifiée et plus claire
+  // Logique de validation améliorée
   const hasRequiredClientData = !!(client.quote_amount && client.name);
   const hasRequiredSupplierData = !!(supplier && supplier.company_name && supplier.contact_name && supplier.email && supplier.phone);
   
@@ -309,7 +308,13 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
       onClick={generatePDF}
       variant="outline"
       size="sm"
-      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+      className={`
+        transition-all duration-200 
+        ${isDisabled 
+          ? 'text-gray-400 border-gray-200 cursor-not-allowed opacity-50' 
+          : 'text-blue-600 border-blue-200 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-300 active:bg-blue-100'
+        }
+      `}
       disabled={isDisabled}
       title={getTooltipMessage()}
     >

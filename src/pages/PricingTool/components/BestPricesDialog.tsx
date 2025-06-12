@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -51,16 +50,17 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
 
   const loadSuppliersData = async () => {
     try {
-      console.log('🔄 Chargement des données des prestataires...');
+      console.log('🔄 Chargement des données des prestataires pour BestPricesDialog...');
       const { data: suppliers, error } = await supabase
         .from('suppliers')
         .select('*');
 
       if (error) throw error;
-      console.log('✅ Prestataires chargés:', suppliers?.length || 0);
+      console.log('✅ Prestataires chargés pour BestPricesDialog:', suppliers?.length || 0);
+      console.log('📋 Liste complète des prestataires avec IDs:', suppliers?.map(s => ({ id: s.id, name: s.company_name })));
       setSuppliersData(suppliers || []);
     } catch (error) {
-      console.error('❌ Erreur chargement prestataires:', error);
+      console.error('❌ Erreur chargement prestataires BestPricesDialog:', error);
     }
   };
 
@@ -165,8 +165,32 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
   };
 
   const getSupplierData = (supplierId: string) => {
-    const supplier = suppliersData.find(s => s.id === supplierId);
-    console.log('🔍 Recherche prestataire:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
+    console.log('🔍 Recherche prestataire dans BestPricesDialog:', supplierId);
+    console.log('📋 IDs disponibles:', suppliersData.map(s => s.id));
+    
+    // Essayer d'abord avec l'ID exact
+    let supplier = suppliersData.find(s => s.id === supplierId);
+    
+    // Si pas trouvé, essayer par nom de société depuis les quotes
+    if (!supplier) {
+      const quote = quotes.find(q => q.supplier_id === supplierId);
+      if (quote) {
+        supplier = suppliersData.find(s => s.company_name === quote.supplier_company || s.company_name === quote.supplier_name);
+        console.log('🔄 Match par nom de société depuis quote:', quote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
+      }
+    }
+    
+    console.log('🔍 Résultat recherche prestataire BestPricesDialog:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
+    if (supplier) {
+      console.log('📋 Données prestataire trouvé:', {
+        id: supplier.id,
+        company_name: supplier.company_name,
+        contact_name: supplier.contact_name,
+        email: supplier.email,
+        phone: supplier.phone,
+        hasBankDetails: !!supplier.bank_details
+      });
+    }
     return supplier;
   };
 

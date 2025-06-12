@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,7 +50,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
 
       if (error) throw error;
       console.log('✅ Prestataires chargés pour ClientQuoteGroup:', suppliers?.length || 0);
-      console.log('📋 Données prestataires:', suppliers);
+      console.log('📋 Liste complète des prestataires avec IDs:', suppliers?.map(s => ({ id: s.id, name: s.company_name })));
       setSuppliersData(suppliers || []);
     } catch (error) {
       console.error('❌ Erreur chargement prestataires ClientQuoteGroup:', error);
@@ -59,13 +58,49 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
   };
 
   const getSupplierData = (supplierId: string) => {
-    const supplier = suppliersData.find(s => s.id === supplierId);
-    console.log('🔍 Recherche prestataire ClientQuoteGroup:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
+    console.log('🔍 Recherche prestataire dans ClientQuoteGroup:', supplierId);
+    console.log('📋 IDs disponibles:', suppliersData.map(s => s.id));
+    
+    // Essayer d'abord avec l'ID exact
+    let supplier = suppliersData.find(s => s.id === supplierId);
+    
+    // Si pas trouvé et que l'ID commence par "supplier-", essayer de matcher par company_name
+    if (!supplier && supplierId.startsWith('supplier-')) {
+      const quotes = window.currentQuotes || []; // Fallback pour accéder aux quotes
+      const currentQuote = quotes.find(q => q.supplier_id === supplierId);
+      if (currentQuote) {
+        supplier = suppliersData.find(s => s.company_name === currentQuote.supplier_company);
+        console.log('🔄 Tentative de match par nom de société:', currentQuote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
+      }
+    }
+    
+    // Si toujours pas trouvé, essayer par nom de société depuis les quotes
+    if (!supplier) {
+      const quote = quotes.find(q => q.supplier_id === supplierId);
+      if (quote) {
+        supplier = suppliersData.find(s => s.company_name === quote.supplier_company);
+        console.log('🔄 Match par nom de société depuis quote:', quote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
+      }
+    }
+    
+    console.log('🔍 Résultat recherche prestataire:', supplierId, 'trouvé:', supplier ? 'OUI' : 'NON');
     if (supplier) {
-      console.log('📋 Données prestataire trouvé:', supplier);
+      console.log('📋 Données prestataire trouvé:', {
+        id: supplier.id,
+        company_name: supplier.company_name,
+        contact_name: supplier.contact_name,
+        email: supplier.email,
+        phone: supplier.phone,
+        hasBankDetails: !!supplier.bank_details
+      });
     }
     return supplier;
   };
+
+  // Stocker les quotes dans window pour le fallback
+  if (typeof window !== 'undefined') {
+    window.currentQuotes = quotes;
+  }
 
   const firstQuote = quotes[0];
   const hasOriginalQuote = firstQuote.original_quote_amount;
@@ -206,7 +241,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
                         contact_name: supplierData.contact_name,
                         email: supplierData.email,
                         phone: supplierData.phone,
-                        bank_details: supplierData.pricing_model?.bank_details
+                        bank_details: supplierData.bank_details
                       } : undefined}
                       supplierPrice={quote.supplier_price}
                       matchMoveMargin={quote.pricing_breakdown?.marginPercentage || 0}
