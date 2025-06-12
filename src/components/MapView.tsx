@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X } from 'lucide-react';
@@ -45,7 +46,7 @@ const MapView = () => {
 
       console.log('🔍 Recherche de référence:', cleanRef);
 
-      // Rechercher dans les clients (format CLI-XXXXXX)
+      // Rechercher dans les clients (format CLI-XXXXXX) - table unifiée
       if (cleanRef.startsWith('CLI-')) {
         const idStr = cleanRef.replace('CLI-', '');
         const id = parseInt(idStr);
@@ -53,23 +54,17 @@ const MapView = () => {
         if (!isNaN(id)) {
           console.log('🔍 Recherche client ID:', id);
           
-          // D'abord chercher dans client_requests avec l'ID décalé
-          let searchId = id;
-          if (id >= 100000) {
-            searchId = id - 100000;
-          }
-          
           const { data: client, error } = await supabase
-            .from('client_requests')
-            .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-            .eq('id', searchId)
+            .from('clients')
+            .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city, client_reference')
+            .eq('id', id)
             .single();
 
           if (!error && client) {
             foundItem = {
               id: client.id,
               type: 'client',
-              reference: `CLI-${String(client.id + 100000).padStart(6, '0')}`,
+              reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`,
               name: client.name || 'Client',
               date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
               details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
@@ -111,7 +106,7 @@ const MapView = () => {
         }
       }
 
-      // Rechercher dans les matchs
+      // Rechercher dans les matchs - utiliser client_id maintenant
       if (!foundItem && cleanRef.startsWith('MTH-')) {
         const id = parseInt(cleanRef.replace('MTH-', ''));
         if (!isNaN(id)) {
@@ -120,27 +115,27 @@ const MapView = () => {
             .select(`
               id,
               created_at,
-              client_request:client_requests(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
+              client:clients(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
               confirmed_move:confirmed_moves(company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city)
             `)
             .eq('id', id)
             .single();
 
           if (!error && match) {
-            const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
+            const client = Array.isArray(match.client) ? match.client[0] : match.client;
             const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
             
             foundItem = {
               id: match.id,
               type: 'match',
               reference: `MTH-${String(match.id).padStart(6, '0')}`,
-              name: `${clientRequest?.name || 'Client'} ↔ ${confirmedMove?.company_name || 'Déménageur'}`,
+              name: `${client?.name || 'Client'} ↔ ${confirmedMove?.company_name || 'Déménageur'}`,
               date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
-              details: `${clientRequest?.departure_postal_code || ''} → ${clientRequest?.arrival_postal_code || ''}`,
-              departure_postal_code: clientRequest?.departure_postal_code,
-              arrival_postal_code: clientRequest?.arrival_postal_code,
-              departure_city: clientRequest?.departure_city,
-              arrival_city: clientRequest?.arrival_city,
+              details: `${client?.departure_postal_code || ''} → ${client?.arrival_postal_code || ''}`,
+              departure_postal_code: client?.departure_postal_code,
+              arrival_postal_code: client?.arrival_postal_code,
+              departure_city: client?.departure_city,
+              arrival_city: client?.arrival_city,
               company_name: confirmedMove?.company_name
             };
           }
@@ -217,7 +212,7 @@ const MapView = () => {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <Input
-                placeholder="Saisissez CLI-100001, TRJ-000001 ou MTH-000001..."
+                placeholder="Saisissez CLI-000001, TRJ-000001 ou MTH-000001..."
                 value={referenceFilter}
                 onChange={(e) => setReferenceFilter(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -294,7 +289,7 @@ const MapView = () => {
               <h3 className="text-lg font-medium text-gray-700 mb-2">Aucun trajet sélectionné</h3>
               <p className="text-gray-500 mb-1">Utilisez la recherche ci-dessus pour afficher un trajet</p>
               <p className="text-sm text-gray-400">
-                Exemples : CLI-100001, TRJ-000001, MTH-000001
+                Exemples : CLI-000001, TRJ-000001, MTH-000001
               </p>
             </div>
           </div>

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -56,7 +57,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
   const fetchClientData = async () => {
     try {
       const { data, error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('departure_postal_code, arrival_postal_code, departure_city, arrival_city, desired_date, name')
         .eq('id', clientId)
         .single();
@@ -91,7 +92,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             available_volume
           )
         `)
-        .eq('client_request_id', clientId)
+        .eq('client_id', clientId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -117,7 +118,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
   const acceptMatch = async (matchId: number) => {
     try {
       const { error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .update({ 
           status: 'confirmed',
           match_status: 'accepted',
@@ -171,17 +172,20 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
 
   const markAsCompleted = async (matchId: number) => {
     try {
-      // Mettre à jour le statut du client
+      // Mettre à jour le statut du client comme terminé
       const { error } = await supabase
-        .from('client_requests')
-        .update({ status: 'completed' })
+        .from('clients')
+        .update({ 
+          status: 'completed',
+          match_status: 'completed'
+        })
         .eq('id', clientId);
 
       if (error) throw error;
 
       toast({
-        title: "Trajet terminé",
-        description: "Le match a été marqué comme terminé",
+        title: "Match terminé",
+        description: "Le déménagement a été marqué comme terminé",
       });
 
       onOpenChange(false);
@@ -195,67 +199,15 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     }
   };
 
-  const showMatchOnMap = (match: Match) => {
+  const showOnMap = (match: Match) => {
     setSelectedMatchForMap(match);
     setShowMapPopup(true);
-  };
-
-  const prepareMapItems = (match: Match) => {
-    const items = [];
-
-    // Ajouter le client
-    if (clientData?.departure_postal_code && clientData?.arrival_postal_code) {
-      items.push({
-        id: clientId,
-        type: 'client' as const,
-        reference: `CLI-${String(clientId).padStart(6, '0')}`,
-        name: clientData.name || clientName,
-        date: clientData.desired_date ? 
-          new Date(clientData.desired_date).toLocaleDateString('fr-FR') : '',
-        details: `${clientData.departure_postal_code} → ${clientData.arrival_postal_code}`,
-        departure_postal_code: clientData.departure_postal_code,
-        arrival_postal_code: clientData.arrival_postal_code,
-        departure_city: clientData.departure_city,
-        arrival_city: clientData.arrival_city,
-        color: '#16a34a' // vert pour client
-      });
-    }
-
-    // Ajouter le trajet du match
-    if (match.confirmed_move?.departure_postal_code && match.confirmed_move?.arrival_postal_code) {
-      items.push({
-        id: match.id,
-        type: 'move' as const,
-        reference: `TRJ-${String(match.id).padStart(6, '0')}`,
-        name: match.confirmed_move.company_name || 'Déménageur',
-        date: match.confirmed_move.departure_date ? 
-          new Date(match.confirmed_move.departure_date).toLocaleDateString('fr-FR') : '',
-        details: `${match.confirmed_move.departure_postal_code} → ${match.confirmed_move.arrival_postal_code}`,
-        departure_postal_code: match.confirmed_move.departure_postal_code,
-        arrival_postal_code: match.confirmed_move.arrival_postal_code,
-        departure_city: match.confirmed_move.departure_city,
-        arrival_city: match.confirmed_move.arrival_city,
-        company_name: match.confirmed_move.company_name,
-        color: '#2563eb' // bleu pour trajet
-      });
-    }
-
-    return items;
-  };
-
-  const getMatchTypeColor = (type: string) => {
-    switch (type) {
-      case 'perfect': return 'bg-blue-100 text-blue-800';
-      case 'partial': return 'bg-yellow-100 text-yellow-800';
-      case 'compatible': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Target className="h-5 w-5 text-blue-600" />
@@ -263,24 +215,26 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             </DialogTitle>
           </DialogHeader>
 
+          {/* Animation radar */}
           {showRadar && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="flex flex-col items-center justify-center py-8"
+              className="flex items-center justify-center py-8"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
             >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="mb-4"
-              >
-                <Radar className="h-12 w-12 text-blue-600" />
-              </motion.div>
-              <p className="text-gray-600">Recherche des correspondances...</p>
+              <div className="relative">
+                <motion.div
+                  className="w-16 h-16 border-4 border-blue-600 rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                />
+                <Radar className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-blue-600" />
+              </div>
+              <span className="ml-4 text-lg font-medium">Recherche de correspondances...</span>
             </motion.div>
           )}
 
+          {/* Résultats */}
           {!showRadar && (
             <div className="space-y-4">
               {loading ? (
@@ -288,92 +242,115 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
               ) : matches.length === 0 ? (
                 <div className="text-center py-8">
                   <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Aucune correspondance trouvée</p>
+                  <p className="text-gray-600">Aucune correspondance trouvée pour ce client</p>
                 </div>
               ) : (
-                matches.map((match) => (
-                  <Card key={match.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center space-x-2">
-                          <Truck className="h-5 w-5 text-blue-600" />
-                          <span>{match.confirmed_move?.company_name}</span>
-                          <Badge variant="outline" className="ml-2">
-                            MTH-{String(match.id).padStart(6, '0')}
-                          </Badge>
-                        </CardTitle>
-                        <div className="flex items-center space-x-2">
-                          <Badge className={getMatchTypeColor(match.match_type)}>
-                            {match.match_type}
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => showMatchOnMap(match)}
-                            className="flex items-center space-x-1"
-                          >
-                            <MapPin className="h-4 w-4" />
-                          </Button>
+                <>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold">
+                      {matches.length} correspondance{matches.length > 1 ? 's' : ''} trouvée{matches.length > 1 ? 's' : ''}
+                    </h3>
+                  </div>
+                  
+                  {matches.map((match) => (
+                    <Card key={match.id} className={`${match.is_valid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg flex items-center space-x-2">
+                            <Truck className="h-5 w-5" />
+                            <span>{match.confirmed_move?.company_name}</span>
+                          </CardTitle>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={match.is_valid ? 'default' : 'secondary'}>
+                              {match.is_valid ? 'Valide' : 'Non valide'}
+                            </Badge>
+                            <Badge variant="outline">
+                              MTH-{String(match.id).padStart(6, '0')}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="flex items-center space-x-1">
-                          <MapPin className="h-3 w-3 text-blue-500" />
-                          <span>
-                            {match.confirmed_move?.departure_postal_code} → {match.confirmed_move?.arrival_postal_code}
-                          </span>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4 text-green-600" />
+                            <span className="text-sm">
+                              {match.confirmed_move?.departure_postal_code} {match.confirmed_move?.departure_city}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4 text-red-600" />
+                            <span className="text-sm">
+                              {match.confirmed_move?.arrival_postal_code} {match.confirmed_move?.arrival_city}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-purple-600" />
+                            <span className="text-sm">
+                              {match.confirmed_move?.departure_date ? 
+                                new Date(match.confirmed_move.departure_date).toLocaleDateString('fr-FR') : 
+                                'Date non définie'
+                              }
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Volume2 className="h-4 w-4 text-orange-600" />
+                            <span className="text-sm">
+                              Volume disponible: {match.confirmed_move?.available_volume || 0} m³
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="h-3 w-3 text-purple-500" />
-                          <span>
-                            {match.confirmed_move?.departure_date ? 
-                              new Date(match.confirmed_move.departure_date).toLocaleDateString('fr-FR') : 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Volume2 className="h-3 w-3 text-green-500" />
-                          <span>{match.confirmed_move?.available_volume}m³ disponible</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Distance:</span>
-                          <span className="font-medium ml-2">{match.distance_km}km</span>
-                        </div>
-                      </div>
 
-                      <div className="flex space-x-2 pt-3">
-                        <Button 
-                          size="sm"
-                          onClick={() => acceptMatch(match.id)}
-                          className="flex-1"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Accepter Match
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => rejectMatch(match.id)}
-                          className="flex-1 text-red-600 hover:text-red-700"
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Rejeter
-                        </Button>
-                        <Button 
-                          size="sm"
-                          variant="outline"
-                          onClick={() => markAsCompleted(match.id)}
-                          className="flex-1"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Trajet terminé
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                        <div className="border-t pt-3">
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <div>Distance: {match.distance_km} km</div>
+                            <div>Différence de dates: {match.date_diff_days} jours</div>
+                            <div>Type de match: {match.match_type}</div>
+                          </div>
+                        </div>
+
+                        {match.is_valid && (
+                          <div className="flex space-x-2 pt-3 border-t">
+                            <Button
+                              size="sm"
+                              onClick={() => acceptMatch(match.id)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Accepter
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => showOnMap(match)}
+                            >
+                              <MapPin className="h-4 w-4 mr-1" />
+                              Voir sur carte
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markAsCompleted(match.id)}
+                            >
+                              Marquer terminé
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => rejectMatch(match.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Rejeter
+                            </Button>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </>
               )}
             </div>
           )}
@@ -381,12 +358,14 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
       </Dialog>
 
       {/* Popup de carte */}
-      <MapPopup
-        open={showMapPopup}
-        onOpenChange={setShowMapPopup}
-        items={selectedMatchForMap ? prepareMapItems(selectedMatchForMap) : []}
-        title={`Carte du match ${selectedMatchForMap ? `MTH-${String(selectedMatchForMap.id).padStart(6, '0')}` : ''}`}
-      />
+      {showMapPopup && selectedMatchForMap && (
+        <MapPopup
+          isOpen={showMapPopup}
+          onClose={() => setShowMapPopup(false)}
+          clientData={clientData}
+          matchData={selectedMatchForMap}
+        />
+      )}
     </>
   );
 };

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -21,7 +22,6 @@ interface Client {
   client_reference?: string;
   created_at: string;
   created_by: string;
-  source?: 'clients' | 'client_requests';
   departure_city?: string;
   departure_postal_code?: string;
   arrival_city?: string;
@@ -31,7 +31,8 @@ interface Client {
   flexible_dates?: boolean;
   flexibility_days?: number;
   status?: string;
-  client_id?: number;
+  is_matched?: boolean;
+  match_status?: string;
 }
 
 const ClientList = () => {
@@ -53,62 +54,28 @@ const ClientList = () => {
     fetchClients();
   }, []);
 
-  const generateClientReference = (id: number) => {
-    return `CLI-${String(id + 100000).padStart(6, '0')}`;
-  };
-
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Chargement et unification des références clients...');
+      console.log('📋 Chargement des clients depuis la table unifiée...');
       
-      // Charger uniquement depuis client_requests avec les références unifiées
-      const { data: requestsData, error: requestsError } = await supabase
-        .from('client_requests')
+      // Charger uniquement depuis la table clients unifiée
+      const { data: clientsData, error } = await supabase
+        .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (requestsError) {
-        console.error('❌ Erreur client_requests:', requestsError);
-        throw requestsError;
+      if (error) {
+        console.error('❌ Erreur clients:', error);
+        throw error;
       }
 
-      const allClients: Client[] = [];
-
-      // Traiter uniquement les client_requests avec format CLI-XXXXXX unifié
-      if (requestsData) {
-        requestsData.forEach(request => {
-          const clientRef = generateClientReference(request.id);
-          allClients.push({
-            id: request.id + 100000, // ID unifié pour éviter conflits
-            name: request.name || 'Nom non renseigné',
-            email: request.email || 'Email non renseigné',
-            phone: request.phone || 'Téléphone non renseigné',
-            client_reference: clientRef,
-            created_at: request.created_at,
-            created_by: request.created_by,
-            source: 'client_requests',
-            departure_city: request.departure_city,
-            departure_postal_code: request.departure_postal_code,
-            arrival_city: request.arrival_city,
-            arrival_postal_code: request.arrival_postal_code,
-            desired_date: request.desired_date,
-            estimated_volume: request.estimated_volume,
-            flexible_dates: request.flexible_dates,
-            flexibility_days: request.flexibility_days,
-            status: request.status,
-            client_id: request.client_id
-          });
-        });
-      }
-
-      console.log('✅ Références clients unifiées:', {
-        requests: requestsData?.length || 0,
-        total: allClients.length,
+      console.log('✅ Clients chargés:', {
+        count: clientsData?.length || 0,
         format: 'CLI-XXXXXX'
       });
       
-      setClients(allClients);
+      setClients(clientsData || []);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -135,25 +102,12 @@ const ClientList = () => {
     try {
       console.log('🗑️ Suppression du client:', clientToDelete.id);
       
-      // Supprimer de client_requests en utilisant l'ID original
-      const originalId = clientToDelete.id - 100000;
       const { error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .delete()
-        .eq('id', originalId);
+        .eq('id', clientToDelete.id);
 
       if (error) throw error;
-
-      if (clientToDelete.client_id) {
-        const { error: clientError } = await supabase
-          .from('clients')
-          .delete()
-          .eq('id', clientToDelete.client_id);
-        
-        if (clientError) {
-          console.error('Erreur suppression client:', clientError);
-        }
-      }
 
       toast({
         title: "Client supprimé",

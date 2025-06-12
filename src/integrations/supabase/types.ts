@@ -50,7 +50,7 @@ export type Database = {
           },
         ]
       }
-      client_requests: {
+      clients: {
         Row: {
           access_conditions: string | null
           arrival_address: string | null
@@ -59,7 +59,6 @@ export type Database = {
           arrival_postal_code: string | null
           budget_max: number | null
           budget_min: number | null
-          client_id: number | null
           client_reference: string | null
           created_at: string | null
           created_by: string
@@ -72,7 +71,7 @@ export type Database = {
           departure_time: string | null
           description: string | null
           desired_date: string | null
-          email: string | null
+          email: string
           estimated_arrival_date: string | null
           estimated_arrival_time: string | null
           estimated_volume: number | null
@@ -83,8 +82,8 @@ export type Database = {
           is_matched: boolean | null
           match_status: string | null
           matched_at: string | null
-          name: string | null
-          phone: string | null
+          name: string
+          phone: string
           quote_amount: number | null
           special_requirements: string | null
           status: string | null
@@ -97,7 +96,6 @@ export type Database = {
           arrival_postal_code?: string | null
           budget_max?: number | null
           budget_min?: number | null
-          client_id?: number | null
           client_reference?: string | null
           created_at?: string | null
           created_by: string
@@ -110,7 +108,7 @@ export type Database = {
           departure_time?: string | null
           description?: string | null
           desired_date?: string | null
-          email?: string | null
+          email: string
           estimated_arrival_date?: string | null
           estimated_arrival_time?: string | null
           estimated_volume?: number | null
@@ -121,8 +119,8 @@ export type Database = {
           is_matched?: boolean | null
           match_status?: string | null
           matched_at?: string | null
-          name?: string | null
-          phone?: string | null
+          name: string
+          phone: string
           quote_amount?: number | null
           special_requirements?: string | null
           status?: string | null
@@ -135,7 +133,6 @@ export type Database = {
           arrival_postal_code?: string | null
           budget_max?: number | null
           budget_min?: number | null
-          client_id?: number | null
           client_reference?: string | null
           created_at?: string | null
           created_by?: string
@@ -148,7 +145,7 @@ export type Database = {
           departure_time?: string | null
           description?: string | null
           desired_date?: string | null
-          email?: string | null
+          email?: string
           estimated_arrival_date?: string | null
           estimated_arrival_time?: string | null
           estimated_volume?: number | null
@@ -159,81 +156,10 @@ export type Database = {
           is_matched?: boolean | null
           match_status?: string | null
           matched_at?: string | null
-          name?: string | null
-          phone?: string | null
-          quote_amount?: number | null
-          special_requirements?: string | null
-          status?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_requests_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      clients: {
-        Row: {
-          arrival_city: string | null
-          arrival_country: string | null
-          arrival_postal_code: string | null
-          client_reference: string | null
-          created_at: string | null
-          created_by: string
-          departure_city: string | null
-          departure_country: string | null
-          departure_postal_code: string | null
-          desired_date: string | null
-          email: string
-          estimated_volume: number | null
-          flexibility_days: number | null
-          flexible_dates: boolean | null
-          id: number
-          name: string
-          phone: string
-          status: string | null
-        }
-        Insert: {
-          arrival_city?: string | null
-          arrival_country?: string | null
-          arrival_postal_code?: string | null
-          client_reference?: string | null
-          created_at?: string | null
-          created_by: string
-          departure_city?: string | null
-          departure_country?: string | null
-          departure_postal_code?: string | null
-          desired_date?: string | null
-          email: string
-          estimated_volume?: number | null
-          flexibility_days?: number | null
-          flexible_dates?: boolean | null
-          id?: number
-          name: string
-          phone: string
-          status?: string | null
-        }
-        Update: {
-          arrival_city?: string | null
-          arrival_country?: string | null
-          arrival_postal_code?: string | null
-          client_reference?: string | null
-          created_at?: string | null
-          created_by?: string
-          departure_city?: string | null
-          departure_country?: string | null
-          departure_postal_code?: string | null
-          desired_date?: string | null
-          email?: string
-          estimated_volume?: number | null
-          flexibility_days?: number | null
-          flexible_dates?: boolean | null
-          id?: number
           name?: string
           phone?: string
+          quote_amount?: number | null
+          special_requirements?: string | null
           status?: string | null
         }
         Relationships: []
@@ -508,7 +434,7 @@ export type Database = {
       }
       move_matches: {
         Row: {
-          client_request_id: number
+          client_id: number
           combined_volume: number
           created_at: string | null
           date_diff_days: number
@@ -520,7 +446,7 @@ export type Database = {
           volume_ok: boolean
         }
         Insert: {
-          client_request_id: number
+          client_id: number
           combined_volume: number
           created_at?: string | null
           date_diff_days: number
@@ -532,7 +458,7 @@ export type Database = {
           volume_ok: boolean
         }
         Update: {
-          client_request_id?: number
+          client_id?: number
           combined_volume?: number
           created_at?: string | null
           date_diff_days?: number
@@ -544,13 +470,6 @@ export type Database = {
           volume_ok?: boolean
         }
         Relationships: [
-          {
-            foreignKeyName: "move_matches_client_request_id_fkey"
-            columns: ["client_request_id"]
-            isOneToOne: false
-            referencedRelation: "client_requests"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "move_matches_move_id_fkey"
             columns: ["move_id"]

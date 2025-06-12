@@ -33,9 +33,9 @@ export const useQuotes = () => {
   const { data: activeClients, refetch: refetchClients } = useQuery({
     queryKey: ['active-clients'],
     queryFn: async () => {
-      console.log('🔍 Fetching active clients from client_requests...');
+      console.log('🔍 Fetching active clients from unified clients table...');
       const { data, error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
         .in('status', ['pending', 'confirmed'])
         .not('departure_postal_code', 'is', null)
@@ -47,14 +47,8 @@ export const useQuotes = () => {
         throw error;
       }
       
-      // Ajouter les références CLI-XXXXXX
-      const clientsWithReferences = data?.map(client => ({
-        ...client,
-        client_reference: `CLI-${String(client.id + 100000).padStart(6, '0')}`
-      })) || [];
-      
-      console.log('✅ Active clients loaded:', clientsWithReferences?.length || 0);
-      return clientsWithReferences;
+      console.log('✅ Active clients loaded:', data?.length || 0);
+      return data || [];
     },
     staleTime: 5 * 60 * 1000,
   });

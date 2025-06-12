@@ -37,32 +37,21 @@ const CreateClientDialog = ({ open, onOpenChange, onSuccess }: CreateClientDialo
     description: ''
   });
 
+  const generateClientReference = (id: number) => {
+    return `CLI-${String(id).padStart(6, '0')}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      console.log('🆕 Création nouveau client:', formData);
+      console.log('🆕 Création nouveau client dans table unifiée:', formData);
 
-      // 1. Créer le client dans la table clients
+      // Créer directement dans la table clients unifiée
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
         .insert({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          created_by: user?.id
-        })
-        .select()
-        .single();
-
-      if (clientError) throw clientError;
-
-      // 2. Créer la demande client associée
-      const { error: requestError } = await supabase
-        .from('client_requests')
-        .insert({
-          client_id: clientData.id,
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
@@ -80,13 +69,22 @@ const CreateClientDialog = ({ open, onOpenChange, onSuccess }: CreateClientDialo
           description: formData.description,
           status: 'pending',
           created_by: user?.id
-        });
+        })
+        .select()
+        .single();
 
-      if (requestError) throw requestError;
+      if (clientError) throw clientError;
+
+      // Générer et mettre à jour la référence client
+      const clientRef = generateClientReference(clientData.id);
+      await supabase
+        .from('clients')
+        .update({ client_reference: clientRef })
+        .eq('id', clientData.id);
 
       toast({
         title: "Client créé avec succès",
-        description: "Le nouveau client a été ajouté et sera synchronisé avec l'application principale",
+        description: `Le nouveau client a été ajouté avec la référence ${clientRef}`,
       });
 
       // Reset form
@@ -128,7 +126,7 @@ const CreateClientDialog = ({ open, onOpenChange, onSuccess }: CreateClientDialo
         <DialogHeader>
           <DialogTitle>Nouveau Client</DialogTitle>
           <DialogDescription>
-            Ajoutez un nouveau client qui sera automatiquement synchronisé avec l'application principale
+            Ajoutez un nouveau client dans la base de données unifiée
           </DialogDescription>
         </DialogHeader>
 

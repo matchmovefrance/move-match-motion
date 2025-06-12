@@ -13,7 +13,7 @@ import { MatchDetailsDialog } from './MatchDetailsDialog';
 
 interface Match {
   id: number;
-  client_request_id: number;
+  client_id: number;
   move_id: number;
   match_type: string;
   volume_ok: boolean;
@@ -22,7 +22,7 @@ interface Match {
   date_diff_days: number;
   is_valid: boolean;
   created_at: string;
-  client_request?: {
+  client?: {
     name?: string;
   };
   confirmed_move?: {
@@ -52,7 +52,7 @@ const MatchAnalytics = () => {
         .from('move_matches')
         .select(`
           *,
-          client_request:client_requests(name),
+          client:clients(name),
           confirmed_move:confirmed_moves(company_name)
         `)
         .order('created_at', { ascending: false });
@@ -62,7 +62,7 @@ const MatchAnalytics = () => {
       // Nettoyer les données
       const cleanedMatches = data?.map(match => ({
         ...match,
-        client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
+        client: Array.isArray(match.client) ? match.client[0] : match.client,
         confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
       })) || [];
 
@@ -82,13 +82,13 @@ const MatchAnalytics = () => {
   const stats = {
     total: matches.length,
     valid: matches.filter(match => match.is_valid).length,
-    uniqueClients: [...new Set(matches.map(match => match.client_request_id))].length,
+    uniqueClients: [...new Set(matches.map(match => match.client_id))].length,
     uniqueMoves: [...new Set(matches.map(match => match.move_id))].length,
   };
 
   const filteredMatches = matches.filter(match => {
     const matchesSearch =
-      match.client_request?.name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      match.client?.name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
       match.confirmed_move?.company_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
       String(match.id).includes(searchFilter);
 
@@ -210,7 +210,7 @@ const MatchAnalytics = () => {
                       </Badge>
                     </div>
                     <div className="text-sm text-gray-600">
-                      <span className="font-medium">{match.client_request?.name}</span>
+                      <span className="font-medium">{match.client?.name}</span>
                       {' → '}
                       <span className="font-medium">{match.confirmed_move?.company_name}</span>
                       <span className="ml-4">Distance: {match.distance_km}km</span>

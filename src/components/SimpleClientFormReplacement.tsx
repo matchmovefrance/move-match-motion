@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +45,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
   }, [initialData]);
 
   const generateClientReference = (id: number) => {
-    return `CLI-${String(id + 100000).padStart(6, '0')}`;
+    return `CLI-${String(id).padStart(6, '0')}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,8 +85,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         dateRangeEnd.setDate(dateRangeEnd.getDate() + formData.flexibility_days);
       }
 
-      // Créer/mettre à jour uniquement dans client_requests avec référence unifiée
-      const requestData = {
+      // Créer/mettre à jour uniquement dans la table clients
+      const clientData = {
         name: formData.name,
         email: `temp-${Date.now()}@temp.com`, // Email temporaire
         phone: 'A renseigner',
@@ -108,13 +109,10 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       };
 
       if (isEditing && initialData?.id) {
-        // Utiliser l'ID original pour la mise à jour
-        const originalId = initialData.id >= 100000 ? initialData.id - 100000 : initialData.id;
-        
         const { error } = await supabase
-          .from('client_requests')
-          .update(requestData)
-          .eq('id', originalId);
+          .from('clients')
+          .update(clientData)
+          .eq('id', initialData.id);
         
         if (error) throw error;
         
@@ -123,16 +121,23 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
           description: "Client modifié avec succès",
         });
       } else {
-        const { data: newRequest, error } = await supabase
-          .from('client_requests')
-          .insert(requestData)
+        const { data: newClient, error } = await supabase
+          .from('clients')
+          .insert(clientData)
           .select('id')
           .single();
         
         if (error) throw error;
         
-        const clientRef = generateClientReference(newRequest.id);
-        console.log('✅ Nouveau client créé avec référence unifiée:', clientRef);
+        const clientRef = generateClientReference(newClient.id);
+        
+        // Mettre à jour la référence client
+        await supabase
+          .from('clients')
+          .update({ client_reference: clientRef })
+          .eq('id', newClient.id);
+        
+        console.log('✅ Nouveau client créé avec référence:', clientRef);
         
         toast({
           title: "Succès",
