@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Target, Search, MapPin, Calendar, Volume2, Users, Truck, Filter } from 'lucide-react';
@@ -24,22 +23,22 @@ interface Match {
   is_valid: boolean;
   created_at: string;
   client_request?: {
-    name: string;
+    name?: string;
     client_reference?: string;
-    departure_postal_code: string;
-    arrival_postal_code: string;
-    desired_date: string;
-    estimated_volume: number;
-  };
+    departure_postal_code?: string;
+    arrival_postal_code?: string;
+    desired_date?: string;
+    estimated_volume?: number;
+  } | null;
   confirmed_move?: {
-    company_name: string;
-    mover_name: string;
+    company_name?: string;
+    mover_name?: string;
     move_reference?: string;
-    departure_postal_code: string;
-    arrival_postal_code: string;
-    departure_date: string;
-    available_volume: number;
-  };
+    departure_postal_code?: string;
+    arrival_postal_code?: string;
+    departure_date?: string;
+    available_volume?: number;
+  } | null;
 }
 
 const MatchFinder = () => {
@@ -64,7 +63,6 @@ const MatchFinder = () => {
           *,
           client_request:client_requests(
             name,
-            client_reference,
             departure_postal_code,
             arrival_postal_code,
             desired_date,
@@ -73,7 +71,6 @@ const MatchFinder = () => {
           confirmed_move:confirmed_moves(
             company_name,
             mover_name,
-            move_reference,
             departure_postal_code,
             arrival_postal_code,
             departure_date,
@@ -84,10 +81,12 @@ const MatchFinder = () => {
 
       if (error) throw error;
       
-      // Générer des références pour les matchs qui n'en ont pas
+      // Générer des références pour les matchs qui n'en ont pas et nettoyer les données
       const matchesWithReferences = data?.map(match => ({
         ...match,
-        match_reference: match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`
+        match_reference: match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`,
+        client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
+        confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
       })) || [];
       
       setMatches(matchesWithReferences);

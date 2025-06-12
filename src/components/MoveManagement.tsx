@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, Plus, Search, MapPin } from 'lucide-react';

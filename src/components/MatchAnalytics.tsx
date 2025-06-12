@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -32,13 +31,13 @@ interface Match {
   date_diff_days: number;
   created_at: string;
   client_request?: {
-    name: string;
+    name?: string;
     client_reference?: string;
-  };
+  } | null;
   confirmed_move?: {
-    company_name: string;
+    company_name?: string;
     move_reference?: string;
-  };
+  } | null;
 }
 
 const MatchAnalytics = () => {
@@ -64,22 +63,22 @@ const MatchAnalytics = () => {
         .select(`
           *,
           client_request:client_requests(
-            name,
-            client_reference
+            name
           ),
           confirmed_move:confirmed_moves(
-            company_name,
-            move_reference
+            company_name
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Générer des références pour les matchs qui n'en ont pas
+      // Générer des références pour les matchs qui n'en ont pas et nettoyer les données
       const matchesWithReferences = matchesData?.map(match => ({
         ...match,
-        match_reference: match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`
+        match_reference: match.match_reference || `MTH-${String(match.id).padStart(6, '0')}`,
+        client_request: Array.isArray(match.client_request) ? match.client_request[0] : match.client_request,
+        confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
       })) || [];
 
       setMatches(matchesWithReferences);
