@@ -194,12 +194,12 @@ class PricingEngine {
               marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
-              pricePerKm: quoteType === 'competitive' ? (supplierModel.price_per_km || 1.2) * 0.80 : 
-                          quoteType === 'standard' ? (supplierModel.price_per_km || 1.2) : 
-                          (supplierModel.price_per_km || 1.2) * 1.25,
-              pricePerM3: quoteType === 'competitive' ? (supplierModel.price_per_m3 || 45) * 0.85 : 
-                         quoteType === 'standard' ? (supplierModel.price_per_m3 || 45) : 
-                         (supplierModel.price_per_m3 || 45) * 1.20,
+              pricePerKm: quoteType === 'competitive' ? (supplier.pricing_model?.price_per_km || 1.2) * 0.80 : 
+                          quoteType === 'standard' ? (supplier.pricing_model?.price_per_km || 1.2) : 
+                          (supplier.pricing_model?.price_per_km || 1.2) * 1.25,
+              pricePerM3: quoteType === 'competitive' ? (supplier.pricing_model?.price_per_m3 || 45) * 0.85 : 
+                         quoteType === 'standard' ? (supplier.pricing_model?.price_per_m3 || 45) : 
+                         (supplier.pricing_model?.price_per_m3 || 45) * 1.20,
               quoteType: quoteType
             },
             rank: i + 1

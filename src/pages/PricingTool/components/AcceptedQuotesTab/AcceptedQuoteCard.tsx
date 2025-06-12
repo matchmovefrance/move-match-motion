@@ -1,7 +1,8 @@
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building, Euro, Calendar, Check, Archive, X, FileDown } from 'lucide-react';
+import { Calendar, MapPin, Package, DollarSign, User, Phone, Mail, FileText, CheckCircle, X, Eye, Flag } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -30,24 +31,24 @@ interface AcceptedQuoteWithDetails {
 interface AcceptedQuoteCardProps {
   quote: AcceptedQuoteWithDetails;
   onMarkAsValidated: (quoteId: string) => void;
-  onComplete: (quote: AcceptedQuoteWithDetails) => void;
-  onReject: (quote: AcceptedQuoteWithDetails) => void;
+  onShowCompleteDialog: (quote: AcceptedQuoteWithDetails) => void;
+  onShowRejectDialog: (quote: AcceptedQuoteWithDetails) => void;
   onDownloadPDF: (quote: AcceptedQuoteWithDetails) => void;
 }
 
-export const AcceptedQuoteCard = ({
-  quote,
-  onMarkAsValidated,
-  onComplete,
-  onReject,
-  onDownloadPDF
+export const AcceptedQuoteCard = ({ 
+  quote, 
+  onMarkAsValidated, 
+  onShowCompleteDialog, 
+  onShowRejectDialog, 
+  onDownloadPDF 
 }: AcceptedQuoteCardProps) => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'accepted':
-        return <Badge variant="secondary">En attente validation client</Badge>;
+        return <Badge className="bg-green-100 text-green-800">Accepté</Badge>;
       case 'validated_by_client':
-        return <Badge className="bg-green-100 text-green-800">Validé par le client</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800">Validé par le client</Badge>;
       case 'rejected':
         return <Badge variant="destructive">Rejeté</Badge>;
       default:
@@ -55,119 +56,178 @@ export const AcceptedQuoteCard = ({
     }
   };
 
-  const getDateToDisplay = () => {
-    if (quote.status === 'rejected' && quote.rejected_at) {
-      return {
-        date: quote.rejected_at,
-        label: 'Date de rejet'
-      };
-    }
-    return {
-      date: quote.submitted_at,
-      label: "Date d'acceptation"
-    };
-  };
-
-  const dateInfo = getDateToDisplay();
-
-  return (
-    <tr>
-      <td className="p-4">
-        <div className="space-y-1">
-          <div className="font-medium">{quote.opportunity?.title || 'Opportunité supprimée'}</div>
-          {quote.opportunity && (
-            <div className="text-sm text-muted-foreground">
-              {quote.opportunity.departure_city} → {quote.opportunity.arrival_city}
-            </div>
-          )}
-          {quote.status === 'rejected' && quote.rejection_reason && (
-            <div className="text-xs text-red-600 mt-1">
-              Raison: {quote.rejection_reason}
-            </div>
-          )}
-        </div>
-      </td>
-      
-      <td className="p-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Building className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{quote.supplier?.company_name || 'Fournisseur supprimé'}</span>
+  const getActionButtons = () => {
+    switch (quote.status) {
+      case 'accepted':
+        return (
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onMarkAsValidated(quote.id)}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            >
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Marquer validé
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onShowRejectDialog(quote)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Rejeter
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDownloadPDF(quote)}
+              className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {quote.supplier?.contact_name}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {quote.supplier?.email}
-          </div>
-        </div>
-      </td>
-      
-      <td className="p-4 text-center">
-        <div className="flex items-center justify-center gap-1">
-          <Euro className="h-4 w-4 text-green-600" />
-          <span className="font-bold text-lg">{quote.bid_amount.toLocaleString()}€</span>
-        </div>
-      </td>
-      
-      <td className="p-4 text-center">
-        <div className="flex items-center justify-center gap-1">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <div className="text-sm">
-            <div>{format(new Date(dateInfo.date), 'dd/MM/yyyy à HH:mm', { locale: fr })}</div>
-            <div className="text-xs text-muted-foreground">{dateInfo.label}</div>
-          </div>
-        </div>
-      </td>
-      
-      <td className="p-4 text-center">
-        {getStatusBadge(quote.status)}
-      </td>
-      
-      <td className="p-4">
-        <div className="flex justify-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onDownloadPDF(quote)}
-          >
-            <FileDown className="h-4 w-4 mr-1" />
-            PDF
-          </Button>
-          
-          {quote.status === 'accepted' && (
-            <>
-              <Button
-                size="sm"
-                onClick={() => onMarkAsValidated(quote.id)}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Check className="h-4 w-4 mr-1" />
-                Validé
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => onReject(quote)}
-              >
-                <X className="h-4 w-4 mr-1" />
-                Rejeter
-              </Button>
-            </>
-          )}
-          
-          {quote.status === 'validated_by_client' && (
+        );
+        
+      case 'validated_by_client':
+        return (
+          <div className="flex gap-2 flex-wrap">
             <Button
               size="sm"
-              onClick={() => onComplete(quote)}
-              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => onShowCompleteDialog(quote)}
+              className="bg-green-600 hover:bg-green-700"
             >
-              <Archive className="h-4 w-4 mr-1" />
+              <Flag className="h-4 w-4 mr-1" />
               Trajet terminé
             </Button>
-          )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onShowRejectDialog(quote)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Rejeter
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDownloadPDF(quote)}
+              className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+          </div>
+        );
+        
+      case 'rejected':
+        return (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDownloadPDF(quote)}
+              className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              PDF
+            </Button>
+          </div>
+        );
+        
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              {quote.bid_amount.toLocaleString()}€
+              {getStatusBadge(quote.status)}
+            </CardTitle>
+            <CardDescription className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              {quote.opportunity.departure_city} → {quote.opportunity.arrival_city}
+            </CardDescription>
+          </div>
+          
+          <div className="text-right text-sm text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              {format(new Date(quote.submitted_at), 'dd/MM/yyyy HH:mm', { locale: fr })}
+            </div>
+          </div>
         </div>
-      </td>
-    </tr>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm flex items-center gap-2">
+              <Package className="h-4 w-4 text-blue-500" />
+              Opportunité
+            </h4>
+            <div className="text-sm bg-gray-50 p-3 rounded-md">
+              <p className="font-medium">{quote.opportunity.title}</p>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm flex items-center gap-2">
+              <User className="h-4 w-4 text-blue-500" />
+              Prestataire
+            </h4>
+            <div className="text-sm bg-gray-50 p-3 rounded-md">
+              <p className="font-medium">{quote.supplier.company_name}</p>
+              <p className="text-muted-foreground">{quote.supplier.contact_name}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <Mail className="h-3 w-3" />
+                <span className="text-xs">{quote.supplier.email}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="h-3 w-3" />
+                <span className="text-xs">{quote.supplier.phone}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {quote.notes && (
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm flex items-center gap-2">
+              <FileText className="h-4 w-4 text-blue-500" />
+              Notes
+            </h4>
+            <div className="text-sm bg-gray-50 p-3 rounded-md">
+              {quote.notes}
+            </div>
+          </div>
+        )}
+
+        {quote.status === 'rejected' && quote.rejection_reason && (
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm flex items-center gap-2 text-red-600">
+              <X className="h-4 w-4" />
+              Raison du rejet
+            </h4>
+            <div className="text-sm bg-red-50 p-3 rounded-md text-red-700">
+              {quote.rejection_reason}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-2">
+          {getActionButtons()}
+        </div>
+      </CardContent>
+    </Card>
   );
 };
