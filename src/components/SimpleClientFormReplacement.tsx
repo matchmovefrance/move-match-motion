@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,23 +74,10 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
     try {
       setLoading(true);
 
-      const desiredDate = new Date(formData.desired_date);
-      let dateRangeStart = null;
-      let dateRangeEnd = null;
-
-      if (formData.flexible_dates && formData.flexibility_days > 0) {
-        dateRangeStart = new Date(desiredDate);
-        dateRangeStart.setDate(dateRangeStart.getDate() - formData.flexibility_days);
-        
-        dateRangeEnd = new Date(desiredDate);
-        dateRangeEnd.setDate(dateRangeEnd.getDate() + formData.flexibility_days);
-      }
-
       const clientReference = isEditing ? initialData?.client_reference : generateClientReference();
 
-      // Créer directement dans client_requests avec client_id null
-      const requestData = {
-        client_id: null as any, // Utiliser null pour satisfaire TypeScript
+      // Créer directement dans la table clients
+      const clientData = {
         name: formData.name,
         email: `${clientReference.toLowerCase()}@temp.com`, // Email temporaire basé sur référence
         phone: 'A renseigner', // Téléphone par défaut
@@ -102,31 +90,27 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         desired_date: formData.desired_date,
         flexible_dates: formData.flexible_dates,
         flexibility_days: formData.flexibility_days,
-        date_range_start: dateRangeStart ? dateRangeStart.toISOString().split('T')[0] : null,
-        date_range_end: dateRangeEnd ? dateRangeEnd.toISOString().split('T')[0] : null,
         estimated_volume: parseFloat(formData.estimated_volume),
         status: 'pending',
-        is_matched: false,
-        match_status: 'pending',
         created_by: user.id,
         client_reference: clientReference
       };
 
-      console.log('🔧 Données à insérer (avec client_id null):', requestData);
+      console.log('🔧 Données à insérer dans clients:', clientData);
 
       let result;
       if (isEditing && initialData?.id) {
         result = await supabase
-          .from('client_requests')
-          .update(requestData)
+          .from('clients')
+          .update(clientData)
           .eq('id', initialData.id)
           .select();
         
         console.log('📝 Client mis à jour:', result);
       } else {
         result = await supabase
-          .from('client_requests')
-          .insert(requestData)
+          .from('clients')
+          .insert(clientData)
           .select();
         
         console.log('✅ Nouveau client créé:', result);

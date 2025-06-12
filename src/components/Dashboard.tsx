@@ -55,9 +55,9 @@ const Dashboard = () => {
       
       const dateFilter = calculateDateFilter(selectedPeriod);
       
-      // Compter les clients depuis client_requests
+      // Compter les clients depuis la table clients
       const clientsQuery = supabase
-        .from('client_requests')
+        .from('clients')
         .select('id', { count: 'exact', head: true });
       
       if (dateFilter) {
@@ -122,9 +122,9 @@ const Dashboard = () => {
         matches: matchesCount || 0
       });
 
-      // Diagnostics pour les KPIs
+      // Diagnostics pour les KPIs (mettre à jour pour utiliser clients)
       const { count: pendingCount } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'pending');
 

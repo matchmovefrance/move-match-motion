@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -55,49 +56,46 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Rechargement complet des clients depuis client_requests...');
+      console.log('📋 Rechargement complet des clients depuis la table clients...');
       
-      // Charger tous les clients depuis client_requests avec tri par date de création
-      const { data: requestsData, error: requestsError } = await supabase
-        .from('client_requests')
+      // Charger tous les clients depuis la table clients avec tri par date de création
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (requestsError) {
-        console.error('❌ Erreur lors du chargement de client_requests:', requestsError);
-        throw requestsError;
+      if (clientsError) {
+        console.error('❌ Erreur lors du chargement des clients:', clientsError);
+        throw clientsError;
       }
 
-      console.log('📊 Données brutes récupérées:', requestsData);
+      console.log('📊 Données brutes récupérées:', clientsData);
 
       const allClients: Client[] = [];
 
-      // Ajouter tous les clients de client_requests
-      if (requestsData) {
-        requestsData.forEach(request => {
-          // Gérer client_reference de manière sécurisée avec casting
-          const requestAny = request as any;
-          const clientRef = requestAny.client_reference || `CLI-${String(request.id).padStart(6, '0')}`;
-          // Gérer flexibility_days de manière sécurisée
-          const flexDays = requestAny.flexibility_days || 0;
+      // Ajouter tous les clients
+      if (clientsData) {
+        clientsData.forEach(client => {
+          const clientRef = client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`;
+          const flexDays = client.flexibility_days || 0;
           
           allClients.push({
-            id: request.id,
-            name: request.name || 'Client sans nom',
-            email: request.email || 'Email manquant',
-            phone: request.phone || 'Téléphone manquant',
+            id: client.id,
+            name: client.name || 'Client sans nom',
+            email: client.email || 'Email manquant',
+            phone: client.phone || 'Téléphone manquant',
             client_reference: clientRef,
-            created_at: request.created_at,
-            created_by: request.created_by,
-            departure_city: request.departure_city,
-            departure_postal_code: request.departure_postal_code,
-            arrival_city: request.arrival_city,
-            arrival_postal_code: request.arrival_postal_code,
-            desired_date: request.desired_date,
-            estimated_volume: request.estimated_volume,
-            flexible_dates: request.flexible_dates,
+            created_at: client.created_at,
+            created_by: client.created_by,
+            departure_city: client.departure_city,
+            departure_postal_code: client.departure_postal_code,
+            arrival_city: client.arrival_city,
+            arrival_postal_code: client.arrival_postal_code,
+            desired_date: client.desired_date,
+            estimated_volume: client.estimated_volume,
+            flexible_dates: client.flexible_dates,
             flexibility_days: flexDays,
-            status: request.status
+            status: client.status
           });
         });
       }
@@ -130,9 +128,9 @@ const ClientList = () => {
     try {
       console.log('🗑️ Suppression du client:', clientToDelete.id);
       
-      // Supprimer de client_requests
+      // Supprimer de la table clients
       const { error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .delete()
         .eq('id', clientToDelete.id);
 

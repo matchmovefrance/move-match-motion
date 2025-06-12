@@ -50,174 +50,66 @@ export type Database = {
           },
         ]
       }
-      client_requests: {
+      clients: {
         Row: {
-          access_conditions: string | null
-          arrival_address: string | null
-          arrival_city: string
+          arrival_city: string | null
           arrival_country: string | null
-          arrival_postal_code: string
-          arrival_time: string | null
-          budget_max: number | null
-          budget_min: number | null
-          client_id: number
+          arrival_postal_code: string | null
           client_reference: string | null
           created_at: string | null
           created_by: string
-          date_range_end: string | null
-          date_range_start: string | null
-          departure_address: string | null
-          departure_city: string
+          departure_city: string | null
           departure_country: string | null
-          departure_postal_code: string
-          departure_time: string | null
-          description: string | null
-          desired_date: string
-          email: string | null
-          estimated_arrival_date: string | null
-          estimated_arrival_time: string | null
+          departure_postal_code: string | null
+          desired_date: string | null
+          email: string
           estimated_volume: number | null
-          estimated_volume_backup: number
           flexibility_days: number | null
           flexible_dates: boolean | null
           id: number
-          inventory_list: string | null
-          is_matched: boolean | null
-          match_status: string | null
-          matched_at: string | null
-          name: string | null
-          phone: string | null
-          quote_amount: number | null
-          special_requirements: string | null
+          name: string
+          phone: string
           status: string | null
-          status_custom: string | null
         }
         Insert: {
-          access_conditions?: string | null
-          arrival_address?: string | null
-          arrival_city: string
+          arrival_city?: string | null
           arrival_country?: string | null
-          arrival_postal_code: string
-          arrival_time?: string | null
-          budget_max?: number | null
-          budget_min?: number | null
-          client_id: number
+          arrival_postal_code?: string | null
           client_reference?: string | null
           created_at?: string | null
           created_by: string
-          date_range_end?: string | null
-          date_range_start?: string | null
-          departure_address?: string | null
-          departure_city: string
+          departure_city?: string | null
           departure_country?: string | null
-          departure_postal_code: string
-          departure_time?: string | null
-          description?: string | null
-          desired_date: string
-          email?: string | null
-          estimated_arrival_date?: string | null
-          estimated_arrival_time?: string | null
+          departure_postal_code?: string | null
+          desired_date?: string | null
+          email: string
           estimated_volume?: number | null
-          estimated_volume_backup?: number
           flexibility_days?: number | null
           flexible_dates?: boolean | null
           id?: number
-          inventory_list?: string | null
-          is_matched?: boolean | null
-          match_status?: string | null
-          matched_at?: string | null
-          name?: string | null
-          phone?: string | null
-          quote_amount?: number | null
-          special_requirements?: string | null
+          name: string
+          phone: string
           status?: string | null
-          status_custom?: string | null
         }
         Update: {
-          access_conditions?: string | null
-          arrival_address?: string | null
-          arrival_city?: string
+          arrival_city?: string | null
           arrival_country?: string | null
-          arrival_postal_code?: string
-          arrival_time?: string | null
-          budget_max?: number | null
-          budget_min?: number | null
-          client_id?: number
+          arrival_postal_code?: string | null
           client_reference?: string | null
           created_at?: string | null
           created_by?: string
-          date_range_end?: string | null
-          date_range_start?: string | null
-          departure_address?: string | null
-          departure_city?: string
+          departure_city?: string | null
           departure_country?: string | null
-          departure_postal_code?: string
-          departure_time?: string | null
-          description?: string | null
-          desired_date?: string
-          email?: string | null
-          estimated_arrival_date?: string | null
-          estimated_arrival_time?: string | null
-          estimated_volume?: number | null
-          estimated_volume_backup?: number
-          flexibility_days?: number | null
-          flexible_dates?: boolean | null
-          id?: number
-          inventory_list?: string | null
-          is_matched?: boolean | null
-          match_status?: string | null
-          matched_at?: string | null
-          name?: string | null
-          phone?: string | null
-          quote_amount?: number | null
-          special_requirements?: string | null
-          status?: string | null
-          status_custom?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_requests_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_client_requests_client_id"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      clients: {
-        Row: {
-          client_reference: string | null
-          created_at: string | null
-          created_by: string
-          email: string
-          id: number
-          name: string
-          phone: string
-        }
-        Insert: {
-          client_reference?: string | null
-          created_at?: string | null
-          created_by: string
-          email: string
-          id?: number
-          name: string
-          phone: string
-        }
-        Update: {
-          client_reference?: string | null
-          created_at?: string | null
-          created_by?: string
+          departure_postal_code?: string | null
+          desired_date?: string | null
           email?: string
+          estimated_volume?: number | null
+          flexibility_days?: number | null
+          flexible_dates?: boolean | null
           id?: number
           name?: string
           phone?: string
+          status?: string | null
         }
         Relationships: []
       }
@@ -528,13 +420,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "move_matches_client_request_id_fkey"
-            columns: ["client_request_id"]
-            isOneToOne: false
-            referencedRelation: "client_requests"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "move_matches_move_id_fkey"
             columns: ["move_id"]
             isOneToOne: false
@@ -659,13 +544,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "pricing_opportunities_client_request_id_fkey"
-            columns: ["client_request_id"]
-            isOneToOne: false
-            referencedRelation: "client_requests"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "pricing_opportunities_created_by_fkey"
             columns: ["created_by"]
