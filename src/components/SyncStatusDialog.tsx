@@ -47,27 +47,25 @@ const SyncStatusDialog = ({ isOpen, onClose, onSyncComplete }: SyncStatusDialogP
         .select('email, count(*)')
         .eq('created_by', user.id);
 
-      // Vérifier les relations client_requests sans client
-      const { data: orphanedRequests } = await supabase
-        .from('client_requests')
-        .select('id, client_id')
-        .eq('created_by', user.id);
+      // Vérifier les clients orphelins dans move_matches
+      const { data: orphanedMatches } = await supabase
+        .from('move_matches')
+        .select('id, client_id');
 
-      if (orphanedRequests) {
-        for (const request of orphanedRequests) {
+      if (orphanedMatches) {
+        for (const match of orphanedMatches) {
           const { data: client } = await supabase
             .from('clients')
             .select('id')
-            .eq('id', request.client_id)
-            .eq('created_by', user.id)
+            .eq('id', match.client_id)
             .single();
 
           if (!client) {
             foundIssues.push({
               type: 'orphaned',
-              table: 'client_requests',
-              message: `Demande client ${request.id} sans client associé`,
-              data: request
+              table: 'move_matches',
+              message: `Match ${match.id} sans client associé`,
+              data: match
             });
           }
         }
@@ -205,12 +203,11 @@ const SyncStatusDialog = ({ isOpen, onClose, onSyncComplete }: SyncStatusDialogP
         console.log('Fixing issue:', issue);
         
         if (issue.type === 'orphaned') {
-          if (issue.table === 'client_requests') {
+          if (issue.table === 'move_matches') {
             await supabase
-              .from('client_requests')
+              .from('move_matches')
               .delete()
-              .eq('id', issue.data.id)
-              .eq('created_by', user.id);
+              .eq('id', issue.data.id);
           } else if (issue.table === 'trucks') {
             await supabase
               .from('trucks')

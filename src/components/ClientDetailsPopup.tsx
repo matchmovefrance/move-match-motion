@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { X, FileDown, Mail, MapPin, Calendar, Volume2, Euro, Phone, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,11 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import QuoteGenerator from './QuoteGenerator';
 import EmailQuoteButton from './EmailQuoteButton';
 import MapPopup from './MapPopup';
 
-interface ClientRequest {
+interface Client {
   id: number;
   name: string | null;
   email: string | null;
@@ -40,11 +40,11 @@ interface ClientRequest {
   is_matched: boolean | null;
   match_status: string | null;
   created_at: string;
-  client_id: number;
+  client_reference: string | null;
 }
 
 interface ClientDetailsPopupProps {
-  client: ClientRequest | null;
+  client: Client | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -60,7 +60,7 @@ const ClientDetailsPopup = ({ client, isOpen, onClose }: ClientDetailsPopupProps
     return [{
       id: client.id,
       type: 'client' as const,
-      reference: `CLI-${String(client.id).padStart(6, '0')}`,
+      reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`,
       name: client.name || 'Client',
       date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
       details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
@@ -207,8 +207,7 @@ const ClientDetailsPopup = ({ client, isOpen, onClose }: ClientDetailsPopupProps
                     <p className="text-sm text-gray-600">Montant du devis</p>
                   </div>
                   <div className="flex space-x-2">
-                    <QuoteGenerator client={client} />
-                    <EmailQuoteButton client={client} />
+                    <EmailQuoteButton />
                   </div>
                 </div>
               </div>
@@ -284,7 +283,7 @@ const ClientDetailsPopup = ({ client, isOpen, onClose }: ClientDetailsPopupProps
         open={showMapPopup}
         onOpenChange={setShowMapPopup}
         items={prepareMapItems()}
-        title={`Carte du client ${client.name ? client.name : `CLI-${String(client.id).padStart(6, '0')}`}`}
+        title={`Carte du client ${client.name ? client.name : client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`}`}
       />
     </>
   );

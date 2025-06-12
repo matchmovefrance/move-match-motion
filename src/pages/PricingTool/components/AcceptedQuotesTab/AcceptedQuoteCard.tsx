@@ -1,10 +1,9 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building, Euro, Calendar, Check, Archive, X } from 'lucide-react';
+import { Building, Euro, Calendar, Check, Archive, X, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import QuoteGenerator from '@/components/QuoteGenerator';
 
 interface AcceptedQuoteWithDetails {
   id: string;
@@ -69,25 +68,6 @@ export const AcceptedQuoteCard = ({
     };
   };
 
-  // Préparer les données client pour le générateur PDF
-  const clientDataForPDF = {
-    id: quote.opportunity?.client_request_id || 0,
-    name: 'Client', // Nom par défaut, sera chargé depuis la DB par QuoteGenerator
-    email: null,
-    phone: null,
-    departure_address: null,
-    departure_city: quote.opportunity?.departure_city || '',
-    departure_postal_code: '',
-    departure_country: 'France',
-    arrival_address: null,
-    arrival_city: quote.opportunity?.arrival_city || '',
-    arrival_postal_code: '',
-    arrival_country: 'France',
-    desired_date: new Date().toISOString(),
-    estimated_volume: null,
-    quote_amount: quote.bid_amount
-  };
-
   const dateInfo = getDateToDisplay();
 
   return (
@@ -146,11 +126,14 @@ export const AcceptedQuoteCard = ({
       
       <td className="p-4">
         <div className="flex justify-center gap-2">
-          <QuoteGenerator
-            client={clientDataForPDF}
-            supplier={quote.supplier}
-            supplierPrice={quote.bid_amount}
-          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDownloadPDF(quote)}
+          >
+            <FileDown className="h-4 w-4 mr-1" />
+            PDF
+          </Button>
           
           {quote.status === 'accepted' && (
             <>

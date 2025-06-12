@@ -75,7 +75,14 @@ export const useQuotes = () => {
       
       for (const client of activeClients) {
         console.log(`🗺️ Calcul distances exactes pour ${client.name}: ${client.departure_postal_code} -> ${client.arrival_postal_code}`);
-        const clientQuotes = await pricingEngine.generateQuotesForClient(client);
+        
+        // Adapter le format client pour le pricing engine
+        const clientForEngine = {
+          ...client,
+          client_reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`
+        };
+        
+        const clientQuotes = await pricingEngine.generateQuotesForClient(clientForEngine);
         allQuotes.push(...clientQuotes);
       }
       

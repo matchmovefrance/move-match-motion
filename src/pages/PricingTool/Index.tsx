@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,8 +34,8 @@ const PricingTool = () => {
     queryFn: async () => {
       console.log('📊 Chargement des statistiques...');
       
-      const [clientRequests, movesRaw, quotesRaw] = await Promise.all([
-        supabase.from('client_requests').select('id, status'),
+      const [clientsData, movesRaw, quotesRaw] = await Promise.all([
+        supabase.from('clients').select('id, status'),
         supabase.from('confirmed_moves').select('mover_id, mover_name, company_name').not('mover_id', 'is', null),
         supabase
           .from('quotes')
@@ -47,10 +48,10 @@ const PricingTool = () => {
           .eq('created_by', user?.id)
       ]);
 
-      // Compter les clients uniques depuis client_requests
-      const totalClients = clientRequests.data?.length || 0;
-      const activeClients = clientRequests.data?.filter(c => ['pending', 'confirmed'].includes(c.status)).length || 0;
-      const completedClients = clientRequests.data?.filter(c => ['completed', 'cancelled', 'closed'].includes(c.status)).length || 0;
+      // Compter les clients uniques depuis clients
+      const totalClients = clientsData.data?.length || 0;
+      const activeClients = clientsData.data?.filter(c => ['pending', 'confirmed'].includes(c.status)).length || 0;
+      const completedClients = clientsData.data?.filter(c => ['completed', 'cancelled', 'closed'].includes(c.status)).length || 0;
 
       // Compter les prestataires uniques depuis les trajets (sans demo)
       const uniqueSuppliersMap = new Map();

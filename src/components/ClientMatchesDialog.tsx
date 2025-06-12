@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -203,6 +204,39 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     setShowMapPopup(true);
   };
 
+  const prepareMapItems = () => {
+    if (!clientData || !selectedMatchForMap?.confirmed_move) return [];
+    
+    return [
+      {
+        id: clientId,
+        type: 'client' as const,
+        reference: `CLI-${String(clientId).padStart(6, '0')}`,
+        name: clientData.name || 'Client',
+        date: clientData.desired_date ? new Date(clientData.desired_date).toLocaleDateString('fr-FR') : '',
+        details: `${clientData.departure_postal_code} → ${clientData.arrival_postal_code}`,
+        departure_postal_code: clientData.departure_postal_code,
+        arrival_postal_code: clientData.arrival_postal_code,
+        departure_city: clientData.departure_city,
+        arrival_city: clientData.arrival_city,
+        color: '#16a34a'
+      },
+      {
+        id: selectedMatchForMap.id,
+        type: 'move' as const,
+        reference: `MVT-${String(selectedMatchForMap.id).padStart(6, '0')}`,
+        name: selectedMatchForMap.confirmed_move.company_name,
+        date: selectedMatchForMap.confirmed_move.departure_date ? new Date(selectedMatchForMap.confirmed_move.departure_date).toLocaleDateString('fr-FR') : '',
+        details: `${selectedMatchForMap.confirmed_move.departure_postal_code} → ${selectedMatchForMap.confirmed_move.arrival_postal_code}`,
+        departure_postal_code: selectedMatchForMap.confirmed_move.departure_postal_code,
+        arrival_postal_code: selectedMatchForMap.confirmed_move.arrival_postal_code,
+        departure_city: selectedMatchForMap.confirmed_move.departure_city,
+        arrival_city: selectedMatchForMap.confirmed_move.arrival_city,
+        color: '#2563eb'
+      }
+    ];
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -356,23 +390,13 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
         </DialogContent>
       </Dialog>
 
-      {/* Popup de carte avec les props correctes */}
-      {showMapPopup && selectedMatchForMap && clientData && (
-        <MapPopup
-          open={showMapPopup}
-          onOpenChange={setShowMapPopup}
-          departure_postal_code={clientData.departure_postal_code}
-          departure_city={clientData.departure_city}
-          arrival_postal_code={clientData.arrival_postal_code}
-          arrival_city={clientData.arrival_city}
-          moveData={{
-            departure_postal_code: selectedMatchForMap.confirmed_move?.departure_postal_code,
-            departure_city: selectedMatchForMap.confirmed_move?.departure_city,
-            arrival_postal_code: selectedMatchForMap.confirmed_move?.arrival_postal_code,
-            arrival_city: selectedMatchForMap.confirmed_move?.arrival_city
-          }}
-        />
-      )}
+      {/* Popup de carte */}
+      <MapPopup
+        open={showMapPopup}
+        onOpenChange={setShowMapPopup}
+        items={prepareMapItems()}
+        title={`Match pour ${clientName}`}
+      />
     </>
   );
 };
