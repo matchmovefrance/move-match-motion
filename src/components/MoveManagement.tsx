@@ -17,7 +17,7 @@ interface Move {
   title: string;
   departure_city: string;
   arrival_city: string;
-  departure_date: string;
+  desired_date: string; // Changed from departure_date to match database
   estimated_volume: number;
   status: string;
   created_at: string;
@@ -26,7 +26,6 @@ interface Move {
   arrival_address?: string;
   departure_postal_code?: string;
   arrival_postal_code?: string;
-  desired_date?: string;
   description?: string;
 }
 
@@ -81,88 +80,6 @@ const MoveManagement = () => {
   const handleSelectMove = (move: Move) => {
     setSelectedMove(move);
     setIsDialogOpen(true);
-  };
-
-  const handleCreateMove = async (moveData: Partial<Move>) => {
-    if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from('pricing_opportunities')
-        .insert({
-          title: moveData.title || '',
-          departure_city: moveData.departure_city || '',
-          arrival_city: moveData.arrival_city || '',
-          departure_date: moveData.departure_date || new Date().toISOString().split('T')[0],
-          estimated_volume: moveData.estimated_volume || 0,
-          status: moveData.status || 'draft',
-          departure_address: moveData.departure_address || '',
-          arrival_address: moveData.arrival_address || '',
-          departure_postal_code: moveData.departure_postal_code || '',
-          arrival_postal_code: moveData.arrival_postal_code || '',
-          desired_date: moveData.desired_date || moveData.departure_date || new Date().toISOString().split('T')[0],
-          description: moveData.description || '',
-          created_by: user.id,
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Déménagement créé",
-        description: "Le déménagement a été créé avec succès",
-      });
-      
-      loadMoves();
-      handleCloseDialog();
-    } catch (error) {
-      console.error('Error creating move:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de créer le déménagement",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleUpdateMove = async (moveData: Partial<Move>) => {
-    if (!user || !selectedMove) return;
-    
-    try {
-      const { error } = await supabase
-        .from('pricing_opportunities')
-        .update({
-          title: moveData.title,
-          departure_city: moveData.departure_city,
-          arrival_city: moveData.arrival_city,
-          departure_date: moveData.departure_date,
-          estimated_volume: moveData.estimated_volume,
-          status: moveData.status,
-          departure_address: moveData.departure_address,
-          arrival_address: moveData.arrival_address,
-          departure_postal_code: moveData.departure_postal_code,
-          arrival_postal_code: moveData.arrival_postal_code,
-          description: moveData.description,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedMove.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Déménagement mis à jour",
-        description: "Le déménagement a été mis à jour avec succès",
-      });
-      
-      loadMoves();
-      handleCloseDialog();
-    } catch (error) {
-      console.error('Error updating move:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour le déménagement",
-        variant: "destructive",
-      });
-    }
   };
 
   const handleDeleteMove = async (moveId: string) => {
@@ -254,7 +171,7 @@ const MoveManagement = () => {
                       <div className="text-right text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          {format(new Date(move.departure_date), 'dd/MM/yyyy', { locale: fr })}
+                          {format(new Date(move.desired_date), 'dd/MM/yyyy', { locale: fr })}
                         </div>
                         <div className="flex items-center gap-1">
                           <Users className="h-4 w-4" />

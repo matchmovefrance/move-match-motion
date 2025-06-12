@@ -7,11 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, MapPin, Package, User, Phone, Mail, Clock, Truck, AlertTriangle, CheckCircle, Flag, Save } from 'lucide-react';
+import { Calendar, MapPin, Package, User, Phone, Mail, Clock, Truck, AlertTriangle, CheckCircle, Flag, Save, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface MoveCardDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ interface MoveCardDialogProps {
 }
 
 const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDialogProps) => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(!move);
@@ -28,7 +30,7 @@ const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDia
     title: move?.title || '',
     departure_city: move?.departure_city || '',
     arrival_city: move?.arrival_city || '',
-    departure_date: move?.departure_date || new Date().toISOString().split('T')[0],
+    desired_date: move?.desired_date || new Date().toISOString().split('T')[0],
     estimated_volume: move?.estimated_volume || 0,
     status: move?.status || 'draft',
     departure_address: move?.departure_address || '',
@@ -44,6 +46,8 @@ const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDia
   };
 
   const handleSave = async () => {
+    if (!user) return;
+    
     try {
       setIsUpdating(true);
       
@@ -52,7 +56,17 @@ const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDia
         const { error } = await supabase
           .from('pricing_opportunities')
           .update({
-            ...formData,
+            title: formData.title,
+            departure_city: formData.departure_city,
+            arrival_city: formData.arrival_city,
+            desired_date: formData.desired_date,
+            estimated_volume: formData.estimated_volume,
+            status: formData.status,
+            departure_address: formData.departure_address,
+            arrival_address: formData.arrival_address,
+            departure_postal_code: formData.departure_postal_code,
+            arrival_postal_code: formData.arrival_postal_code,
+            description: formData.description,
             updated_at: new Date().toISOString()
           })
           .eq('id', move.id);
@@ -68,8 +82,18 @@ const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDia
         const { error } = await supabase
           .from('pricing_opportunities')
           .insert({
-            ...formData,
-            desired_date: formData.departure_date,
+            title: formData.title,
+            departure_city: formData.departure_city,
+            arrival_city: formData.arrival_city,
+            desired_date: formData.desired_date,
+            estimated_volume: formData.estimated_volume,
+            status: formData.status,
+            departure_address: formData.departure_address,
+            arrival_address: formData.arrival_address,
+            departure_postal_code: formData.departure_postal_code,
+            arrival_postal_code: formData.arrival_postal_code,
+            description: formData.description,
+            created_by: user.id,
           });
 
         if (error) throw error;
@@ -205,12 +229,12 @@ const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDia
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="departure_date">Date de départ</Label>
+                  <Label htmlFor="desired_date">Date souhaitée</Label>
                   <Input
-                    id="departure_date"
-                    name="departure_date"
+                    id="desired_date"
+                    name="desired_date"
                     type="date"
-                    value={formData.departure_date}
+                    value={formData.desired_date}
                     onChange={handleInputChange}
                   />
                 </div>
@@ -273,10 +297,10 @@ const MoveCardDialog = ({ open, onOpenChange, move, onMoveUpdated }: MoveCardDia
                       <div className="text-xs text-muted-foreground">{formData.arrival_address}</div>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Date de départ:</span>
+                      <span className="text-muted-foreground">Date souhaitée:</span>
                       <div className="font-medium flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {format(new Date(formData.departure_date), 'dd/MM/yyyy', { locale: fr })}
+                        {format(new Date(formData.desired_date), 'dd/MM/yyyy', { locale: fr })}
                       </div>
                     </div>
                     <div>
