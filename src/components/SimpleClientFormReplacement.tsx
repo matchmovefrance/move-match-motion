@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,15 +112,28 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         client_reference: clientReference
       };
 
+      console.log('🔧 Données à insérer:', requestData);
+
+      let result;
       if (isEditing && initialData?.id) {
-        await supabase
+        result = await supabase
           .from('client_requests')
           .update(requestData)
-          .eq('id', initialData.id);
+          .eq('id', initialData.id)
+          .select();
+        
+        console.log('📝 Client mis à jour:', result);
       } else {
-        await supabase
+        result = await supabase
           .from('client_requests')
-          .insert(requestData);
+          .insert(requestData)
+          .select();
+        
+        console.log('✅ Nouveau client créé:', result);
+      }
+
+      if (result.error) {
+        throw result.error;
       }
 
       toast({
@@ -146,7 +158,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       }
 
     } catch (error: any) {
-      console.error('Error saving client:', error);
+      console.error('❌ Erreur lors de la sauvegarde du client:', error);
       toast({
         title: "Erreur",
         description: `Impossible de sauvegarder: ${error.message}`,

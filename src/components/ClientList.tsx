@@ -55,9 +55,9 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Chargement des clients depuis client_requests...');
+      console.log('📋 Rechargement complet des clients depuis client_requests...');
       
-      // Charger uniquement depuis client_requests
+      // Charger tous les clients depuis client_requests avec tri par date de création
       const { data: requestsData, error: requestsError } = await supabase
         .from('client_requests')
         .select('*')
@@ -68,15 +68,18 @@ const ClientList = () => {
         throw requestsError;
       }
 
+      console.log('📊 Données brutes récupérées:', requestsData);
+
       const allClients: Client[] = [];
 
       // Ajouter tous les clients de client_requests
       if (requestsData) {
         requestsData.forEach(request => {
-          // Gérer client_reference de manière sécurisée
-          const clientRef = (request as any).client_reference || `CLI-${String(request.id).padStart(6, '0')}`;
+          // Gérer client_reference de manière sécurisée avec casting
+          const requestAny = request as any;
+          const clientRef = requestAny.client_reference || `CLI-${String(request.id).padStart(6, '0')}`;
           // Gérer flexibility_days de manière sécurisée
-          const flexDays = (request as any).flexibility_days || 0;
+          const flexDays = requestAny.flexibility_days || 0;
           
           allClients.push({
             id: request.id,
@@ -99,10 +102,10 @@ const ClientList = () => {
         });
       }
 
-      console.log('✅ Clients chargés:', allClients.length, allClients);
+      console.log('✅ Clients traités et chargés:', allClients.length, allClients);
       setClients(allClients);
     } catch (error) {
-      console.error('Error fetching clients:', error);
+      console.error('❌ Erreur dans fetchClients:', error);
       toast({
         title: "Erreur",
         description: "Impossible de charger les clients",
@@ -142,9 +145,9 @@ const ClientList = () => {
 
       setShowDeleteDialog(false);
       setClientToDelete(null);
-      fetchClients();
+      fetchClients(); // Recharger la liste
     } catch (error) {
-      console.error('Error deleting client:', error);
+      console.error('❌ Erreur lors de la suppression du client:', error);
       toast({
         title: "Erreur",
         description: "Impossible de supprimer le client",
@@ -179,7 +182,7 @@ const ClientList = () => {
         <SimpleClientFormReplacement 
           onSuccess={() => {
             setShowAddForm(false);
-            fetchClients();
+            fetchClients(); // Recharger la liste après création
           }}
         />
       </motion.div>
@@ -220,7 +223,7 @@ const ClientList = () => {
           isEditing={true}
           onSuccess={() => {
             setEditingClient(null);
-            fetchClients();
+            fetchClients(); // Recharger la liste après modification
           }}
         />
       </motion.div>
