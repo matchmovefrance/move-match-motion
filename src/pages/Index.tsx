@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
@@ -9,7 +8,7 @@ import MatchFinder from '@/components/MatchFinder';
 import MatchAnalytics from '@/components/MatchAnalytics';
 import ServiceProviders from '@/components/ServiceProviders';
 import GoogleMap from '@/components/GoogleMap';
-import { MoverCalendar } from '@/components/MoverCalendar';
+import { MoverCalendarTab } from '@/components/MoverCalendarTab';
 import UserManagement from '@/components/UserManagement';
 import PublicLinkManager from '@/components/PublicLinkManager';
 import AdminActions from '@/components/AdminActions';
@@ -47,7 +46,7 @@ const Index = () => {
       case 'match-analytics': return <MatchAnalytics />;
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
-      case 'calendar': return <MoverCalendar />;
+      case 'calendar': return <MoverCalendarTab />;
       case 'diagnostic': return <DiagnosticTab />;
       case 'admin-actions': return <AdminActions />;
       case 'management': 
