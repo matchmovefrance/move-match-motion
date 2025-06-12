@@ -32,6 +32,9 @@ declare namespace google {
     class LatLngBounds {
       constructor();
       extend(point: LatLng): void;
+      getNorthEast(): LatLng;
+      getSouthWest(): LatLng;
+      isEmpty(): boolean;
     }
 
     class Marker {
@@ -48,6 +51,12 @@ declare namespace google {
         scaledSize: Size;
       };
       title?: string;
+      label?: {
+        text: string;
+        color: string;
+        fontSize: string;
+        fontWeight: string;
+      };
     }
 
     class Size {
@@ -110,6 +119,62 @@ declare namespace google {
     interface GeocoderResponse {
       results: GeocoderResult[];
       status: GeocoderStatus;
+    }
+
+    class DirectionsService {
+      route(
+        request: DirectionsRequest,
+        callback: (result: DirectionsResult | null, status: DirectionsStatus) => void
+      ): void;
+    }
+
+    class DirectionsRenderer {
+      constructor(options?: DirectionsRendererOptions);
+      setMap(map: Map | null): void;
+      setDirections(directions: DirectionsResult): void;
+      setOptions(options: DirectionsRendererOptions): void;
+    }
+
+    interface DirectionsRequest {
+      origin: LatLng | LatLngLiteral | string;
+      destination: LatLng | LatLngLiteral | string;
+      travelMode: TravelMode;
+    }
+
+    interface DirectionsResult {
+      routes: any[];
+    }
+
+    enum DirectionsStatus {
+      OK = 'OK',
+      ZERO_RESULTS = 'ZERO_RESULTS',
+      OVER_QUERY_LIMIT = 'OVER_QUERY_LIMIT',
+      REQUEST_DENIED = 'REQUEST_DENIED',
+      INVALID_REQUEST = 'INVALID_REQUEST',
+      UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+    }
+
+    interface DirectionsRendererOptions {
+      polylineOptions?: {
+        strokeColor?: string;
+        strokeWeight?: number;
+        strokeOpacity?: number;
+      };
+      suppressMarkers?: boolean;
+    }
+
+    enum TravelMode {
+      DRIVING = 'DRIVING',
+      WALKING = 'WALKING',
+      BICYCLING = 'BICYCLING',
+      TRANSIT = 'TRANSIT'
+    }
+
+    enum MapTypeId {
+      ROADMAP = 'roadmap',
+      SATELLITE = 'satellite',
+      HYBRID = 'hybrid',
+      TERRAIN = 'terrain'
     }
   }
 }

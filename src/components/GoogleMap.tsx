@@ -34,7 +34,7 @@ const ROUTE_COLORS = [
   '#be185d', // pink
 ];
 
-// Nouveau composant pour afficher plusieurs routes
+// Composant pour afficher plusieurs routes
 const MultipleRoutesGoogleMap = ({ items }: { items: FilteredItem[] }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -55,6 +55,7 @@ const MultipleRoutesGoogleMap = ({ items }: { items: FilteredItem[] }) => {
         
         const geocoder = new google.maps.Geocoder();
         const bounds = new google.maps.LatLngBounds();
+        let hasAddedBounds = false;
 
         // Créer la carte
         const map = new google.maps.Map(mapRef.current, {
@@ -100,6 +101,7 @@ const MultipleRoutesGoogleMap = ({ items }: { items: FilteredItem[] }) => {
             // Ajouter les positions aux bounds
             bounds.extend(departureLocation);
             bounds.extend(arrivalLocation);
+            hasAddedBounds = true;
 
             // Ajouter les marqueurs
             new google.maps.Marker({
@@ -166,7 +168,7 @@ const MultipleRoutesGoogleMap = ({ items }: { items: FilteredItem[] }) => {
         }
 
         // Ajuster la vue pour inclure tous les points
-        if (!bounds.getNorthEast().equals(bounds.getSouthWest())) {
+        if (hasAddedBounds) {
           map.fitBounds(bounds);
         }
 
