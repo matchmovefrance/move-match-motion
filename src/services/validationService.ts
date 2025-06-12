@@ -154,9 +154,9 @@ class ValidationService {
         return { connected: false, clientsCount: 0 };
       }
 
-      // Compter les clients
+      // Compter les clients depuis la table clients
       const { count: clientsCount, error: countError } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('id', { count: 'exact' });
 
       if (countError) {

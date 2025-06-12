@@ -1,5 +1,4 @@
 
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,6 @@ import { Users, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { QuoteCard } from './QuoteCard';
-import QuoteGenerator from '@/components/QuoteGenerator';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -191,7 +189,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
         <div className="grid gap-4">
           {quotes.map((quote) => {
             const supplierData = getSupplierData(quote.supplier_id, quotes);
-            console.log('🎯 Quote PDF pour:', quote.supplier_company, 'Données prestataire:', supplierData ? 'DISPONIBLES' : 'MANQUANTES');
+            console.log('🎯 Quote pour:', quote.supplier_company, 'Données prestataire:', supplierData ? 'DISPONIBLES' : 'MANQUANTES');
             
             return (
               <div key={quote.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -234,41 +232,6 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
                   </div>
                   
                   <div className="flex gap-2">
-                    <QuoteGenerator
-                      client={{
-                        id: quote.client_id,
-                        name: quote.client_name,
-                        email: quote.client_email,
-                        phone: null,
-                        departure_address: null,
-                        departure_city: quote.departure_city,
-                        departure_postal_code: '',
-                        departure_country: null,
-                        arrival_address: null,
-                        arrival_city: quote.arrival_city,
-                        arrival_postal_code: '',
-                        arrival_country: null,
-                        desired_date: quote.desired_date,
-                        estimated_volume: quote.estimated_volume,
-                        quote_amount: quote.calculated_price,
-                      }}
-                      supplier={supplierData ? {
-                        company_name: supplierData.company_name,
-                        contact_name: supplierData.contact_name,
-                        email: supplierData.email,
-                        phone: supplierData.phone,
-                        bank_details: supplierData.bank_details
-                      } : {
-                        company_name: quote.supplier_company,
-                        contact_name: "Contact non disponible",
-                        email: "email@exemple.fr",
-                        phone: "01 23 45 67 89",
-                        bank_details: undefined
-                      }}
-                      supplierPrice={quote.supplier_price}
-                      matchMoveMargin={quote.pricing_breakdown?.marginPercentage || 0}
-                    />
-                    
                     <Button
                       variant="outline"
                       size="sm"
@@ -297,4 +260,3 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     </Card>
   );
 };
-
