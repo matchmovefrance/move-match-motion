@@ -4,38 +4,65 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Edit, Plus, Calendar, MapPin, Package, Users, CheckCircle } from 'lucide-react';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { 
+  Trash2, 
+  Edit, 
+  Plus, 
+  Calendar, 
+  MapPin, 
+  Package, 
+  Users, 
+  Map,
+  Search,
+  Truck
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import MoveCardDialog from './MoveCardDialog';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import SimpleMoverFormReplacement from './SimpleMoverFormReplacement';
+import MapPopup from './MapPopup';
 
-interface Move {
-  id: string;
-  title: string;
+interface ConfirmedMove {
+  id: number;
+  company_name: string;
+  mover_name: string;
   departure_city: string;
   arrival_city: string;
-  desired_date: string; // Changed from departure_date to match database
-  estimated_volume: number;
+  departure_postal_code: string;
+  arrival_postal_code: string;
+  departure_date: string;
+  max_volume: number;
+  used_volume: number;
+  available_volume: number;
   status: string;
+  truck_type: string;
+  contact_phone: string;
   created_at: string;
-  client_request_id?: number;
   departure_address?: string;
   arrival_address?: string;
-  departure_postal_code?: string;
-  arrival_postal_code?: string;
   description?: string;
 }
 
 const MoveManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [moves, setMoves] = useState<Move[]>([]);
+  const [moves, setMoves] = useState<ConfirmedMove[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedMove, setSelectedMove] = useState<Move | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingMove, setEditingMove] = useState<ConfirmedMove | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showMapPopup, setShowMapPopup] = useState(false);
+  const [selectedMoveForMap, setSelectedMoveForMap] = useState<ConfirmedMove | null>(null);
 
   useEffect(() => {
     loadMoves();
@@ -47,19 +74,24 @@ const MoveManagement = () => {
     try {
       setLoading(true);
       
+      console.log('🔍 Chargement des trajets confirmés...');
       const { data, error } = await supabase
-        .from('pricing_opportunities')
+        .from('confirmed_moves')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur lors du chargement des trajets:', error);
+        throw error;
+      }
       
+      console.log('📋 Trajets confirmés chargés:', data?.length || 0, data);
       setMoves(data || []);
     } catch (error) {
       console.error('Error loading moves:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les déménagements",
+        description: "Impossible de charger les trajets",
         variant: "destructive",
       });
     } finally {
@@ -67,35 +99,24 @@ const MoveManagement = () => {
     }
   };
 
-  const handleOpenDialog = () => {
-    setIsDialogOpen(true);
-    setSelectedMove(null);
-  };
-
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    setSelectedMove(null);
-  };
-
-  const handleSelectMove = (move: Move) => {
-    setSelectedMove(move);
-    setIsDialogOpen(true);
-  };
-
-  const handleDeleteMove = async (moveId: string) => {
+  const handleDeleteMove = async (moveId: number) => {
     if (!user) return;
+    
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce trajet ?')) {
+      return;
+    }
     
     try {
       const { error } = await supabase
-        .from('pricing_opportunities')
+        .from('confirmed_moves')
         .delete()
         .eq('id', moveId);
 
       if (error) throw error;
 
       toast({
-        title: "Déménagement supprimé",
-        description: "Le déménagement a été supprimé avec succès",
+        title: "Trajet supprimé",
+        description: "Le trajet a été supprimé avec succès",
       });
       
       loadMoves();
@@ -103,20 +124,25 @@ const MoveManagement = () => {
       console.error('Error deleting move:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le déménagement",
+        description: "Impossible de supprimer le trajet",
         variant: "destructive",
       });
     }
   };
 
+  const handleShowOnMap = (move: ConfirmedMove) => {
+    setSelectedMoveForMap(move);
+    setShowMapPopup(true);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft':
-        return <Badge variant="outline">Brouillon</Badge>;
-      case 'active':
-        return <Badge className="bg-green-100 text-green-800">Actif</Badge>;
+      case 'confirmed':
+        return <Badge className="bg-green-100 text-green-800">Confirmé</Badge>;
+      case 'en_cours':
+        return <Badge className="bg-blue-100 text-blue-800">En cours</Badge>;
       case 'completed':
-        return <Badge className="bg-blue-100 text-blue-800">Terminé</Badge>;
+        return <Badge className="bg-gray-100 text-gray-800">Terminé</Badge>;
       case 'cancelled':
         return <Badge variant="destructive">Annulé</Badge>;
       default:
@@ -124,12 +150,58 @@ const MoveManagement = () => {
     }
   };
 
+  const filteredMoves = moves.filter(move =>
+    move.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    move.mover_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    move.departure_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    move.arrival_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    move.departure_postal_code?.includes(searchTerm) ||
+    move.arrival_postal_code?.includes(searchTerm)
+  );
+
+  const formatMapItem = (move: ConfirmedMove) => ({
+    id: move.id,
+    type: 'move' as const,
+    reference: `TRJ-${move.id}`,
+    name: move.company_name,
+    date: format(new Date(move.departure_date), 'dd/MM/yyyy', { locale: fr }),
+    details: `${move.departure_city} → ${move.arrival_city} (${move.available_volume}m³ dispo)`,
+    departure_postal_code: move.departure_postal_code,
+    arrival_postal_code: move.arrival_postal_code,
+    departure_city: move.departure_city,
+    arrival_city: move.arrival_city,
+    company_name: move.company_name,
+    color: '#2563eb'
+  });
+
+  if (showAddForm) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-800">Nouveau Trajet</h2>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAddForm(false)}
+          >
+            Retour à la liste
+          </Button>
+        </div>
+        <SimpleMoverFormReplacement 
+          onSuccess={() => {
+            setShowAddForm(false);
+            loadMoves();
+          }}
+        />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <Card>
         <CardContent className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300 mx-auto"></div>
-          <p className="text-gray-600 mt-2">Chargement...</p>
+          <p className="text-gray-600 mt-2">Chargement des trajets...</p>
         </CardContent>
       </Card>
     );
@@ -137,81 +209,143 @@ const MoveManagement = () => {
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle className="flex items-center">
-            <Package className="h-5 w-5 mr-2" />
-            Déménagements
-          </CardTitle>
-          <Button size="sm" onClick={handleOpenDialog}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Truck className="h-6 w-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-gray-800">Trajets de Déménagement</h2>
+            <Badge variant="secondary">{filteredMoves.length}</Badge>
+          </div>
+          <Button onClick={() => setShowAddForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Ajouter
+            Nouveau Trajet
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {moves.length === 0 ? (
-            <p className="text-center text-gray-500">Aucun déménagement trouvé.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {moves.map((move) => (
-                <Card key={move.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          {move.title}
-                          {getStatusBadge(move.status)}
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          {move.departure_city} → {move.arrival_city}
-                        </p>
-                      </div>
-                      
-                      <div className="text-right text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          {format(new Date(move.desired_date), 'dd/MM/yyyy', { locale: fr })}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="h-4 w-4" />
-                          {move.estimated_volume} m³
-                        </div>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSelectMove(move)}
-                      className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Modifier
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeleteMove(move.id)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Supprimer
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <MoveCardDialog
-        open={isDialogOpen}
-        onOpenChange={handleCloseDialog}
-        move={selectedMove}
-        onMoveUpdated={loadMoves}
-      />
+        <div className="flex items-center space-x-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Rechercher par entreprise, déménageur, ville ou code postal..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        {filteredMoves.length === 0 ? (
+          <div className="text-center py-12">
+            <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">
+              {searchTerm ? 'Aucun trajet trouvé pour cette recherche' : 'Aucun trajet de déménagement'}
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Cliquez sur "Nouveau Trajet" pour ajouter un trajet
+            </p>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Liste des Trajets</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Entreprise</TableHead>
+                    <TableHead>Responsable</TableHead>
+                    <TableHead>Trajet</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Volume</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMoves.map((move) => (
+                    <TableRow key={move.id}>
+                      <TableCell className="font-medium">
+                        {move.company_name}
+                      </TableCell>
+                      <TableCell>{move.mover_name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <MapPin className="h-4 w-4 text-green-600" />
+                          <span className="text-sm">
+                            {move.departure_postal_code} {move.departure_city}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <MapPin className="h-4 w-4 text-red-600" />
+                          <span className="text-sm">
+                            {move.arrival_postal_code} {move.arrival_city}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-4 w-4 text-purple-600" />
+                          <span>{format(new Date(move.departure_date), 'dd/MM/yyyy', { locale: fr })}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="text-sm">
+                            <span className="font-medium">{move.max_volume}m³</span> total
+                          </div>
+                          <div className="text-sm text-green-600">
+                            <span className="font-medium">{move.available_volume}m³</span> disponible
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(move.status)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleShowOnMap(move)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Map className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingMove(move)}
+                            className="text-gray-600 hover:text-gray-700"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteMove(move.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {selectedMoveForMap && (
+        <MapPopup
+          open={showMapPopup}
+          onOpenChange={setShowMapPopup}
+          items={[formatMapItem(selectedMoveForMap)]}
+          title={`Trajet ${selectedMoveForMap.company_name}`}
+        />
+      )}
     </>
   );
 };
