@@ -1,13 +1,13 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Map, Filter, Search, X } from 'lucide-react';
+import { Map, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import GoogleMapRoute from './GoogleMapRoute';
 
 interface FilteredItem {
   id: number;
@@ -16,149 +16,144 @@ interface FilteredItem {
   name: string;
   date: string;
   details: string;
+  departure_postal_code?: string;
+  arrival_postal_code?: string;
+  departure_city?: string;
+  arrival_city?: string;
+  company_name?: string;
 }
 
 const MapView = () => {
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
   const [referenceFilter, setReferenceFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [filteredItems, setFilteredItems] = useState<FilteredItem[]>([]);
-  const [selectedItems, setSelectedItems] = useState<FilteredItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<FilteredItem | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (searchTerm.length >= 2 || referenceFilter.length >= 3) {
-      searchItems();
-    } else {
-      setFilteredItems([]);
+  const searchByReference = async () => {
+    if (referenceFilter.length < 3) {
+      toast({
+        title: "Référence trop courte",
+        description: "Veuillez saisir au moins 3 caractères",
+        variant: "destructive",
+      });
+      return;
     }
-  }, [searchTerm, referenceFilter, typeFilter]);
 
-  const searchItems = async () => {
     setLoading(true);
     try {
-      let items: FilteredItem[] = [];
+      const cleanRef = referenceFilter.toUpperCase().trim();
+      let foundItem: FilteredItem | null = null;
 
       // Rechercher dans les clients
-      if (typeFilter === 'all' || typeFilter === 'client') {
-        const { data: clients, error: clientError } = await supabase
-          .from('client_requests')
-          .select('id, name, desired_date, departure_postal_code, arrival_postal_code')
-          .or(`name.ilike.%${searchTerm}%,departure_postal_code.ilike.%${searchTerm}%,arrival_postal_code.ilike.%${searchTerm}%`)
-          .limit(10);
+      if (cleanRef.startsWith('CLI-')) {
+        const id = parseInt(cleanRef.replace('CLI-', ''));
+        if (!isNaN(id)) {
+          const { data: client, error } = await supabase
+            .from('client_requests')
+            .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+            .eq('id', id)
+            .single();
 
-        if (!clientError && clients) {
-          let filteredClients = clients;
-          
-          // Filtre par référence si spécifié
-          if (referenceFilter) {
-            filteredClients = clients.filter(client => {
-              const ref = `CLI-${String(client.id).padStart(6, '0')}`;
-              return ref.toLowerCase().includes(referenceFilter.toLowerCase());
-            });
+          if (!error && client) {
+            foundItem = {
+              id: client.id,
+              type: 'client',
+              reference: `CLI-${String(client.id).padStart(6, '0')}`,
+              name: client.name || 'Client',
+              date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
+              details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
+              departure_postal_code: client.departure_postal_code,
+              arrival_postal_code: client.arrival_postal_code,
+              departure_city: client.departure_city,
+              arrival_city: client.arrival_city
+            };
           }
-
-          items.push(...filteredClients.map(client => ({
-            id: client.id,
-            type: 'client' as const,
-            reference: `CLI-${String(client.id).padStart(6, '0')}`,
-            name: client.name || 'Client',
-            date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
-            details: `${client.departure_postal_code} → ${client.arrival_postal_code}`
-          })));
         }
       }
 
       // Rechercher dans les trajets
-      if (typeFilter === 'all' || typeFilter === 'move') {
-        const { data: moves, error: moveError } = await supabase
-          .from('confirmed_moves')
-          .select('id, company_name, departure_date, departure_postal_code, arrival_postal_code')
-          .or(`company_name.ilike.%${searchTerm}%,departure_postal_code.ilike.%${searchTerm}%,arrival_postal_code.ilike.%${searchTerm}%`)
-          .limit(10);
+      if (!foundItem && cleanRef.startsWith('TRJ-')) {
+        const id = parseInt(cleanRef.replace('TRJ-', ''));
+        if (!isNaN(id)) {
+          const { data: move, error } = await supabase
+            .from('confirmed_moves')
+            .select('id, company_name, departure_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+            .eq('id', id)
+            .single();
 
-        if (!moveError && moves) {
-          let filteredMoves = moves;
-          
-          // Filtre par référence si spécifié
-          if (referenceFilter) {
-            filteredMoves = moves.filter(move => {
-              const ref = `TRJ-${String(move.id).padStart(6, '0')}`;
-              return ref.toLowerCase().includes(referenceFilter.toLowerCase());
-            });
+          if (!error && move) {
+            foundItem = {
+              id: move.id,
+              type: 'move',
+              reference: `TRJ-${String(move.id).padStart(6, '0')}`,
+              name: move.company_name || 'Déménageur',
+              date: move.departure_date ? new Date(move.departure_date).toLocaleDateString('fr-FR') : '',
+              details: `${move.departure_postal_code} → ${move.arrival_postal_code}`,
+              departure_postal_code: move.departure_postal_code,
+              arrival_postal_code: move.arrival_postal_code,
+              departure_city: move.departure_city,
+              arrival_city: move.arrival_city,
+              company_name: move.company_name
+            };
           }
-
-          items.push(...filteredMoves.map(move => ({
-            id: move.id,
-            type: 'move' as const,
-            reference: `TRJ-${String(move.id).padStart(6, '0')}`,
-            name: move.company_name || 'Déménageur',
-            date: move.departure_date ? new Date(move.departure_date).toLocaleDateString('fr-FR') : '',
-            details: `${move.departure_postal_code} → ${move.arrival_postal_code}`
-          })));
         }
       }
 
       // Rechercher dans les matchs
-      if (typeFilter === 'all' || typeFilter === 'match') {
-        const { data: matches, error: matchError } = await supabase
-          .from('move_matches')
-          .select(`
-            id,
-            created_at,
-            client_request:client_requests(name, departure_postal_code, arrival_postal_code),
-            confirmed_move:confirmed_moves(company_name, departure_postal_code, arrival_postal_code)
-          `)
-          .limit(10);
+      if (!foundItem && cleanRef.startsWith('MTH-')) {
+        const id = parseInt(cleanRef.replace('MTH-', ''));
+        if (!isNaN(id)) {
+          const { data: match, error } = await supabase
+            .from('move_matches')
+            .select(`
+              id,
+              created_at,
+              client_request:client_requests(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
+              confirmed_move:confirmed_moves(company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city)
+            `)
+            .eq('id', id)
+            .single();
 
-        if (!matchError && matches) {
-          let filteredMatches = matches;
-          
-          // Filtre par référence si spécifié
-          if (referenceFilter) {
-            filteredMatches = matches.filter(match => {
-              const ref = `MTH-${String(match.id).padStart(6, '0')}`;
-              return ref.toLowerCase().includes(referenceFilter.toLowerCase());
-            });
-          }
-
-          // Filtre par terme de recherche
-          if (searchTerm) {
-            filteredMatches = filteredMatches.filter(match => {
-              const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
-              const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
-              
-              const clientName = clientRequest?.name || '';
-              const moveName = confirmedMove?.company_name || '';
-              
-              return clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                     moveName.toLowerCase().includes(searchTerm.toLowerCase());
-            });
-          }
-
-          items.push(...filteredMatches.map(match => {
+          if (!error && match) {
             const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
             const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
             
-            return {
+            foundItem = {
               id: match.id,
-              type: 'match' as const,
+              type: 'match',
               reference: `MTH-${String(match.id).padStart(6, '0')}`,
               name: `${clientRequest?.name || 'Client'} ↔ ${confirmedMove?.company_name || 'Déménageur'}`,
               date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
-              details: `${clientRequest?.departure_postal_code || ''} → ${clientRequest?.arrival_postal_code || ''}`
+              details: `${clientRequest?.departure_postal_code || ''} → ${clientRequest?.arrival_postal_code || ''}`,
+              departure_postal_code: clientRequest?.departure_postal_code,
+              arrival_postal_code: clientRequest?.arrival_postal_code,
+              departure_city: clientRequest?.departure_city,
+              arrival_city: clientRequest?.arrival_city,
+              company_name: confirmedMove?.company_name
             };
-          }));
+          }
         }
       }
 
-      setFilteredItems(items);
+      if (foundItem) {
+        setSelectedItem(foundItem);
+        toast({
+          title: "Référence trouvée",
+          description: `${foundItem.reference} affiché sur la carte`,
+        });
+      } else {
+        toast({
+          title: "Référence non trouvée",
+          description: `Aucun élément trouvé pour la référence ${cleanRef}`,
+          variant: "destructive",
+        });
+        setSelectedItem(null);
+      }
     } catch (error) {
-      console.error('Error searching items:', error);
+      console.error('Error searching by reference:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de rechercher les éléments",
+        description: "Impossible de rechercher la référence",
         variant: "destructive",
       });
     } finally {
@@ -166,33 +161,14 @@ const MapView = () => {
     }
   };
 
-  const addToMap = (item: FilteredItem) => {
-    if (!selectedItems.find(selected => selected.id === item.id && selected.type === item.type)) {
-      setSelectedItems([...selectedItems, item]);
-      toast({
-        title: "Ajouté à la carte",
-        description: `${item.reference} ajouté à la visualisation`,
-      });
-    }
-  };
-
-  const removeFromMap = (item: FilteredItem) => {
-    setSelectedItems(selectedItems.filter(selected => !(selected.id === item.id && selected.type === item.type)));
-  };
-
-  const clearAllFilters = () => {
-    setSelectedItems([]);
-    setSearchTerm('');
+  const clearFilter = () => {
     setReferenceFilter('');
-    setFilteredItems([]);
+    setSelectedItem(null);
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'client': return 'bg-green-100 text-green-800';
-      case 'move': return 'bg-blue-100 text-blue-800';
-      case 'match': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      searchByReference();
     }
   };
 
@@ -207,21 +183,20 @@ const MapView = () => {
           <Map className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Carte</h2>
         </div>
-        {selectedItems.length > 0 && (
-          <Button variant="outline" onClick={clearAllFilters}>
+        {selectedItem && (
+          <Button variant="outline" onClick={clearFilter}>
             <X className="h-4 w-4 mr-2" />
-            Effacer filtres ({selectedItems.length})
+            Effacer
           </Button>
         )}
       </div>
 
-      {/* Filtres de recherche */}
-      <div className="bg-white p-4 rounded-lg border space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Filtre par référence - Plus visible */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Recherche par référence
+      {/* Filtre de recherche par référence */}
+      <div className="bg-white p-4 rounded-lg border">
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Rechercher par référence
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -229,127 +204,87 @@ const MapView = () => {
                 placeholder="CLI-000001, TRJ-000001, MTH-000001..."
                 value={referenceFilter}
                 onChange={(e) => setReferenceFilter(e.target.value)}
+                onKeyPress={handleKeyPress}
                 className="pl-10 border-blue-300 focus:border-blue-500"
               />
             </div>
           </div>
-
-          {/* Recherche générale */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Recherche générale
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Nom, entreprise, code postal..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-          
-          {/* Type de contenu */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type de contenu
-            </label>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
-                <SelectItem value="client">Clients</SelectItem>
-                <SelectItem value="move">Trajets</SelectItem>
-                <SelectItem value="match">Matchs</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Button 
+            onClick={searchByReference}
+            disabled={loading || referenceFilter.length < 3}
+            className="mt-6"
+          >
+            {loading ? 'Recherche...' : 'Rechercher'}
+          </Button>
         </div>
 
-        {/* Résultats de recherche */}
-        {loading ? (
-          <div className="text-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-          </div>
-        ) : filteredItems.length > 0 ? (
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {filteredItems.map((item) => (
-              <div
-                key={`${item.type}-${item.id}`}
-                className="flex items-center justify-between p-2 border rounded hover:bg-gray-50"
-              >
-                <div className="flex items-center space-x-3">
-                  <Badge className={getTypeColor(item.type)}>
-                    {item.reference}
-                  </Badge>
-                  <div>
-                    <span className="font-medium">{item.name}</span>
-                    <div className="text-sm text-gray-500">
-                      {item.details} • {item.date}
-                    </div>
-                  </div>
+        {selectedItem && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Badge className="bg-blue-100 text-blue-800">
+                {selectedItem.reference}
+              </Badge>
+              <div>
+                <span className="font-medium">{selectedItem.name}</span>
+                <div className="text-sm text-gray-500">
+                  {selectedItem.details} • {selectedItem.date}
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => addToMap(item)}
-                  disabled={selectedItems.some(selected => selected.id === item.id && selected.type === item.type)}
-                >
-                  {selectedItems.some(selected => selected.id === item.id && selected.type === item.type) ? 'Ajouté' : 'Ajouter'}
-                </Button>
               </div>
-            ))}
-          </div>
-        ) : (searchTerm.length >= 2 || referenceFilter.length >= 3) ? (
-          <div className="text-center py-4 text-gray-500">
-            Aucun résultat trouvé
-          </div>
-        ) : (
-          <div className="text-center py-4 text-gray-400">
-            Saisissez au moins 2 caractères dans la recherche générale ou 3 dans la référence
+            </div>
           </div>
         )}
       </div>
 
-      {/* Éléments sélectionnés */}
-      {selectedItems.length > 0 && (
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="font-semibold mb-3">Éléments affichés sur la carte ({selectedItems.length})</h3>
-          <div className="flex flex-wrap gap-2">
-            {selectedItems.map((item) => (
-              <Badge
-                key={`selected-${item.type}-${item.id}`}
-                variant="secondary"
-                className="flex items-center space-x-1"
-              >
-                <span>{item.reference}</span>
-                <button
-                  onClick={() => removeFromMap(item)}
-                  className="ml-1 hover:bg-gray-300 rounded-full p-0.5"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
+      {/* Affichage de la carte */}
+      {selectedItem && selectedItem.type === 'move' && selectedItem.departure_postal_code && selectedItem.arrival_postal_code ? (
+        <div className="bg-white rounded-lg border p-4">
+          <h3 className="font-semibold mb-4">Trajet: {selectedItem.reference}</h3>
+          <GoogleMapRoute 
+            move={{
+              departure_postal_code: selectedItem.departure_postal_code,
+              arrival_postal_code: selectedItem.arrival_postal_code,
+              departure_city: selectedItem.departure_city || '',
+              arrival_city: selectedItem.arrival_city || '',
+              company_name: selectedItem.company_name || selectedItem.name
+            }}
+          />
+        </div>
+      ) : selectedItem && (selectedItem.type === 'client' || selectedItem.type === 'match') && selectedItem.departure_postal_code && selectedItem.arrival_postal_code ? (
+        <div className="bg-white rounded-lg border p-4">
+          <h3 className="font-semibold mb-4">
+            {selectedItem.type === 'client' ? 'Demande client' : 'Match'}: {selectedItem.reference}
+          </h3>
+          <GoogleMapRoute 
+            move={{
+              departure_postal_code: selectedItem.departure_postal_code,
+              arrival_postal_code: selectedItem.arrival_postal_code,
+              departure_city: selectedItem.departure_city || '',
+              arrival_city: selectedItem.arrival_city || '',
+              company_name: selectedItem.company_name || selectedItem.name
+            }}
+          />
+        </div>
+      ) : !selectedItem ? (
+        <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+          <div className="text-center">
+            <Map className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-500">Recherchez par référence pour afficher un trajet</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Saisissez une référence (CLI-XXXXXX, TRJ-XXXXXX, MTH-XXXXXX)
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+          <div className="text-center">
+            <Map className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-500">Impossible d'afficher la carte</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Données d'adresse manquantes pour {selectedItem.reference}
+            </p>
           </div>
         </div>
       )}
-
-      {/* Placeholder pour la carte */}
-      <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-        <div className="text-center">
-          <Map className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500">Carte interactive</p>
-          <p className="text-sm text-gray-400 mt-1">
-            {selectedItems.length === 0 ? 'Utilisez les filtres ci-dessus pour afficher des éléments' : 
-             `${selectedItems.length} élément(s) sélectionné(s) pour affichage`}
-          </p>
-        </div>
-      </div>
     </motion.div>
   );
 };
