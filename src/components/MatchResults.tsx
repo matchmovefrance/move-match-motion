@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Eye, Filter, RefreshCw, MapPin, Calendar, Package, Truck, ArrowRight } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, MapPin, Calendar, Package, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ClientMatchesDialog } from './ClientMatchesDialog';
@@ -77,7 +77,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
         .from('move_matches')
         .select(`
           *,
-          client:clients!move_matches_client_id_fkey (
+          clients!move_matches_client_id_fkey (
             id,
             name,
             client_reference,
@@ -88,7 +88,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
             estimated_volume,
             desired_date
           ),
-          move:confirmed_moves!move_matches_move_id_fkey (
+          confirmed_moves!move_matches_move_id_fkey (
             id,
             company_name,
             mover_name,
@@ -105,10 +105,21 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur Supabase:', error);
+        throw error;
+      }
 
       console.log('✅ Matches chargés:', matchesData?.length || 0);
-      setMatches(matchesData || []);
+      
+      // Transformer les données pour correspondre à notre interface
+      const transformedMatches = matchesData?.map(match => ({
+        ...match,
+        client: match.clients,
+        move: match.confirmed_moves
+      })) || [];
+
+      setMatches(transformedMatches);
 
     } catch (error) {
       console.error('❌ Erreur chargement matches:', error);
@@ -166,7 +177,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
 
   return (
     <div className="space-y-6">
-      {/* En-tête avec statistiques */}
+      {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -301,7 +312,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
                     <TableRow key={match.id}>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{match.client?.name}</div>
+                          <div className="font-medium">{match.client?.name || 'N/A'}</div>
                           {match.client?.client_reference && (
                             <div className="text-sm text-gray-500">
                               {match.client.client_reference}
@@ -311,28 +322,28 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
-                          <span>{match.client?.departure_postal_code}</span>
+                          <span>{match.client?.departure_postal_code || 'N/A'}</span>
                           <ArrowRight className="h-3 w-3" />
-                          <span>{match.client?.arrival_postal_code}</span>
+                          <span>{match.client?.arrival_postal_code || 'N/A'}</span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          {match.client?.departure_city} → {match.client?.arrival_city}
+                          {match.client?.departure_city || 'N/A'} → {match.client?.arrival_city || 'N/A'}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{match.move?.company_name}</div>
-                          <div className="text-sm text-gray-500">{match.move?.mover_name}</div>
+                          <div className="font-medium">{match.move?.company_name || 'N/A'}</div>
+                          <div className="text-sm text-gray-500">{match.move?.mover_name || 'N/A'}</div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
-                          <span>{match.move?.departure_postal_code}</span>
+                          <span>{match.move?.departure_postal_code || 'N/A'}</span>
                           <ArrowRight className="h-3 w-3" />
-                          <span>{match.move?.arrival_postal_code}</span>
+                          <span>{match.move?.arrival_postal_code || 'N/A'}</span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          {match.move?.departure_city} → {match.move?.arrival_city}
+                          {match.move?.departure_city || 'N/A'} → {match.move?.arrival_city || 'N/A'}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -353,7 +364,7 @@ const MatchResults = ({ refreshTrigger }: MatchResultsProps) => {
                         <div className="text-sm">
                           <div className="flex items-center gap-1">
                             <Package className="h-3 w-3" />
-                            <span>{match.client?.estimated_volume}m³</span>
+                            <span>{match.client?.estimated_volume || 0}m³</span>
                           </div>
                           <div className="text-xs text-gray-500">
                             Reste: {match.combined_volume}m³
