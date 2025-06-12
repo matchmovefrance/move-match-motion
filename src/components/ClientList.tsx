@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -21,6 +22,7 @@ interface Client {
   client_reference?: string;
   created_at: string;
   created_by: string;
+  source?: 'clients' | 'client_requests';
   // Propriétés optionnelles pour la compatibilité
   departure_city?: string;
   departure_postal_code?: string;
@@ -56,20 +58,75 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Chargement des clients depuis la table clients...');
+      console.log('📋 Chargement des clients depuis les deux tables...');
       
-      const { data, error } = await supabase
+      // Charger les clients de la table clients
+      const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('❌ Erreur lors du chargement des clients:', error);
-        throw error;
+      if (clientsError) {
+        console.error('❌ Erreur lors du chargement de la table clients:', clientsError);
       }
-      
-      console.log('✅ Clients chargés:', data?.length || 0, data);
-      setClients(data || []);
+
+      // Charger les clients de la table client_requests qui ne sont pas dans la table clients
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('client_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (requestsError) {
+        console.error('❌ Erreur lors du chargement de la table client_requests:', requestsError);
+      }
+
+      const allClients: Client[] = [];
+
+      // Ajouter les clients de la table clients
+      if (clientsData) {
+        clientsData.forEach(client => {
+          allClients.push({
+            ...client,
+            source: 'clients'
+          });
+        });
+      }
+
+      // Ajouter les clients de client_requests qui ont des infos client et qui ne sont pas déjà dans la table clients
+      if (requestsData) {
+        requestsData.forEach(request => {
+          if (request.name && request.email && request.phone) {
+            // Vérifier si ce client existe déjà dans la table clients
+            const existsInClients = clientsData?.some(client => 
+              client.email === request.email || 
+              (client.name === request.name && client.phone === request.phone)
+            );
+
+            if (!existsInClients) {
+              allClients.push({
+                id: request.id,
+                name: request.name,
+                email: request.email,
+                phone: request.phone,
+                client_reference: `REQ-${String(request.id).padStart(6, '0')}`,
+                created_at: request.created_at,
+                created_by: request.created_by,
+                source: 'client_requests',
+                departure_city: request.departure_city,
+                departure_postal_code: request.departure_postal_code,
+                arrival_city: request.arrival_city,
+                arrival_postal_code: request.arrival_postal_code,
+                desired_date: request.desired_date,
+                estimated_volume: request.estimated_volume,
+                status: request.status
+              });
+            }
+          }
+        });
+      }
+
+      console.log('✅ Clients chargés:', allClients.length, allClients);
+      setClients(allClients);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -94,25 +151,35 @@ const ClientList = () => {
 
     setIsDeleting(true);
     try {
-      console.log('🗑️ Suppression du client:', clientToDelete.id);
+      console.log('🗑️ Suppression du client:', clientToDelete.id, 'source:', clientToDelete.source);
       
-      // Supprimer d'abord les demandes client associées
-      const { error: requestError } = await supabase
-        .from('client_requests')
-        .delete()
-        .eq('client_id', clientToDelete.id);
+      if (clientToDelete.source === 'clients') {
+        // Supprimer d'abord les demandes client associées
+        const { error: requestError } = await supabase
+          .from('client_requests')
+          .delete()
+          .eq('client_id', clientToDelete.id);
 
-      if (requestError) {
-        console.error('❌ Erreur suppression demandes:', requestError);
+        if (requestError) {
+          console.error('❌ Erreur suppression demandes:', requestError);
+        }
+
+        // Puis supprimer le client
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', clientToDelete.id);
+
+        if (error) throw error;
+      } else {
+        // Supprimer de client_requests
+        const { error } = await supabase
+          .from('client_requests')
+          .delete()
+          .eq('id', clientToDelete.id);
+
+        if (error) throw error;
       }
-
-      // Puis supprimer le client
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', clientToDelete.id);
-
-      if (error) throw error;
 
       toast({
         title: "Client supprimé",
@@ -241,13 +308,13 @@ const ClientList = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map((client) => (
-            <Card key={client.id} className="hover:shadow-lg transition-shadow">
+            <Card key={`${client.source}-${client.id}`} className="hover:shadow-lg transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{client.name}</CardTitle>
                   <div className="flex items-center space-x-1">
                     <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                      Actif
+                      {client.source === 'clients' ? 'Client' : 'Demande'}
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -318,7 +385,7 @@ const ClientList = () => {
                     className="flex-1"
                   >
                     <Target className="h-4 w-4 mr-1" />
-                    Demandes
+                    Trouver un match
                   </Button>
                 </div>
               </CardContent>
