@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import StatusToggle from './StatusToggle';
+import MapPopup from './MapPopup';
 
 interface Move {
   id: number;
@@ -18,6 +19,7 @@ interface Move {
   used_volume: number;
   status_custom: string;
   contact_email: string;
+  company_name?: string;
 }
 
 const MoverCalendar = () => {
@@ -32,6 +34,8 @@ const MoverCalendar = () => {
     used_volume: 0
   });
   const [loading, setLoading] = useState(true);
+  const [showMapPopup, setShowMapPopup] = useState(false);
+  const [selectedMoveForMap, setSelectedMoveForMap] = useState<Move | null>(null);
   const { user, profile } = useAuth();
   const { toast } = useToast();
 
@@ -166,6 +170,30 @@ const MoverCalendar = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const showMoveOnMap = (move: Move) => {
+    setSelectedMoveForMap(move);
+    setShowMapPopup(true);
+  };
+
+  const prepareMapItems = (move: Move) => {
+    if (!move) return [];
+    
+    return [{
+      id: move.id,
+      type: 'move' as const,
+      reference: `TRJ-${String(move.id).padStart(6, '0')}`,
+      name: move.company_name || 'Déménageur',
+      date: move.departure_date ? new Date(move.departure_date).toLocaleDateString('fr-FR') : '',
+      details: `${move.departure_postal_code} → ${move.arrival_postal_code}`,
+      departure_postal_code: move.departure_postal_code,
+      arrival_postal_code: move.arrival_postal_code,
+      departure_city: move.departure_city,
+      arrival_city: move.arrival_city,
+      company_name: move.company_name,
+      color: '#2563eb'
+    }];
   };
 
   if (loading) {
@@ -307,15 +335,34 @@ const MoverCalendar = () => {
                   </div>
                 </div>
                 
-                <StatusToggle
-                  status={move.status_custom || 'en_cours'}
-                  onStatusChange={(newStatus) => updateMoveStatus(move.id, newStatus)}
-                />
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => showMoveOnMap(move)}
+                    className="flex items-center space-x-1"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    <span>Carte</span>
+                  </Button>
+                  <StatusToggle
+                    status={move.status_custom || 'en_cours'}
+                    onStatusChange={(newStatus) => updateMoveStatus(move.id, newStatus)}
+                  />
+                </div>
               </div>
             </motion.div>
           ))
         )}
       </div>
+
+      {/* Popup de carte */}
+      <MapPopup
+        open={showMapPopup}
+        onOpenChange={setShowMapPopup}
+        items={selectedMoveForMap ? prepareMapItems(selectedMoveForMap) : []}
+        title={`Carte du trajet ${selectedMoveForMap ? `TRJ-${String(selectedMoveForMap.id).padStart(6, '0')}` : ''}`}
+      />
     </div>
   );
 };
