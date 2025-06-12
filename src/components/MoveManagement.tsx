@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import NewMoveForm from './NewMoveForm';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { MoveMapDialog } from './MoveMapDialog';
+import { MoveCardDialog } from './MoveCardDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface Move {
@@ -396,7 +396,7 @@ const MoveManagement = () => {
         isDeleting={isDeleting}
       />
 
-      <MoveMapDialog
+      <MoveCardDialog
         open={showMapDialog}
         onOpenChange={setShowMapDialog}
         move={selectedMove}
