@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useMatchActions } from '@/hooks/useMatchActions';
-import { ListView } from '@/components/ui/list-view';
 
 interface Client {
   id: number;
@@ -542,7 +541,7 @@ const MatchFinder = () => {
             initial={{ scale: 0.9 }}
             animate={{ scale: 1 }}
           >
-            🎯 MatchFinder Pro
+            Matchmove finder
           </motion.h1>
           <p className="text-gray-600">Trouvez les correspondances parfaites entre clients et transporteurs</p>
         </div>
