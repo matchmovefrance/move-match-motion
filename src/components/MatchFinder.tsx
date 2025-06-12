@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package } from 'lucide-react';
+import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useMatchActions } from '@/hooks/useMatchActions';
 
 interface Client {
   id: number;
@@ -99,6 +99,7 @@ const calculateFallbackDistance = (postal1: string, postal2: string): number => 
 
 const MatchFinder = () => {
   const { toast } = useToast();
+  const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [clients, setClients] = useState<Client[]>([]);
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -267,6 +268,22 @@ const MatchFinder = () => {
       });
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const handleAcceptMatch = async (match: MatchResult) => {
+    const success = await acceptMatch(match);
+    if (success) {
+      // Retirer le match de la liste après acceptation
+      setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
+    }
+  };
+
+  const handleRejectMatch = async (match: MatchResult) => {
+    const success = await rejectMatch(match);
+    if (success) {
+      // Retirer le match de la liste après rejet
+      setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
     }
   };
 
@@ -482,6 +499,29 @@ const MatchFinder = () => {
                           Score: {match.match_score}
                         </Badge>
                       </div>
+                      {match.is_valid && (
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleAcceptMatch(match)}
+                            disabled={actionLoading}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Accepter devis
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRejectMatch(match)}
+                            disabled={actionLoading}
+                            className="text-red-600 hover:text-red-700 border-red-300"
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Refuser devis
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">

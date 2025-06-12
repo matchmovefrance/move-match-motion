@@ -1,13 +1,13 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, MapPin, Calendar, Package, Truck, Target, Eye, CheckCircle, XCircle } from "lucide-react";
+import { Search, MapPin, Calendar, Package, Truck, Target, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useMatchActions } from '@/hooks/useMatchActions';
 
 interface ClientMatchesDialogProps {
   open: boolean;
@@ -107,6 +107,7 @@ const calculateFallbackDistance = (postal1: string, postal2: string): number => 
 
 export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }: ClientMatchesDialogProps) => {
   const { toast } = useToast();
+  const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [client, setClient] = useState<Client | null>(null);
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -277,6 +278,32 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     }
   };
 
+  const handleAcceptMatch = async (match: MatchResult) => {
+    const matchData = {
+      ...match,
+      client: client!
+    };
+    
+    const success = await acceptMatch(matchData);
+    if (success) {
+      // Rafraîchir les données après acceptation
+      await fetchClientAndMatches();
+    }
+  };
+
+  const handleRejectMatch = async (match: MatchResult) => {
+    const matchData = {
+      ...match,
+      client: client!
+    };
+    
+    const success = await rejectMatch(matchData);
+    if (success) {
+      // Rafraîchir les données après rejet
+      await fetchClientAndMatches();
+    }
+  };
+
   const filteredMatches = matches.filter(match => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
@@ -406,14 +433,29 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                           </Badge>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => saveMatch(match)}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Sauvegarder
-                          </Button>
+                          {match.is_valid && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAcceptMatch(match)}
+                                disabled={actionLoading}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Accepter devis
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRejectMatch(match)}
+                                disabled={actionLoading}
+                                className="text-red-600 hover:text-red-700 border-red-300"
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Refuser devis
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
 
