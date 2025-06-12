@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     }
   };
 
-  const getSupplierData = (supplierId: string) => {
+  const getSupplierData = (supplierId: string, allQuotes: GeneratedQuote[]) => {
     console.log('🔍 Recherche prestataire dans ClientQuoteGroup:', supplierId);
     console.log('📋 IDs disponibles:', suppliersData.map(s => s.id));
     
@@ -66,8 +67,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     
     // Si pas trouvé et que l'ID commence par "supplier-", essayer de matcher par company_name
     if (!supplier && supplierId.startsWith('supplier-')) {
-      const quotes = window.currentQuotes || []; // Fallback pour accéder aux quotes
-      const currentQuote = quotes.find(q => q.supplier_id === supplierId);
+      const currentQuote = allQuotes.find(q => q.supplier_id === supplierId);
       if (currentQuote) {
         supplier = suppliersData.find(s => s.company_name === currentQuote.supplier_company);
         console.log('🔄 Tentative de match par nom de société:', currentQuote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
@@ -76,7 +76,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     
     // Si toujours pas trouvé, essayer par nom de société depuis les quotes
     if (!supplier) {
-      const quote = quotes.find(q => q.supplier_id === supplierId);
+      const quote = allQuotes.find(q => q.supplier_id === supplierId);
       if (quote) {
         supplier = suppliersData.find(s => s.company_name === quote.supplier_company);
         console.log('🔄 Match par nom de société depuis quote:', quote.supplier_company, 'trouvé:', supplier ? 'OUI' : 'NON');
@@ -96,11 +96,6 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
     }
     return supplier;
   };
-
-  // Stocker les quotes dans window pour le fallback
-  if (typeof window !== 'undefined') {
-    window.currentQuotes = quotes;
-  }
 
   const firstQuote = quotes[0];
   const hasOriginalQuote = firstQuote.original_quote_amount;
@@ -179,7 +174,7 @@ export const ClientQuoteGroup = ({ quotes, onAcceptQuote, onRejectQuote }: Clien
       <CardContent>
         <div className="grid gap-4">
           {quotes.map((quote) => {
-            const supplierData = getSupplierData(quote.supplier_id);
+            const supplierData = getSupplierData(quote.supplier_id, quotes);
             console.log('🎯 Quote PDF pour:', quote.supplier_company, 'Données prestataire:', supplierData ? 'DISPONIBLES' : 'MANQUANTES');
             
             return (
