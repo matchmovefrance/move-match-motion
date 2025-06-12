@@ -16,7 +16,7 @@ interface Client {
   quote_amount?: number;
 }
 
-// Interface for supplier data
+// Interface for supplier data with pricing model
 interface Supplier {
   id: string;
   company_name: string;
@@ -95,61 +95,79 @@ class PricingEngine {
     return Math.round(R * c);
   }
 
-  private calculatePrice(distance: number, volume: number, supplier: Supplier, quoteType: 'competitive' | 'standard' | 'premium'): { supplierPrice: number; margin: number; finalPrice: number } {
-    console.log(`💰 Calcul prix avec modèle prestataire ${supplier.company_name} (type: ${quoteType})`);
+  private calculateSupplierPrice(distance: number, volume: number, supplier: Supplier): number {
+    console.log(`💰 Calcul prix prestataire ${supplier.company_name} avec modèle de tarification`);
     
-    const supplierModel = supplier.pricing_model || {};
+    const pricingModel = supplier.pricing_model || {};
+    console.log(`📊 Modèle de tarification prestataire:`, pricingModel);
     
-    // Utiliser les vraies variables de pricing du prestataire ou des valeurs par défaut réalistes
-    let basePrice = supplierModel.basePrice || 150;
-    let volumeRate = supplierModel.volumeRate || 12;
-    let distanceRate = supplierModel.distanceRate || 1.2;
-    let minimumPrice = supplierModel.minimumPrice || 200;
+    // Utiliser les vraies variables du modèle de tarification du prestataire
+    const basePrice = pricingModel.basePrice || 150;
+    const volumeRate = pricingModel.volumeRate || 12;
+    const distanceRate = pricingModel.distanceRate || 1.2;
+    const minimumPrice = pricingModel.minimumPrice || 200;
     
-    // Marge MatchMove fixée à 40% comme demandé
-    let matchMoveMargin = 0.40;
+    // Variables supplémentaires du modèle de tarification
+    const floorRate = pricingModel.floorRate || 45;
+    const packingRate = pricingModel.packingRate || 4.5;
+    const heavyItemsFee = pricingModel.heavyItemsFee || 180;
+    const carryingDistanceFee = pricingModel.carryingDistanceFee || 90;
+    const volumeSupplementFee1 = pricingModel.volumeSupplementFee1 || 130;
+    const volumeSupplementThreshold1 = pricingModel.volumeSupplementThreshold1 || 20;
+    const timeMultiplier = pricingModel.timeMultiplier || 1.0;
     
-    console.log(`📊 Variables de base: basePrice=${basePrice}€, volumeRate=${volumeRate}€/m³, distanceRate=${distanceRate}€/km, marge=${matchMoveMargin * 100}%`);
+    console.log(`📋 Variables tarification: basePrice=${basePrice}€, volumeRate=${volumeRate}€/m³, distanceRate=${distanceRate}€/km`);
     
-    // Appliquer les stratégies de pricing pour avoir 3 devis variés
-    switch (quoteType) {
-      case 'competitive':
-        // Prix compétitif - réduction de 15%
-        basePrice *= 0.85;
-        volumeRate *= 0.85;
-        distanceRate *= 0.85;
-        matchMoveMargin *= 0.75; // Marge réduite pour être compétitif
-        break;
-      case 'standard':
-        // Prix standard - pas de modification
-        break;
-      case 'premium':
-        // Prix premium - augmentation de 20%
-        basePrice *= 1.20;
-        volumeRate *= 1.20;
-        distanceRate *= 1.20;
-        matchMoveMargin *= 1.10; // Marge légèrement augmentée
-        break;
+    // Calcul du prix de base
+    let supplierPrice = basePrice + (volume * volumeRate) + (distance * distanceRate);
+    
+    // Calcul des étages estimés (1 étage par 15m³)
+    const estimatedFloors = Math.ceil(volume / 15);
+    if (estimatedFloors > 1) {
+      supplierPrice += (estimatedFloors - 1) * floorRate;
+      console.log(`🏢 Supplément étages: ${estimatedFloors - 1} étages x ${floorRate}€ = ${(estimatedFloors - 1) * floorRate}€`);
     }
     
-    // Calcul du prix prestataire
-    const supplierPrice = Math.max(
-      Math.round(basePrice + (volume * volumeRate) + (distance * distanceRate)),
-      minimumPrice
-    );
+    // Supplément volume important
+    if (volume > volumeSupplementThreshold1) {
+      supplierPrice += volumeSupplementFee1;
+      console.log(`📦 Supplément gros volume: +${volumeSupplementFee1}€`);
+    }
     
-    // Calcul de la marge MatchMove
-    const margin = Math.round(supplierPrice * matchMoveMargin);
+    // Appliquer le multiplicateur de temps
+    supplierPrice *= timeMultiplier;
+    
+    // Assurer le prix minimum
+    supplierPrice = Math.max(supplierPrice, minimumPrice);
+    
+    const finalSupplierPrice = Math.round(supplierPrice);
+    console.log(`✅ Prix prestataire calculé: ${finalSupplierPrice}€`);
+    
+    return finalSupplierPrice;
+  }
+
+  private applyMatchMoveMargin(supplierPrice: number, supplier: Supplier): { margin: number; finalPrice: number; marginPercentage: number } {
+    console.log(`📊 Application marge MatchMove sur prix prestataire: ${supplierPrice}€`);
+    
+    // Vérifier si le prestataire a une marge MatchMove spécifique dans son modèle
+    const supplierMatchMoveMargin = supplier.pricing_model?.matchMoveMargin;
+    
+    // Utiliser la marge du prestataire ou 40% par défaut
+    const marginPercentage = supplierMatchMoveMargin || 40;
+    
+    console.log(`🎯 Marge MatchMove appliquée: ${marginPercentage}%`);
+    
+    const margin = Math.round(supplierPrice * (marginPercentage / 100));
     const finalPrice = supplierPrice + margin;
     
-    console.log(`✅ Prix calculé: prestataire=${supplierPrice}€, marge=${margin}€ (${Math.round(matchMoveMargin * 100)}%), final=${finalPrice}€`);
+    console.log(`💰 Détail calcul: Prix prestataire ${supplierPrice}€ + Marge ${margin}€ (${marginPercentage}%) = Prix final ${finalPrice}€`);
     
-    return { supplierPrice, margin, finalPrice };
+    return { margin, finalPrice, marginPercentage };
   }
 
   async loadActiveSuppliers(): Promise<Supplier[]> {
     try {
-      console.log('🔄 Chargement des prestataires actifs...');
+      console.log('🔄 Chargement des prestataires actifs avec modèles de tarification...');
       const { data: suppliers, error } = await supabase
         .from('suppliers')
         .select('*')
@@ -158,6 +176,12 @@ class PricingEngine {
       if (error) throw error;
       
       console.log('✅ Prestataires chargés:', suppliers?.length || 0);
+      console.log('📋 Modèles de tarification:', suppliers?.map(s => ({ 
+        company: s.company_name, 
+        hasPricingModel: !!s.pricing_model,
+        matchMoveMargin: s.pricing_model?.matchMoveMargin || 'non définie'
+      })));
+      
       return suppliers || [];
     } catch (error) {
       console.error('❌ Erreur chargement prestataires:', error);
@@ -167,7 +191,7 @@ class PricingEngine {
 
   async generateQuotesForClient(client: Client): Promise<GeneratedQuote[]> {
     try {
-      console.log(`💰 Génération de 3 devis avec vraies variables pricing pour client ${client.name} (${client.client_reference})`);
+      console.log(`💰 Génération de 3 devis pour client ${client.name} avec modèles de tarification exacts`);
       
       const suppliers = await this.loadActiveSuppliers();
       if (suppliers.length === 0) {
@@ -184,13 +208,33 @@ class PricingEngine {
       const quotes: GeneratedQuote[] = [];
       const quoteTypes: Array<'competitive' | 'standard' | 'premium'> = ['competitive', 'standard', 'premium'];
 
-      // Si on a au moins 3 prestataires, utiliser 3 prestataires différents
+      // Générer les devis en utilisant les vrais modèles de tarification
       if (suppliers.length >= 3) {
+        // Utiliser 3 prestataires différents
         for (let i = 0; i < 3; i++) {
           const supplier = suppliers[i];
           const quoteType = quoteTypes[i];
           
-          const pricing = this.calculatePrice(exactDistance, client.estimated_volume, supplier, quoteType);
+          console.log(`📊 Génération devis ${i + 1}/3 pour prestataire: ${supplier.company_name} (type: ${quoteType})`);
+          
+          // Calculer le prix du prestataire avec son modèle exact
+          let supplierPrice = this.calculateSupplierPrice(exactDistance, client.estimated_volume, supplier);
+          
+          // Appliquer une variation selon le type de devis
+          switch (quoteType) {
+            case 'competitive':
+              supplierPrice = Math.round(supplierPrice * 0.95); // -5% pour être compétitif
+              break;
+            case 'standard':
+              // Prix normal, pas de modification
+              break;
+            case 'premium':
+              supplierPrice = Math.round(supplierPrice * 1.10); // +10% pour premium
+              break;
+          }
+          
+          // Appliquer la marge MatchMove (40% par défaut ou celle du prestataire)
+          const { margin, finalPrice, marginPercentage } = this.applyMatchMoveMargin(supplierPrice, supplier);
           
           const quote: GeneratedQuote = {
             id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
@@ -204,22 +248,30 @@ class PricingEngine {
             supplier_id: supplier.id,
             supplier_name: supplier.contact_name,
             supplier_company: supplier.company_name,
-            calculated_price: pricing.finalPrice,
-            supplier_price: pricing.supplierPrice,
-            matchmove_margin: pricing.margin,
+            calculated_price: finalPrice,
+            supplier_price: supplierPrice,
+            matchmove_margin: margin,
             original_quote_amount: client.quote_amount,
             quote_type: quoteType,
             pricing_breakdown: {
               exactDistance,
-              marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
+              marginPercentage,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
+              supplierPricingModel: supplier.pricing_model,
               basePrice: supplier.pricing_model?.basePrice || 150,
               volumeRate: supplier.pricing_model?.volumeRate || 12,
               distanceRate: supplier.pricing_model?.distanceRate || 1.2,
-              matchMoveMargin: 40, // Marge fixe à 40%
+              matchMoveMarginUsed: marginPercentage,
               quoteType: quoteType,
-              supplierPricingModel: supplier.pricing_model
+              calculationDetails: {
+                baseCalculation: (supplier.pricing_model?.basePrice || 150) + 
+                               (client.estimated_volume * (supplier.pricing_model?.volumeRate || 12)) + 
+                               (exactDistance * (supplier.pricing_model?.distanceRate || 1.2)),
+                finalSupplierPrice: supplierPrice,
+                marginAmount: margin,
+                finalClientPrice: finalPrice
+              }
             },
             rank: i + 1
           };
@@ -227,13 +279,30 @@ class PricingEngine {
           quotes.push(quote);
         }
       } else {
-        // Si on a moins de 3 prestataires, utiliser le même prestataire avec 3 stratégies différentes
+        // Si moins de 3 prestataires, utiliser le même prestataire avec différentes stratégies
         const supplier = suppliers[0];
         
         for (let i = 0; i < 3; i++) {
           const quoteType = quoteTypes[i];
           
-          const pricing = this.calculatePrice(exactDistance, client.estimated_volume, supplier, quoteType);
+          console.log(`📊 Génération devis ${i + 1}/3 avec même prestataire: ${supplier.company_name} (type: ${quoteType})`);
+          
+          let supplierPrice = this.calculateSupplierPrice(exactDistance, client.estimated_volume, supplier);
+          
+          // Appliquer une variation selon le type de devis
+          switch (quoteType) {
+            case 'competitive':
+              supplierPrice = Math.round(supplierPrice * 0.95);
+              break;
+            case 'standard':
+              // Prix normal
+              break;
+            case 'premium':
+              supplierPrice = Math.round(supplierPrice * 1.10);
+              break;
+          }
+          
+          const { margin, finalPrice, marginPercentage } = this.applyMatchMoveMargin(supplierPrice, supplier);
           
           const quote: GeneratedQuote = {
             id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
@@ -247,22 +316,30 @@ class PricingEngine {
             supplier_id: supplier.id,
             supplier_name: supplier.contact_name,
             supplier_company: supplier.company_name,
-            calculated_price: pricing.finalPrice,
-            supplier_price: pricing.supplierPrice,
-            matchmove_margin: pricing.margin,
+            calculated_price: finalPrice,
+            supplier_price: supplierPrice,
+            matchmove_margin: margin,
             original_quote_amount: client.quote_amount,
             quote_type: quoteType,
             pricing_breakdown: {
               exactDistance,
-              marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
+              marginPercentage,
               estimatedVolume: client.estimated_volume,
               estimatedFloors: Math.ceil(client.estimated_volume / 15),
+              supplierPricingModel: supplier.pricing_model,
               basePrice: supplier.pricing_model?.basePrice || 150,
               volumeRate: supplier.pricing_model?.volumeRate || 12,
               distanceRate: supplier.pricing_model?.distanceRate || 1.2,
-              matchMoveMargin: 40, // Marge fixe à 40%
+              matchMoveMarginUsed: marginPercentage,
               quoteType: quoteType,
-              supplierPricingModel: supplier.pricing_model
+              calculationDetails: {
+                baseCalculation: (supplier.pricing_model?.basePrice || 150) + 
+                               (client.estimated_volume * (supplier.pricing_model?.volumeRate || 12)) + 
+                               (exactDistance * (supplier.pricing_model?.distanceRate || 1.2)),
+                finalSupplierPrice: supplierPrice,
+                marginAmount: margin,
+                finalClientPrice: finalPrice
+              }
             },
             rank: i + 1
           };
@@ -274,12 +351,16 @@ class PricingEngine {
       // Trier par prix pour avoir les meilleurs prix en premier
       quotes.sort((a, b) => a.calculated_price - b.calculated_price);
       
-      // Assigner les rangs finaux après tri
+      // Réassigner les rangs après tri
       quotes.forEach((quote, index) => {
         quote.rank = index + 1;
       });
 
-      console.log(`✅ 3 devis générés avec vraies variables pricing (marge 40%):`, quotes.map(q => `${q.rank}. ${q.calculated_price}€ (${q.quote_type})`));
+      console.log(`✅ 3 devis générés avec modèles de tarification exacts:`);
+      quotes.forEach(q => {
+        console.log(`  ${q.rank}. ${q.supplier_company} - ${q.calculated_price}€ (marge: ${q.pricing_breakdown?.marginPercentage}%, type: ${q.quote_type})`);
+      });
+      
       return quotes;
 
     } catch (error) {
