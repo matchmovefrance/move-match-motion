@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -82,7 +81,7 @@ export const useQuotes = () => {
     }
     
     setIsGenerating(true);
-    console.log('🔄 Génération des devis avec distances exactes Google Maps...');
+    console.log('🔄 Génération de 3 devis par client avec distances exactes Google Maps...');
     
     setGeneratedQuotes([]);
     
@@ -90,7 +89,7 @@ export const useQuotes = () => {
       const allQuotes: GeneratedQuote[] = [];
       
       for (const client of activeClients) {
-        console.log(`🗺️ Calcul distances exactes pour ${client.name}: ${client.departure_postal_code} -> ${client.arrival_postal_code}`);
+        console.log(`🗺️ Calcul 3 devis pour ${client.name}: ${client.departure_postal_code} -> ${client.arrival_postal_code}`);
         
         // Adapter le format client pour le pricing engine
         const clientForEngine = {
@@ -99,15 +98,16 @@ export const useQuotes = () => {
         };
         
         const clientQuotes = await pricingEngine.generateQuotesForClient(clientForEngine);
+        console.log(`📊 Client ${client.name} - ${clientQuotes.length} devis générés:`, clientQuotes.map(q => `Rang ${q.rank}: ${q.calculated_price}€`));
         allQuotes.push(...clientQuotes);
       }
       
       setGeneratedQuotes(allQuotes);
-      console.log('✅ Devis générés avec distances exactes Google Maps:', allQuotes.length);
+      console.log(`✅ TOTAL: ${allQuotes.length} devis générés (3 par client) avec distances exactes Google Maps`);
       
       toast({
-        title: "Devis générés avec distances exactes",
-        description: `${allQuotes.length} devis calculés avec les vraies distances Google Maps`,
+        title: "3 devis par client générés",
+        description: `${allQuotes.length} devis au total calculés avec les vraies distances Google Maps`,
       });
       
     } catch (error) {

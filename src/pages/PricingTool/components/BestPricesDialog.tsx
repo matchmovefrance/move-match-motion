@@ -68,7 +68,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
     if (!opportunity) return;
     
     setIsGenerating(true);
-    console.log('🔄 Génération des devis avec moteur de pricing unifié...');
+    console.log('🔄 Génération de 3 devis avec moteur de pricing unifié...');
     
     try {
       const clientForPricing = {
@@ -85,15 +85,15 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         client_reference: opportunity.client_reference || `CLI-${String(opportunity.id).padStart(6, '0')}`
       };
 
-      console.log(`🗺️ Calcul distances exactes pour ${clientForPricing.name}: ${clientForPricing.departure_postal_code} -> ${clientForPricing.arrival_postal_code}`);
+      console.log(`🗺️ Calcul 3 devis pour ${clientForPricing.name}: ${clientForPricing.departure_postal_code} -> ${clientForPricing.arrival_postal_code}`);
       
       const generatedQuotes = await pricingEngine.generateQuotesForClient(clientForPricing);
       setQuotes(generatedQuotes);
       
-      console.log('✅ Devis générés avec moteur unifié:', generatedQuotes.length);
+      console.log(`✅ ${generatedQuotes.length} devis générés avec moteur unifié:`, generatedQuotes.map(q => `Rang ${q.rank}: ${q.calculated_price}€`));
       
       toast({
-        title: "Devis générés",
+        title: "3 devis générés",
         description: `${generatedQuotes.length} devis calculés avec les mêmes critères que le moteur principal`,
       });
       
@@ -219,7 +219,7 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-blue-600" />
-            Moteur de devis - {opportunity?.name}
+            3 Meilleurs devis - {opportunity?.name}
             {exactDistance && (
               <Badge className="bg-blue-100 text-blue-800 ml-2">
                 🗺️ {exactDistance}km (Google Maps)
@@ -270,6 +270,10 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                 🗺️ Distance exacte calculée par Google Maps : {exactDistance}km
               </div>
             )}
+            
+            <div className="text-sm mt-2 text-green-600 font-medium">
+              📊 3 devis automatiques: Compétitif, Standard, Premium
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -278,9 +282,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
             <Card>
               <CardContent className="text-center py-8">
                 <Loader2 className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-                <h3 className="text-lg font-medium mb-2">Calcul des devis avec Google Maps API...</h3>
+                <h3 className="text-lg font-medium mb-2">Calcul de 3 devis avec Google Maps API...</h3>
                 <p className="text-muted-foreground">
-                  Utilisation des distances exactes et du moteur de pricing unifié.
+                  Génération des 3 meilleurs prix avec distances exactes.
                 </p>
               </CardContent>
             </Card>
@@ -296,6 +300,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
             </Card>
           ) : (
             <div className="grid gap-4">
+              <div className="text-sm text-green-600 font-medium bg-green-50 p-3 rounded-md">
+                📊 {quotes.length} devis générés - Classés du meilleur prix au plus élevé
+              </div>
               {quotes.map((quote) => {
                 const supplierData = getSupplierData(quote.supplier_id);
                 
@@ -306,6 +313,9 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                         <div className="flex items-center gap-3 mb-3">
                           {getRankBadge(quote.rank)}
                           <h4 className="font-semibold">{quote.supplier_company}</h4>
+                          <Badge variant="outline" className="text-xs">
+                            {quote.quote_type}
+                          </Badge>
                         </div>
                         
                         <div className="bg-gray-50 p-3 rounded-md mb-3">
@@ -328,7 +338,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
                               Marge: {quote.pricing_breakdown.marginPercentage?.toFixed(1)}% • 
                               Distance Google Maps: {quote.pricing_breakdown.exactDistance}km • 
                               Étages: {quote.pricing_breakdown.estimatedFloors} • 
-                              Volume: {quote.pricing_breakdown.estimatedVolume}m³
+                              Volume: {quote.pricing_breakdown.estimatedVolume}m³ •
+                              Stratégie: {quote.quote_type}
                             </div>
                           )}
                         </div>
