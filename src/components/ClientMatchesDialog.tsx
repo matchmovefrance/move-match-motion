@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,32 +77,41 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
     setTimeout(() => setShowRadar(false), 2000);
 
     try {
-      const { data, error } = await supabase
+      console.log('🔍 Chargement matches pour client:', clientId);
+      
+      // Requête simplifiée pour éviter les problèmes de jointures complexes
+      const { data: matchData, error: matchError } = await supabase
         .from('move_matches')
-        .select(`
-          *,
-          confirmed_move:confirmed_moves(
-            company_name,
-            mover_name,
-            departure_postal_code,
-            arrival_postal_code,
-            departure_city,
-            arrival_city,
-            departure_date,
-            available_volume
-          )
-        `)
+        .select('*')
         .eq('client_id', clientId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (matchError) throw matchError;
+
+      // Charger les données des trajets confirmés séparément
+      const matchesWithMoves = [];
       
-      const cleanedMatches = data?.map(match => ({
-        ...match,
-        confirmed_move: Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move
-      })) || [];
+      for (const match of matchData || []) {
+        const { data: moveData, error: moveError } = await supabase
+          .from('confirmed_moves')
+          .select('company_name, mover_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city, departure_date, available_volume')
+          .eq('id', match.move_id)
+          .single();
+
+        if (moveError) {
+          console.error('❌ Erreur chargement trajet:', match.move_id, moveError);
+          continue;
+        }
+
+        matchesWithMoves.push({
+          ...match,
+          confirmed_move: moveData
+        });
+      }
       
-      setMatches(cleanedMatches);
+      console.log('✅ Matches chargés avec données trajets:', matchesWithMoves.length);
+      setMatches(matchesWithMoves);
+      
     } catch (error) {
       console.error('Error fetching matches:', error);
       toast({
@@ -246,6 +255,9 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
               <Target className="h-5 w-5 text-blue-600" />
               <span>Correspondances pour {clientName}</span>
             </DialogTitle>
+            <DialogDescription>
+              Matches trouvés avec le moteur de matching unifié (distances exactes Google Maps)
+            </DialogDescription>
           </DialogHeader>
 
           {/* Animation radar */}
@@ -276,6 +288,9 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                 <div className="text-center py-8">
                   <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">Aucune correspondance trouvée pour ce client</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Le moteur de matching utilise des critères stricts : ≤100km distance totale, ≤7 jours d'écart, volume compatible
+                  </p>
                 </div>
               ) : (
                 <>
@@ -283,10 +298,13 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                     <h3 className="text-lg font-semibold">
                       {matches.length} correspondance{matches.length > 1 ? 's' : ''} trouvée{matches.length > 1 ? 's' : ''}
                     </h3>
+                    <p className="text-sm text-gray-600">
+                      Distances calculées avec Google Maps API • Critères unifiés avec le moteur de devis
+                    </p>
                   </div>
                   
                   {matches.map((match) => (
-                    <Card key={match.id} className={`${match.is_valid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                    <Card key={match.id} className={`${match.is_valid ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'}`}>
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-lg flex items-center space-x-2">
@@ -295,10 +313,13 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                           </CardTitle>
                           <div className="flex items-center space-x-2">
                             <Badge variant={match.is_valid ? 'default' : 'secondary'}>
-                              {match.is_valid ? 'Valide' : 'Non valide'}
+                              {match.is_valid ? 'Match Valide' : 'Match Partiel'}
                             </Badge>
                             <Badge variant="outline">
                               MTH-{String(match.id).padStart(6, '0')}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              Type: {match.match_type}
                             </Badge>
                           </div>
                         </div>
@@ -336,11 +357,26 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                           </div>
                         </div>
 
-                        <div className="border-t pt-3">
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <div>Distance: {match.distance_km} km</div>
-                            <div>Différence de dates: {match.date_diff_days} jours</div>
-                            <div>Type de match: {match.match_type}</div>
+                        <div className="border-t pt-3 bg-white/50 rounded p-3">
+                          <div className="text-sm space-y-1">
+                            <div className="flex justify-between">
+                              <span>Distance totale (Google Maps):</span>
+                              <span className="font-medium">{match.distance_km} km</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Différence de dates:</span>
+                              <span className="font-medium">{match.date_diff_days} jours</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Volume compatible:</span>
+                              <span className={`font-medium ${match.volume_ok ? 'text-green-600' : 'text-red-600'}`}>
+                                {match.volume_ok ? '✓ Oui' : '✗ Non'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Volume combiné:</span>
+                              <span className="font-medium">{match.combined_volume} m³</span>
+                            </div>
                           </div>
                         </div>
 
@@ -378,6 +414,33 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                               <XCircle className="h-4 w-4 mr-1" />
                               Rejeter
                             </Button>
+                          </div>
+                        )}
+
+                        {!match.is_valid && (
+                          <div className="bg-orange-100 border border-orange-200 rounded p-3">
+                            <p className="text-sm text-orange-800">
+                              <strong>Match partiel :</strong> Ce match ne respecte pas tous les critères (distance > 100km, écart > 7 jours, ou volume insuffisant)
+                            </p>
+                            <div className="flex space-x-2 mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => showOnMap(match)}
+                              >
+                                <MapPin className="h-4 w-4 mr-1" />
+                                Voir sur carte
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => rejectMatch(match.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Supprimer
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </CardContent>

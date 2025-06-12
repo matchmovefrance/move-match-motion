@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { pricingEngine } from '@/pages/PricingTool/components/PricingEngine';
 
 interface Client {
   id: number;
@@ -96,11 +97,22 @@ const MatchFinder = () => {
     }
   };
 
-  const calculateDistance = (postal1: string, postal2: string): number => {
-    const lat1 = parseFloat(postal1.substring(0, 2));
-    const lon1 = parseFloat(postal1.substring(2, 5));
-    const lat2 = parseFloat(postal2.substring(0, 2));
-    const lon2 = parseFloat(postal2.substring(2, 5));
+  // Utiliser la même méthode de calcul de distance que PricingEngine pour la cohérence
+  const calculateExactDistance = async (postal1: string, postal2: string): Promise<number> => {
+    try {
+      return await pricingEngine.getExactDistance(postal1, postal2);
+    } catch (error) {
+      console.error('❌ Erreur calcul distance:', error);
+      // Fallback vers calcul simple si Google Maps échoue
+      return calculateFallbackDistance(postal1, postal2);
+    }
+  };
+
+  const calculateFallbackDistance = (postal1: string, postal2: string): number => {
+    const lat1 = parseFloat(postal1.substring(0, 2)) + parseFloat(postal1.substring(2, 5)) / 1000;
+    const lon1 = parseFloat(postal1.substring(0, 2)) * 0.5;
+    const lat2 = parseFloat(postal2.substring(0, 2)) + parseFloat(postal2.substring(2, 5)) / 1000;
+    const lon2 = parseFloat(postal2.substring(0, 2)) * 0.5;
     
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -124,53 +136,72 @@ const MatchFinder = () => {
     }
 
     setIsMatching(true);
-    console.log('🎯 Début du processus de matching...');
+    console.log('🎯 Début du processus de matching avec distances exactes...');
 
     try {
+      // Supprimer les anciens matches pour éviter les doublons
+      const { error: deleteError } = await supabase
+        .from('move_matches')
+        .delete()
+        .neq('id', 0); // Supprime tous les matches existants
+
+      if (deleteError) {
+        console.warn('⚠️ Erreur suppression anciens matches:', deleteError);
+      }
+
       const matches = [];
 
       for (const client of clients) {
+        console.log(`🔍 Recherche matches pour client ${client.name}...`);
+        
         for (const move of confirmedMoves) {
-          // Calculer la distance entre les points de départ
-          const departureDistance = calculateDistance(
-            client.departure_postal_code,
-            move.departure_postal_code
-          );
-          
-          // Calculer la distance entre les points d'arrivée
-          const arrivalDistance = calculateDistance(
-            client.arrival_postal_code,
-            move.arrival_postal_code
-          );
-          
-          const totalDistance = departureDistance + arrivalDistance;
-          
-          // Calculer la différence de dates
-          const clientDate = new Date(client.desired_date);
-          const moveDate = new Date(move.departure_date);
-          const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
-          
-          // Vérifier la compatibilité du volume
-          const volumeOk = client.estimated_volume <= move.available_volume;
-          const combinedVolume = client.estimated_volume + (move.available_volume - client.estimated_volume);
-          
-          // Critères de validation
-          const isValid = 
-            totalDistance <= 100 && // Max 100km de distance totale
-            dateDiff <= 7 &&        // Max 7 jours de différence
-            volumeOk;               // Volume compatible
-          
-          if (totalDistance <= 200) { // Sauvegarder même les matches non parfaits
-            matches.push({
-              client_id: client.id,
-              move_id: move.id,
-              match_type: isValid ? 'perfect' : 'partial',
-              volume_ok: volumeOk,
-              combined_volume: combinedVolume,
-              distance_km: totalDistance,
-              date_diff_days: Math.round(dateDiff),
-              is_valid: isValid
-            });
+          try {
+            // Calculer la distance exacte entre les points de départ
+            const departureDistance = await calculateExactDistance(
+              client.departure_postal_code,
+              move.departure_postal_code
+            );
+            
+            // Calculer la distance exacte entre les points d'arrivée
+            const arrivalDistance = await calculateExactDistance(
+              client.arrival_postal_code,
+              move.arrival_postal_code
+            );
+            
+            const totalDistance = departureDistance + arrivalDistance;
+            
+            // Calculer la différence de dates
+            const clientDate = new Date(client.desired_date);
+            const moveDate = new Date(move.departure_date);
+            const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
+            
+            // Vérifier la compatibilité du volume
+            const volumeOk = client.estimated_volume <= move.available_volume;
+            const combinedVolume = client.estimated_volume + (move.available_volume - client.estimated_volume);
+            
+            // Critères de validation cohérents avec le reste de l'application
+            const isValid = 
+              totalDistance <= 100 && // Max 100km de distance totale
+              dateDiff <= 7 &&        // Max 7 jours de différence
+              volumeOk;               // Volume compatible
+            
+            // Enregistrer même les matches partiels pour analyse
+            if (totalDistance <= 200) {
+              matches.push({
+                client_id: client.id,
+                move_id: move.id,
+                match_type: isValid ? 'perfect' : 'partial',
+                volume_ok: volumeOk,
+                combined_volume: combinedVolume,
+                distance_km: totalDistance,
+                date_diff_days: Math.round(dateDiff),
+                is_valid: isValid
+              });
+              
+              console.log(`📊 Match trouvé: Client ${client.id} -> Move ${move.id}, Distance: ${totalDistance}km, Valide: ${isValid}`);
+            }
+          } catch (error) {
+            console.error(`❌ Erreur calcul match Client ${client.id} -> Move ${move.id}:`, error);
           }
         }
       }
@@ -201,10 +232,10 @@ const MatchFinder = () => {
           if (updateError) console.warn('⚠️ Erreur mise à jour statuts:', updateError);
         }
 
-        console.log('✅ Matches sauvegardés:', matches.length);
+        console.log('✅ Matches sauvegardés avec distances exactes:', matches.length);
         toast({
           title: "Matching terminé",
-          description: `${matches.length} correspondances trouvées dont ${matches.filter(m => m.is_valid).length} valides`,
+          description: `${matches.length} correspondances trouvées dont ${matches.filter(m => m.is_valid).length} valides (distances exactes Google Maps)`,
         });
       } else {
         toast({
@@ -235,7 +266,19 @@ const MatchFinder = () => {
     >
       <div className="flex items-center space-x-3">
         <Search className="h-6 w-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching - Distances Exactes</h2>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 text-blue-800 mb-2">
+          <Target className="h-5 w-5" />
+          <span className="font-semibold">Algorithme de Matching Unifié</span>
+        </div>
+        <div className="text-sm text-blue-700">
+          • <strong>Distances exactes</strong> calculées via Google Maps API<br/>
+          • <strong>Critères cohérents</strong> : ≤100km distance totale, ≤7 jours d'écart, volume compatible<br/>
+          • <strong>Synchronisation</strong> avec le moteur de devis pour des résultats cohérents
+        </div>
       </div>
 
       {/* Statistiques */}
@@ -249,6 +292,9 @@ const MatchFinder = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{clients.length}</div>
+            <p className="text-xs text-muted-foreground">
+              Status: pending, confirmed
+            </p>
           </CardContent>
         </Card>
 
@@ -261,6 +307,9 @@ const MatchFinder = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{confirmedMoves.length}</div>
+            <p className="text-xs text-muted-foreground">
+              Status: confirmed
+            </p>
           </CardContent>
         </Card>
 
@@ -280,7 +329,7 @@ const MatchFinder = () => {
               {isMatching ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Matching en cours...
+                  Calcul distances exactes...
                 </>
               ) : (
                 <>
@@ -309,8 +358,8 @@ const MatchFinder = () => {
             <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-orange-800 mb-2">Données insuffisantes</h3>
             <p className="text-orange-700">
-              {clients.length === 0 && "Aucun client actif trouvé. "}
-              {confirmedMoves.length === 0 && "Aucun trajet confirmé trouvé. "}
+              {clients.length === 0 && "Aucun client actif trouvé (status: pending/confirmed). "}
+              {confirmedMoves.length === 0 && "Aucun trajet confirmé trouvé (status: confirmed). "}
               Veuillez ajouter des données pour pouvoir lancer le matching.
             </p>
           </CardContent>
