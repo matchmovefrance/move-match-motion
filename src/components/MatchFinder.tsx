@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Calendar, Volume2, Target, Users, Truck } from 'lucide-react';
@@ -9,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import MatchFilters from './MatchFilters';
-import MatchDetailsDialog from './MatchDetailsDialog';
+import { MatchDetailsDialog } from './MatchDetailsDialog';
 
 interface ClientRequest {
   id: number;
@@ -61,9 +60,12 @@ const MatchFinder = () => {
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
 
   // Filtres
-  const [maxDistance, setMaxDistance] = useState(100);
-  const [maxDateDiff, setMaxDateDiff] = useState(7);
-  const [minMatchScore, setMinMatchScore] = useState(70);
+  const [filters, setFilters] = useState({
+    pending: true,
+    accepted: false,
+    rejected: false,
+    showAll: false
+  });
 
   useEffect(() => {
     fetchData();
@@ -73,7 +75,7 @@ const MatchFinder = () => {
     if (clients.length > 0 && moves.length > 0) {
       findMatches();
     }
-  }, [clients, moves, maxDistance, maxDateDiff, minMatchScore]);
+  }, [clients, moves, filters]);
 
   const fetchData = async () => {
     try {
@@ -186,11 +188,8 @@ const MatchFinder = () => {
         // Calculer score de match
         const matchScore = calculateMatchScore(avgDistance, dateDiff, volumeMatch);
 
-        // Appliquer les filtres
-        if (avgDistance <= maxDistance && 
-            dateDiff <= maxDateDiff && 
-            matchScore >= minMatchScore) {
-          
+        // Appliquer les filtres basiques
+        if (avgDistance <= 100 && dateDiff <= 7 && matchScore >= 70) {
           foundMatches.push({
             client,
             move,
@@ -303,12 +302,7 @@ const MatchFinder = () => {
       </div>
 
       <MatchFilters
-        maxDistance={maxDistance}
-        setMaxDistance={setMaxDistance}
-        maxDateDiff={maxDateDiff}
-        setMaxDateDiff={setMaxDateDiff}
-        minMatchScore={minMatchScore}
-        setMinMatchScore={setMinMatchScore}
+        onFiltersChange={setFilters}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -418,6 +412,7 @@ const MatchFinder = () => {
         open={showDetailsDialog}
         onOpenChange={setShowDetailsDialog}
         match={selectedMatch}
+        onMatchUpdated={fetchData}
       />
     </motion.div>
   );

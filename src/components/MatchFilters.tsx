@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,15 +5,15 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
 import { Clock, Check, X, Eye, RotateCcw } from 'lucide-react';
 
-interface MatchFiltersProps {
-  onFiltersChange: (filters: MatchFilterOptions) => void;
-}
-
 export interface MatchFilterOptions {
   pending: boolean;
   accepted: boolean;
   rejected: boolean;
   showAll: boolean;
+}
+
+interface MatchFiltersProps {
+  onFiltersChange: (filters: MatchFilterOptions) => void;
 }
 
 const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
