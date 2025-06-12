@@ -23,6 +23,7 @@ interface ClientRequest {
   estimated_volume: number;
   desired_date: string;
   quote_amount?: number;
+  client_reference: string;
 }
 
 export class PricingEngine {

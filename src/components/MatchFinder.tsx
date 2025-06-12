@@ -1,94 +1,60 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, MapPin, Calendar, Volume2, Target, Users, Truck } from 'lucide-react';
+import { Search, Users, Truck, Target, Play, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
-import MatchFilters from './MatchFilters';
-import { MatchDetailsDialog } from './MatchDetailsDialog';
 
-interface ClientRequest {
+interface Client {
   id: number;
   name: string;
   departure_city: string;
   departure_postal_code: string;
   arrival_city: string;
   arrival_postal_code: string;
-  desired_date: string;
   estimated_volume: number;
-  flexible_dates: boolean;
+  desired_date: string;
   status: string;
-  created_at: string;
+  client_reference: string;
 }
 
 interface ConfirmedMove {
   id: number;
-  mover_name: string;
   company_name: string;
   departure_city: string;
   departure_postal_code: string;
   arrival_city: string;
   arrival_postal_code: string;
   departure_date: string;
-  max_volume: number;
-  used_volume: number;
   available_volume: number;
-  price_per_m3: number;
-  status: string;
-}
-
-interface MatchResult {
-  client: ClientRequest;
-  move: ConfirmedMove;
-  distance: number;
-  dateDiff: number;
-  volumeMatch: boolean;
-  matchScore: number;
 }
 
 const MatchFinder = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [clients, setClients] = useState<ClientRequest[]>([]);
-  const [moves, setMoves] = useState<ConfirmedMove[]>([]);
-  const [matches, setMatches] = useState<MatchResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
-  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
-
-  // Filtres
-  const [filters, setFilters] = useState({
-    pending: true,
-    accepted: false,
-    rejected: false,
-    showAll: false
-  });
+  const [clients, setClients] = useState<Client[]>([]);
+  const [confirmedMoves, setConfirmedMoves] = useState<ConfirmedMove[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isMatching, setIsMatching] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
-
-  useEffect(() => {
-    if (clients.length > 0 && moves.length > 0) {
-      findMatches();
-    }
-  }, [clients, moves, filters]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       console.log('🔍 Chargement des données pour le matching...');
 
-      // Charger les demandes clients avec TOUS les champs nécessaires
+      // Charger les clients depuis la table unifiée
       const { data: clientsData, error: clientsError } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
+        .in('status', ['pending', 'active'])
         .not('departure_postal_code', 'is', null)
         .not('arrival_postal_code', 'is', null)
-        .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (clientsError) {
@@ -96,45 +62,27 @@ const MatchFinder = () => {
         throw clientsError;
       }
 
-      // Charger les déménagements confirmés avec TOUS les champs nécessaires
+      // Charger les trajets confirmés
       const { data: movesData, error: movesError } = await supabase
         .from('confirmed_moves')
         .select('*')
+        .eq('status', 'confirmed')
         .not('departure_postal_code', 'is', null)
         .not('arrival_postal_code', 'is', null)
-        .eq('status', 'confirmed')
-        .gt('available_volume', 0)
         .order('departure_date', { ascending: true });
 
       if (movesError) {
-        console.error('❌ Erreur chargement déménagements:', movesError);
+        console.error('❌ Erreur chargement trajets:', movesError);
         throw movesError;
       }
 
-      // Filtrer les données nulles côté client aussi
-      const validClients = clientsData?.filter(client => 
-        client.departure_postal_code && 
-        client.arrival_postal_code && 
-        client.estimated_volume && 
-        client.estimated_volume > 0
-      ) || [];
-
-      const validMoves = movesData?.filter(move => 
-        move.departure_postal_code && 
-        move.arrival_postal_code && 
-        move.available_volume && 
-        move.available_volume > 0
-      ) || [];
-
-      setClients(validClients);
-      setMoves(validMoves);
-      
-      console.log('✅ Données valides chargées:', {
-        clients: validClients.length,
-        moves: validMoves.length,
-        filteredOutClients: (clientsData?.length || 0) - validClients.length,
-        filteredOutMoves: (movesData?.length || 0) - validMoves.length
+      console.log('✅ Données chargées:', {
+        clients: clientsData?.length || 0,
+        moves: movesData?.length || 0
       });
+
+      setClients(clientsData || []);
+      setConfirmedMoves(movesData || []);
 
     } catch (error) {
       console.error('❌ Erreur lors du chargement:', error);
@@ -148,226 +96,136 @@ const MatchFinder = () => {
     }
   };
 
-  const calculateDistance = (postalCode1: string | null, postalCode2: string | null): number => {
-    // Vérifier que les codes postaux ne sont pas null ou undefined
-    if (!postalCode1 || !postalCode2) {
-      console.warn('Code postal manquant:', { postalCode1, postalCode2 });
-      return 999; // Distance par défaut élevée pour les codes postaux manquants
-    }
-
-    // Vérifier que les codes postaux ont une longueur suffisante
-    if (postalCode1.length < 2 || postalCode2.length < 2) {
-      console.warn('Code postal trop court:', { postalCode1, postalCode2 });
-      return 999;
-    }
-
-    // Simulation de calcul de distance basé sur les codes postaux
-    // Dans une vraie application, on utiliserait l'API Google Maps
-    const code1 = parseInt(postalCode1.substring(0, 2));
-    const code2 = parseInt(postalCode2.substring(0, 2));
+  const calculateDistance = (postal1: string, postal2: string): number => {
+    const lat1 = parseFloat(postal1.substring(0, 2));
+    const lon1 = parseFloat(postal1.substring(2, 5));
+    const lat2 = parseFloat(postal2.substring(0, 2));
+    const lon2 = parseFloat(postal2.substring(2, 5));
     
-    // Vérifier que les codes sont des nombres valides
-    if (isNaN(code1) || isNaN(code2)) {
-      console.warn('Code postal invalide:', { postalCode1, postalCode2, code1, code2 });
-      return 999;
-    }
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     
-    return Math.abs(code1 - code2) * 10; // Distance approximative en km
+    return Math.round(R * c);
   };
 
-  const calculateDateDiff = (date1: string, date2: string): number => {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const calculateMatchScore = (distance: number, dateDiff: number, volumeMatch: boolean): number => {
-    let score = 100;
-    
-    // Pénalité distance (max 30 points)
-    score -= Math.min(distance / 10, 30);
-    
-    // Pénalité différence de dates (max 20 points)
-    score -= Math.min(dateDiff * 3, 20);
-    
-    // Bonus volume compatible (15 points)
-    if (volumeMatch) score += 15;
-    
-    // Bonus départ proche (10 points si < 20km)
-    if (distance < 20) score += 10;
-    
-    return Math.max(0, Math.round(score));
-  };
-
-  const findMatches = () => {
-    console.log('🎯 Recherche de matches avec données validées...');
-    const foundMatches: MatchResult[] = [];
-
-    if (clients.length === 0) {
-      console.warn('⚠️ Aucun client valide pour le matching');
-      setMatches([]);
-      return;
-    }
-
-    if (moves.length === 0) {
-      console.warn('⚠️ Aucun déménagement valide pour le matching');
-      setMatches([]);
-      return;
-    }
-
-    clients.forEach(client => {
-      console.log('🔍 Analyse client:', {
-        name: client.name,
-        departure: client.departure_postal_code,
-        arrival: client.arrival_postal_code,
-        volume: client.estimated_volume
-      });
-
-      moves.forEach(move => {
-        console.log('🚛 Analyse trajet:', {
-          company: move.company_name,
-          departure: move.departure_postal_code,
-          arrival: move.arrival_postal_code,
-          available: move.available_volume
-        });
-
-        // Calculer distance entre départs
-        const departureDistance = calculateDistance(
-          client.departure_postal_code,
-          move.departure_postal_code
-        );
-
-        // Calculer distance entre arrivées
-        const arrivalDistance = calculateDistance(
-          client.arrival_postal_code,
-          move.arrival_postal_code
-        );
-
-        // Distance moyenne
-        const avgDistance = (departureDistance + arrivalDistance) / 2;
-
-        // Différence de dates
-        const dateDiff = calculateDateDiff(client.desired_date, move.departure_date);
-
-        // Vérifier compatibilité volume
-        const volumeMatch = move.available_volume >= client.estimated_volume;
-
-        // Calculer score de match
-        const matchScore = calculateMatchScore(avgDistance, dateDiff, volumeMatch);
-
-        console.log('📊 Résultat match:', {
-          client: client.name,
-          move: move.company_name,
-          avgDistance,
-          dateDiff,
-          volumeMatch,
-          matchScore
-        });
-
-        // Critères de base plus permissifs pour voir plus de résultats
-        if (avgDistance <= 150 && dateDiff <= 10 && matchScore >= 50) {
-          foundMatches.push({
-            client,
-            move,
-            distance: avgDistance,
-            dateDiff,
-            volumeMatch,
-            matchScore
-          });
-        }
-      });
-    });
-
-    // Trier par score décroissant
-    foundMatches.sort((a, b) => b.matchScore - a.matchScore);
-    
-    setMatches(foundMatches);
-    console.log('✅ Matches trouvés:', foundMatches.length);
-    
-    if (foundMatches.length === 0) {
-      console.warn('❌ Aucun match trouvé. Critères possibles:', {
-        clientsWithData: clients.length,
-        movesWithData: moves.length,
-        maxDistanceKm: 150,
-        maxDateDiffDays: 10,
-        minScore: 50
-      });
-    }
-  };
-
-  const createMatch = async (match: MatchResult) => {
-    if (!user) return;
-
-    try {
-      console.log('🔗 Création du match...', match);
-
-      const { error } = await supabase
-        .from('move_matches')
-        .insert({
-          client_request_id: match.client.id,
-          move_id: match.move.id,
-          match_type: 'automatic',
-          distance_km: match.distance,
-          date_diff_days: match.dateDiff,
-          volume_ok: match.volumeMatch,
-          combined_volume: match.client.estimated_volume + match.move.used_volume,
-          is_valid: true
-        });
-
-      if (error) throw error;
-
-      // Mettre à jour le statut du client
-      await supabase
-        .from('client_requests')
-        .update({
-          is_matched: true,
-          matched_at: new Date().toISOString(),
-          match_status: 'matched'
-        })
-        .eq('id', match.client.id);
-
+  const findMatches = async () => {
+    if (clients.length === 0 || confirmedMoves.length === 0) {
       toast({
-        title: "Match créé",
-        description: `Match créé entre ${match.client.name} et ${match.move.company_name}`,
-      });
-
-      // Recharger les données
-      fetchData();
-
-    } catch (error) {
-      console.error('❌ Erreur création match:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de créer le match",
+        title: "Pas de données",
+        description: "Aucun client ou trajet disponible pour le matching",
         variant: "destructive",
       });
+      return;
+    }
+
+    setIsMatching(true);
+    console.log('🎯 Début du processus de matching...');
+
+    try {
+      const matches = [];
+
+      for (const client of clients) {
+        for (const move of confirmedMoves) {
+          // Calculer la distance entre les points de départ
+          const departureDistance = calculateDistance(
+            client.departure_postal_code,
+            move.departure_postal_code
+          );
+          
+          // Calculer la distance entre les points d'arrivée
+          const arrivalDistance = calculateDistance(
+            client.arrival_postal_code,
+            move.arrival_postal_code
+          );
+          
+          const totalDistance = departureDistance + arrivalDistance;
+          
+          // Calculer la différence de dates
+          const clientDate = new Date(client.desired_date);
+          const moveDate = new Date(move.departure_date);
+          const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
+          
+          // Vérifier la compatibilité du volume
+          const volumeOk = client.estimated_volume <= move.available_volume;
+          const combinedVolume = client.estimated_volume + (move.available_volume - client.estimated_volume);
+          
+          // Critères de validation
+          const isValid = 
+            totalDistance <= 100 && // Max 100km de distance totale
+            dateDiff <= 7 &&        // Max 7 jours de différence
+            volumeOk;               // Volume compatible
+          
+          if (totalDistance <= 200) { // Sauvegarder même les matches non parfaits
+            matches.push({
+              client_id: client.id,
+              move_id: move.id,
+              match_type: isValid ? 'perfect' : 'partial',
+              volume_ok: volumeOk,
+              combined_volume: combinedVolume,
+              distance_km: totalDistance,
+              date_diff_days: Math.round(dateDiff),
+              is_valid: isValid
+            });
+          }
+        }
+      }
+
+      // Sauvegarder les matches en base
+      if (matches.length > 0) {
+        const { error } = await supabase
+          .from('move_matches')
+          .insert(matches);
+
+        if (error) throw error;
+
+        // Mettre à jour les statuts des clients matchés
+        const validMatchedClientIds = matches
+          .filter(m => m.is_valid)
+          .map(m => m.client_id);
+
+        if (validMatchedClientIds.length > 0) {
+          const { error: updateError } = await supabase
+            .from('clients')
+            .update({
+              is_matched: true,
+              matched_at: new Date().toISOString(),
+              match_status: 'matched'
+            })
+            .in('id', validMatchedClientIds);
+
+          if (updateError) console.warn('⚠️ Erreur mise à jour statuts:', updateError);
+        }
+
+        console.log('✅ Matches sauvegardés:', matches.length);
+        toast({
+          title: "Matching terminé",
+          description: `${matches.length} correspondances trouvées dont ${matches.filter(m => m.is_valid).length} valides`,
+        });
+      } else {
+        toast({
+          title: "Aucun match",
+          description: "Aucune correspondance trouvée avec les critères actuels",
+        });
+      }
+
+      await fetchData(); // Recharger les données
+
+    } catch (error) {
+      console.error('❌ Erreur matching:', error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors du processus de matching",
+        variant: "destructive",
+      });
+    } finally {
+      setIsMatching(false);
     }
   };
-
-  const getMatchTypeColor = (score: number) => {
-    if (score >= 90) return 'bg-green-100 text-green-800 border-green-200';
-    if (score >= 75) return 'bg-blue-100 text-blue-800 border-blue-200';
-    if (score >= 60) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    return 'bg-gray-100 text-gray-800 border-gray-200';
-  };
-
-  const getMatchTypeLabel = (score: number) => {
-    if (score >= 90) return 'Excellent';
-    if (score >= 75) return 'Très bon';
-    if (score >= 60) return 'Bon';
-    return 'Moyen';
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement des données...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <motion.div
@@ -375,131 +233,89 @@ const MatchFinder = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Target className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Recherche de correspondances</h2>
-          <Badge variant="secondary">{matches.length} match(es) trouvé(s)</Badge>
-        </div>
-        <Button onClick={fetchData} disabled={loading}>
-          <Search className="h-4 w-4 mr-2" />
-          Actualiser
-        </Button>
+      <div className="flex items-center space-x-3">
+        <Search className="h-6 w-6 text-blue-600" />
+        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching</h2>
       </div>
 
-      <MatchFilters
-        onFiltersChange={setFilters}
-      />
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center">
+              <Users className="h-4 w-4 mr-2 text-blue-600" />
+              Clients actifs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{clients.length}</div>
+          </CardContent>
+        </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {matches.map((match, index) => (
-          <Card key={`${match.client.id}-${match.move.id}`} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Match #{index + 1}</CardTitle>
-                <Badge className={getMatchTypeColor(match.matchScore)}>
-                  {getMatchTypeLabel(match.matchScore)} ({match.matchScore}%)
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Informations client */}
-              <div className="bg-blue-50 rounded-lg p-3">
-                <div className="flex items-center mb-2">
-                  <Users className="h-4 w-4 text-blue-600 mr-2" />
-                  <span className="font-medium text-blue-800">Client: {match.client.name}</span>
-                </div>
-                <div className="space-y-1 text-sm text-blue-700">
-                  <div className="flex items-center">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {match.client.departure_postal_code} → {match.client.arrival_postal_code}
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    {new Date(match.client.desired_date).toLocaleDateString('fr-FR')}
-                  </div>
-                  <div className="flex items-center">
-                    <Volume2 className="h-3 w-3 mr-1" />
-                    {match.client.estimated_volume} m³
-                  </div>
-                </div>
-              </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center">
+              <Truck className="h-4 w-4 mr-2 text-green-600" />
+              Trajets confirmés
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{confirmedMoves.length}</div>
+          </CardContent>
+        </Card>
 
-              {/* Informations déménagement */}
-              <div className="bg-green-50 rounded-lg p-3">
-                <div className="flex items-center mb-2">
-                  <Truck className="h-4 w-4 text-green-600 mr-2" />
-                  <span className="font-medium text-green-800">{match.move.company_name}</span>
-                </div>
-                <div className="space-y-1 text-sm text-green-700">
-                  <div className="flex items-center">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {match.move.departure_postal_code} → {match.move.arrival_postal_code}
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    {new Date(match.move.departure_date).toLocaleDateString('fr-FR')}
-                  </div>
-                  <div className="flex items-center">
-                    <Volume2 className="h-3 w-3 mr-1" />
-                    {match.move.available_volume} m³ disponible
-                  </div>
-                </div>
-              </div>
-
-              {/* Métriques du match */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="text-center">
-                  <div className="font-medium text-gray-700">Distance</div>
-                  <div className="text-lg font-bold text-gray-900">{Math.round(match.distance)} km</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-medium text-gray-700">Écart dates</div>
-                  <div className="text-lg font-bold text-gray-900">{Math.round(match.dateDiff)} jours</div>
-                </div>
-              </div>
-
-              <div className="flex space-x-2 pt-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedMatch(match);
-                    setShowDetailsDialog(true);
-                  }}
-                  className="flex-1"
-                >
-                  Détails
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => createMatch(match)}
-                  className="flex-1"
-                >
-                  Créer le match
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center">
+              <Target className="h-4 w-4 mr-2 text-purple-600" />
+              Action
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={findMatches}
+              disabled={loading || isMatching || clients.length === 0 || confirmedMoves.length === 0}
+              className="w-full"
+            >
+              {isMatching ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Matching en cours...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Lancer le matching
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
-      {matches.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2">Aucune correspondance trouvée</p>
-          <p className="text-sm text-gray-500">
-            Essayez d'ajuster les filtres de recherche
-          </p>
-        </div>
+      {/* Messages d'état */}
+      {loading && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-blue-700">Chargement des données...</p>
+          </CardContent>
+        </Card>
       )}
 
-      <MatchDetailsDialog
-        open={showDetailsDialog}
-        onOpenChange={setShowDetailsDialog}
-        match={selectedMatch}
-        onMatchUpdated={fetchData}
-      />
+      {!loading && (clients.length === 0 || confirmedMoves.length === 0) && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="text-center py-8">
+            <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-orange-800 mb-2">Données insuffisantes</h3>
+            <p className="text-orange-700">
+              {clients.length === 0 && "Aucun client actif trouvé. "}
+              {confirmedMoves.length === 0 && "Aucun trajet confirmé trouvé. "}
+              Veuillez ajouter des données pour pouvoir lancer le matching.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </motion.div>
   );
 };

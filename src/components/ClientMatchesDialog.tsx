@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -357,11 +356,11 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
         </DialogContent>
       </Dialog>
 
-      {/* Popup de carte */}
+      {/* Popup de carte avec les bons props */}
       {showMapPopup && selectedMatchForMap && (
         <MapPopup
           open={showMapPopup}
-          onClose={() => setShowMapPopup(false)}
+          onOpenChange={setShowMapPopup}
           clientData={clientData}
           matchData={selectedMatchForMap}
         />

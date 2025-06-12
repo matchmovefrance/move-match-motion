@@ -21,7 +21,7 @@ interface AcceptedQuoteWithDetails {
     title: string;
     departure_city: string;
     arrival_city: string;
-    client_request_id?: number;
+    client_id?: number;
   };
 }
 
@@ -60,7 +60,7 @@ export const useAcceptedQuotes = () => {
         .select(`
           *,
           supplier:suppliers(company_name, contact_name, email, phone),
-          opportunity:pricing_opportunities(title, departure_city, arrival_city, client_request_id)
+          opportunity:pricing_opportunities(title, departure_city, arrival_city, client_id)
         `)
         .in('status', statusFilter);
 
@@ -132,21 +132,21 @@ export const useAcceptedQuotes = () => {
         .from('quotes')
         .select(`
           opportunity_id,
-          opportunity:pricing_opportunities(client_request_id)
+          opportunity:pricing_opportunities(client_id)
         `)
         .eq('id', selectedQuote.id)
         .single();
 
       if (fetchError) throw fetchError;
 
-      if (quote?.opportunity?.client_request_id) {
+      if (quote?.opportunity?.client_id) {
         const { error: clientError } = await supabase
-          .from('client_requests')
+          .from('clients')
           .update({ 
             status: 'completed',
             quote_amount: selectedQuote.bid_amount
           })
-          .eq('id', quote.opportunity.client_request_id);
+          .eq('id', quote.opportunity.client_id);
 
         if (clientError) console.warn('⚠️ Erreur mise à jour client:', clientError);
       }
