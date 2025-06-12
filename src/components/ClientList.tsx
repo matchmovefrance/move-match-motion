@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -54,22 +53,16 @@ const ClientList = () => {
     fetchClients();
   }, []);
 
+  const generateClientReference = (id: number) => {
+    return `CLI-${String(id + 100000).padStart(6, '0')}`;
+  };
+
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Chargement de TOUS les clients (clients + client_requests)...');
+      console.log('📋 Chargement et unification des références clients...');
       
-      // Charger depuis la table clients
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('clients')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (clientsError) {
-        console.error('❌ Erreur clients:', clientsError);
-      }
-
-      // Charger depuis la table client_requests
+      // Charger uniquement depuis client_requests avec les références unifiées
       const { data: requestsData, error: requestsError } = await supabase
         .from('client_requests')
         .select('*')
@@ -77,44 +70,21 @@ const ClientList = () => {
 
       if (requestsError) {
         console.error('❌ Erreur client_requests:', requestsError);
+        throw requestsError;
       }
 
       const allClients: Client[] = [];
 
-      // Ajouter les clients de la table clients avec référence CLI-XXXXXX
-      if (clientsData) {
-        clientsData.forEach(client => {
-          allClients.push({
-            id: client.id,
-            name: client.name || 'Nom non renseigné',
-            email: client.email || 'Email non renseigné',
-            phone: client.phone || 'Téléphone non renseigné',
-            client_reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`,
-            created_at: client.created_at,
-            created_by: client.created_by,
-            source: 'clients',
-            departure_city: client.departure_city,
-            departure_postal_code: client.departure_postal_code,
-            arrival_city: client.arrival_city,
-            arrival_postal_code: client.arrival_postal_code,
-            desired_date: client.desired_date,
-            estimated_volume: client.estimated_volume,
-            flexible_dates: client.flexible_dates,
-            flexibility_days: client.flexibility_days,
-            status: client.status
-          });
-        });
-      }
-
-      // Ajouter les clients de la table client_requests avec référence CLI-XXXXXX
+      // Traiter uniquement les client_requests avec format CLI-XXXXXX unifié
       if (requestsData) {
         requestsData.forEach(request => {
+          const clientRef = generateClientReference(request.id);
           allClients.push({
-            id: request.id + 100000, // Décaler les IDs pour éviter les conflits
+            id: request.id + 100000, // ID unifié pour éviter conflits
             name: request.name || 'Nom non renseigné',
             email: request.email || 'Email non renseigné',
             phone: request.phone || 'Téléphone non renseigné',
-            client_reference: `CLI-${String(request.id + 100000).padStart(6, '0')}`,
+            client_reference: clientRef,
             created_at: request.created_at,
             created_by: request.created_by,
             source: 'client_requests',
@@ -132,11 +102,12 @@ const ClientList = () => {
         });
       }
 
-      console.log('✅ Tous les clients chargés:', {
-        clients: clientsData?.length || 0,
+      console.log('✅ Références clients unifiées:', {
         requests: requestsData?.length || 0,
-        total: allClients.length
+        total: allClients.length,
+        format: 'CLI-XXXXXX'
       });
+      
       setClients(allClients);
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -164,10 +135,12 @@ const ClientList = () => {
     try {
       console.log('🗑️ Suppression du client:', clientToDelete.id);
       
+      // Supprimer de client_requests en utilisant l'ID original
+      const originalId = clientToDelete.id - 100000;
       const { error } = await supabase
         .from('client_requests')
         .delete()
-        .eq('id', clientToDelete.id);
+        .eq('id', originalId);
 
       if (error) throw error;
 
@@ -318,7 +291,7 @@ const ClientList = () => {
                   <CardTitle className="text-lg">{client.name}</CardTitle>
                   <div className="flex items-center space-x-1">
                     <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                      Demande
+                      Client
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

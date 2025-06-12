@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X } from 'lucide-react';
@@ -44,21 +43,33 @@ const MapView = () => {
       const cleanRef = referenceFilter.toUpperCase().trim();
       let foundItem: FilteredItem | null = null;
 
-      // Rechercher dans les clients
+      console.log('🔍 Recherche de référence:', cleanRef);
+
+      // Rechercher dans les clients (format CLI-XXXXXX)
       if (cleanRef.startsWith('CLI-')) {
-        const id = parseInt(cleanRef.replace('CLI-', ''));
+        const idStr = cleanRef.replace('CLI-', '');
+        const id = parseInt(idStr);
+        
         if (!isNaN(id)) {
+          console.log('🔍 Recherche client ID:', id);
+          
+          // D'abord chercher dans client_requests avec l'ID décalé
+          let searchId = id;
+          if (id >= 100000) {
+            searchId = id - 100000;
+          }
+          
           const { data: client, error } = await supabase
             .from('client_requests')
             .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-            .eq('id', id)
+            .eq('id', searchId)
             .single();
 
           if (!error && client) {
             foundItem = {
               id: client.id,
               type: 'client',
-              reference: `CLI-${String(client.id).padStart(6, '0')}`,
+              reference: `CLI-${String(client.id + 100000).padStart(6, '0')}`,
               name: client.name || 'Client',
               date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
               details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
@@ -67,6 +78,7 @@ const MapView = () => {
               departure_city: client.departure_city,
               arrival_city: client.arrival_city
             };
+            console.log('✅ Client trouvé:', foundItem);
           }
         }
       }
@@ -137,11 +149,13 @@ const MapView = () => {
 
       if (foundItem) {
         setSelectedItem(foundItem);
+        console.log('✅ Référence trouvée et affichée:', foundItem.reference);
         toast({
           title: "Référence trouvée",
           description: `${foundItem.reference} affiché sur la carte`,
         });
       } else {
+        console.log('❌ Référence non trouvée:', cleanRef);
         toast({
           title: "Référence non trouvée",
           description: `Aucun élément trouvé pour la référence ${cleanRef}`,
@@ -203,7 +217,7 @@ const MapView = () => {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <Input
-                placeholder="Saisissez CLI-000001, TRJ-000001 ou MTH-000001..."
+                placeholder="Saisissez CLI-100001, TRJ-000001 ou MTH-000001..."
                 value={referenceFilter}
                 onChange={(e) => setReferenceFilter(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -280,7 +294,7 @@ const MapView = () => {
               <h3 className="text-lg font-medium text-gray-700 mb-2">Aucun trajet sélectionné</h3>
               <p className="text-gray-500 mb-1">Utilisez la recherche ci-dessus pour afficher un trajet</p>
               <p className="text-sm text-gray-400">
-                Exemples : CLI-000001, TRJ-000001, MTH-000001
+                Exemples : CLI-100001, TRJ-000001, MTH-000001
               </p>
             </div>
           </div>

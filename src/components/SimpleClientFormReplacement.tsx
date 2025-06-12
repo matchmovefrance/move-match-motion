@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,9 +43,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
     }
   }, [initialData]);
 
-  const generateClientReference = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    return `CLI-${timestamp}`;
+  const generateClientReference = (id: number) => {
+    return `CLI-${String(id + 100000).padStart(6, '0')}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,43 +84,11 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         dateRangeEnd.setDate(dateRangeEnd.getDate() + formData.flexibility_days);
       }
 
-      const clientReference = isEditing ? initialData?.client_reference : generateClientReference();
-
-      // Créer le client d'abord
-      const clientData = {
-        name: formData.name,
-        email: `${clientReference.toLowerCase()}@temp.com`,
-        phone: 'A renseigner',
-        client_reference: clientReference,
-        created_by: user.id,
-      };
-
-      let clientId;
-      if (isEditing && initialData?.client_id) {
-        clientId = initialData.client_id;
-        const { error: updateClientError } = await supabase
-          .from('clients')
-          .update(clientData)
-          .eq('id', clientId);
-        
-        if (updateClientError) {
-          console.error('Erreur mise à jour client:', updateClientError);
-        }
-      } else {
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert(clientData)
-          .select('id')
-          .single();
-
-        if (clientError) throw clientError;
-        clientId = newClient.id;
-      }
-
-      // Créer/mettre à jour la demande client
+      // Créer/mettre à jour uniquement dans client_requests avec référence unifiée
       const requestData = {
         name: formData.name,
-        client_id: clientId,
+        email: `temp-${Date.now()}@temp.com`, // Email temporaire
+        phone: 'A renseigner',
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         departure_country: 'France',
@@ -138,29 +104,41 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         status: 'pending',
         is_matched: false,
         match_status: 'pending',
-        created_by: user.id,
-        client_reference: clientReference
+        created_by: user.id
       };
 
       if (isEditing && initialData?.id) {
+        // Utiliser l'ID original pour la mise à jour
+        const originalId = initialData.id >= 100000 ? initialData.id - 100000 : initialData.id;
+        
         const { error } = await supabase
           .from('client_requests')
           .update(requestData)
-          .eq('id', initialData.id);
+          .eq('id', originalId);
         
         if (error) throw error;
+        
+        toast({
+          title: "Succès",
+          description: "Client modifié avec succès",
+        });
       } else {
-        const { error } = await supabase
+        const { data: newRequest, error } = await supabase
           .from('client_requests')
-          .insert(requestData);
+          .insert(requestData)
+          .select('id')
+          .single();
         
         if (error) throw error;
+        
+        const clientRef = generateClientReference(newRequest.id);
+        console.log('✅ Nouveau client créé avec référence unifiée:', clientRef);
+        
+        toast({
+          title: "Succès",
+          description: `Client créé avec la référence ${clientRef}`,
+        });
       }
-
-      toast({
-        title: "Succès",
-        description: `Client ${isEditing ? 'modifié' : 'créé'} avec la référence ${clientReference}`,
-      });
 
       if (!isEditing) {
         setFormData({

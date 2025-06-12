@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X, Filter, Plus, Trash2 } from 'lucide-react';
@@ -250,23 +249,34 @@ const GoogleMap = () => {
     const cleanRef = reference.toUpperCase().trim();
     if (cleanRef.length < 3) return null;
 
+    console.log('🔍 Recherche référence:', cleanRef);
     let foundItem: FilteredItem | null = null;
 
-    // Rechercher dans les clients
+    // Rechercher dans les clients (format CLI-XXXXXX uniquement)
     if (cleanRef.startsWith('CLI-')) {
-      const id = parseInt(cleanRef.replace('CLI-', ''));
+      const idStr = cleanRef.replace('CLI-', '');
+      const id = parseInt(idStr);
+      
       if (!isNaN(id)) {
+        console.log('🔍 Recherche client ID:', id);
+        
+        // Chercher dans client_requests avec l'ID décalé
+        let searchId = id;
+        if (id >= 100000) {
+          searchId = id - 100000;
+        }
+        
         const { data: client, error } = await supabase
           .from('client_requests')
           .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-          .eq('id', id)
+          .eq('id', searchId)
           .single();
 
         if (!error && client) {
           foundItem = {
             id: client.id,
             type: 'client',
-            reference: `CLI-${String(client.id).padStart(6, '0')}`,
+            reference: `CLI-${String(client.id + 100000).padStart(6, '0')}`,
             name: client.name || 'Client',
             date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
             details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
@@ -275,6 +285,7 @@ const GoogleMap = () => {
             departure_city: client.departure_city,
             arrival_city: client.arrival_city
           };
+          console.log('✅ Client trouvé:', foundItem);
         }
       }
     }
@@ -444,7 +455,7 @@ const GoogleMap = () => {
               <div key={index} className="flex items-center gap-3">
                 <div className="flex-1">
                   <Input
-                    placeholder={`Référence ${index + 1}: CLI-000001, TRJ-000001 ou MTH-000001...`}
+                    placeholder={`Référence ${index + 1}: CLI-100001, TRJ-000001 ou MTH-000001...`}
                     value={filter}
                     onChange={(e) => updateReferenceFilter(index, e.target.value)}
                     onKeyPress={handleKeyPress}
