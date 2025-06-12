@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 // Interface for client data from the unified clients table
@@ -216,7 +215,7 @@ class PricingEngine {
       console.log('📋 Modèles de tarification:', suppliers?.map(s => ({ 
         company: s.company_name, 
         hasPricingModel: !!s.pricing_model,
-        matchMoveMargin: s.pricing_model?.matchMoveMargin || 'non définie'
+        matchMoveMargin: this.parsePricingModel(s.pricing_model).matchMoveMargin || 'non définie'
       })));
       
       return suppliers || [];
