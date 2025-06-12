@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import GoogleMapRoute from './GoogleMapRoute';
 
 interface FilteredItem {
   id: number;
@@ -41,7 +41,7 @@ interface MatchRoutes {
 
 // Composant pour afficher les routes d'un match
 const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => {
-  const mapRef = React.useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const initMap = async () => {
@@ -74,6 +74,11 @@ const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => 
         // Traiter le trajet déménageur (en rouge)
         const moveDepartureQuery = `${matchRoutes.move.departure_postal_code}, ${matchRoutes.move.departure_city}, France`;
         const moveArrivalQuery = `${matchRoutes.move.arrival_postal_code}, ${matchRoutes.move.arrival_city}, France`;
+
+        console.log('🗺️ Géocodage des adresses pour match:', {
+          client: { from: clientDepartureQuery, to: clientArrivalQuery },
+          move: { from: moveDepartureQuery, to: moveArrivalQuery }
+        });
 
         try {
           // Géocoder toutes les adresses
@@ -109,6 +114,8 @@ const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => 
           const clientArrivalLocation = clientArrivalResult[0].geometry.location;
           const moveDepartureLocation = moveDepartureResult[0].geometry.location;
           const moveArrivalLocation = moveArrivalResult[0].geometry.location;
+
+          console.log('✅ Positions géocodées avec succès');
 
           // Ajouter toutes les positions aux bounds
           bounds.extend(clientDepartureLocation);
@@ -205,6 +212,7 @@ const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => 
           }, (result, status) => {
             if (status === 'OK' && result) {
               clientDirectionsRenderer.setDirections(result);
+              console.log('✅ Route client (bleue) affichée');
             }
           });
 
@@ -230,6 +238,7 @@ const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => 
           }, (result, status) => {
             if (status === 'OK' && result) {
               moveDirectionsRenderer.setDirections(result);
+              console.log('✅ Route déménageur (rouge) affichée');
             }
           });
 
@@ -238,14 +247,14 @@ const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => 
             map.fitBounds(bounds);
           }
 
-          console.log('Carte match avec 2 trajets initialisée avec succès');
+          console.log('✅ Carte match avec 2 trajets initialisée avec succès');
 
         } catch (error) {
-          console.error('Erreur lors du géocodage:', error);
+          console.error('❌ Erreur lors du géocodage:', error);
         }
 
       } catch (error) {
-        console.error('Erreur lors de l\'initialisation de la carte:', error);
+        console.error('❌ Erreur lors de l\'initialisation de la carte:', error);
       }
     };
 
@@ -288,7 +297,6 @@ const MatchRoutesGoogleMap = ({ matchRoutes }: { matchRoutes: MatchRoutes }) => 
 // Composant pour afficher une seule route
 const SingleRouteGoogleMap = ({ item }: { item: FilteredItem }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
 
   useEffect(() => {
     const initMap = async () => {
@@ -340,7 +348,6 @@ const SingleRouteGoogleMap = ({ item }: { item: FilteredItem }) => {
           mapTypeId: google.maps.MapTypeId.ROADMAP,
         });
 
-        mapInstanceRef.current = map;
         console.log('Carte créée');
 
         // Ajouter les marqueurs
@@ -449,7 +456,7 @@ const SingleRouteGoogleMap = ({ item }: { item: FilteredItem }) => {
     loadGoogleMaps();
   }, [item]);
 
-  return <div className="h-96 w-full rounded-lg border" />;
+  return <div ref={mapRef} className="h-96 w-full rounded-lg border" />;
 };
 
 const MapView = () => {
@@ -545,57 +552,75 @@ const MapView = () => {
       // Rechercher dans les matchs avec les deux trajets
       if (!foundItem && cleanRef.startsWith('MTH-')) {
         const id = parseInt(cleanRef.replace('MTH-', ''));
+        console.log('🔍 Recherche match ID:', id);
+        
         if (!isNaN(id)) {
           const { data: match, error } = await supabase
             .from('move_matches')
             .select(`
               id,
               created_at,
-              client:clients!move_matches_client_id_fkey(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
-              confirmed_move:confirmed_moves!move_matches_move_id_fkey(company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city)
+              client_id,
+              move_id
             `)
             .eq('id', id)
             .single();
 
-          if (!error && match && match.client && match.confirmed_move) {
-            const client = Array.isArray(match.client) ? match.client[0] : match.client;
-            const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
-            
-            foundItem = {
-              id: match.id,
-              type: 'match',
-              reference: `MTH-${String(match.id).padStart(6, '0')}`,
-              name: `${client?.name || 'Client'} ↔ ${confirmedMove?.company_name || 'Déménageur'}`,
-              date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
-              details: `Client: ${client?.departure_postal_code || ''} → ${client?.arrival_postal_code || ''} | Déménageur: ${confirmedMove?.departure_postal_code || ''} → ${confirmedMove?.arrival_postal_code || ''}`,
-              departure_postal_code: client?.departure_postal_code,
-              arrival_postal_code: client?.arrival_postal_code,
-              departure_city: client?.departure_city,
-              arrival_city: client?.arrival_city,
-              company_name: confirmedMove?.company_name
-            };
+          console.log('🔍 Résultat recherche match:', { match, error });
 
-            // Créer les données pour les deux trajets
-            if (client && confirmedMove) {
+          if (!error && match) {
+            // Charger les données du client
+            const { data: clientData, error: clientError } = await supabase
+              .from('clients')
+              .select('name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+              .eq('id', match.client_id)
+              .single();
+
+            // Charger les données du trajet
+            const { data: moveData, error: moveError } = await supabase
+              .from('confirmed_moves')
+              .select('company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+              .eq('id', match.move_id)
+              .single();
+
+            console.log('🔍 Données chargées:', { clientData, clientError, moveData, moveError });
+
+            if (!clientError && !moveError && clientData && moveData) {
+              foundItem = {
+                id: match.id,
+                type: 'match',
+                reference: `MTH-${String(match.id).padStart(6, '0')}`,
+                name: `${clientData.name || 'Client'} ↔ ${moveData.company_name || 'Déménageur'}`,
+                date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
+                details: `Client: ${clientData.departure_postal_code || ''} → ${clientData.arrival_postal_code || ''} | Déménageur: ${moveData.departure_postal_code || ''} → ${moveData.arrival_postal_code || ''}`,
+                departure_postal_code: clientData.departure_postal_code,
+                arrival_postal_code: clientData.arrival_postal_code,
+                departure_city: clientData.departure_city,
+                arrival_city: clientData.arrival_city,
+                company_name: moveData.company_name
+              };
+
+              // Créer les données pour les deux trajets
               foundMatchRoutes = {
                 client: {
-                  departure_postal_code: client.departure_postal_code || '',
-                  arrival_postal_code: client.arrival_postal_code || '',
-                  departure_city: client.departure_city || '',
-                  arrival_city: client.arrival_city || '',
-                  name: client.name || 'Client'
+                  departure_postal_code: clientData.departure_postal_code || '',
+                  arrival_postal_code: clientData.arrival_postal_code || '',
+                  departure_city: clientData.departure_city || '',
+                  arrival_city: clientData.arrival_city || '',
+                  name: clientData.name || 'Client'
                 },
                 move: {
-                  departure_postal_code: confirmedMove.departure_postal_code || '',
-                  arrival_postal_code: confirmedMove.arrival_postal_code || '',
-                  departure_city: confirmedMove.departure_city || '',
-                  arrival_city: confirmedMove.arrival_city || '',
-                  company_name: confirmedMove.company_name || 'Déménageur'
+                  departure_postal_code: moveData.departure_postal_code || '',
+                  arrival_postal_code: moveData.arrival_postal_code || '',
+                  departure_city: moveData.departure_city || '',
+                  arrival_city: moveData.arrival_city || '',
+                  company_name: moveData.company_name || 'Déménageur'
                 }
               };
-            }
 
-            console.log('✅ Match trouvé avec 2 trajets:', foundItem);
+              console.log('✅ Match trouvé avec 2 trajets:', foundItem);
+              console.log('🗺️ Routes du match:', foundMatchRoutes);
+            }
           }
         }
       }
@@ -627,7 +652,7 @@ const MapView = () => {
         setMatchRoutes(null);
       }
     } catch (error) {
-      console.error('Error searching by reference:', error);
+      console.error('❌ Error searching by reference:', error);
       toast({
         title: "Erreur",
         description: "Impossible de rechercher la référence",
