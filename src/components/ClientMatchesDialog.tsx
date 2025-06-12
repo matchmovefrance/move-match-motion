@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search, MapPin, Calendar, Package, Truck, Target, Eye, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { pricingEngine } from '@/pages/PricingTool/components/PricingEngine';
 
 interface ClientMatchesDialogProps {
   open: boolean;
@@ -54,6 +52,58 @@ interface MatchResult {
   match_reference?: string;
 }
 
+// Fonction pour calculer la distance via Google Maps API
+const calculateGoogleMapsDistance = async (
+  fromPostal: string, 
+  toPostal: string
+): Promise<number> => {
+  const apiKey = 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
+  
+  try {
+    console.log(`🗺️ Calcul distance Google Maps: ${fromPostal} -> ${toPostal}`);
+    
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${fromPostal},France&destinations=${toPostal},France&units=metric&key=${apiKey}&mode=driving`
+    );
+    
+    const data = await response.json();
+    
+    if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
+      const distanceInMeters = data.rows[0].elements[0].distance.value;
+      const distanceInKm = Math.round(distanceInMeters / 1000);
+      console.log(`✅ Distance Google Maps: ${distanceInKm}km`);
+      return distanceInKm;
+    } else {
+      console.warn('⚠️ Google Maps API error:', data);
+      throw new Error('Google Maps API error');
+    }
+  } catch (error) {
+    console.error('❌ Erreur Google Maps API:', error);
+    // Fallback vers calcul approximatif
+    return calculateFallbackDistance(fromPostal, toPostal);
+  }
+};
+
+// Fonction de fallback pour le calcul de distance
+const calculateFallbackDistance = (postal1: string, postal2: string): number => {
+  const lat1 = parseFloat(postal1.substring(0, 2)) + parseFloat(postal1.substring(2, 5)) / 1000;
+  const lon1 = parseFloat(postal1.substring(0, 2)) * 0.5;
+  const lat2 = parseFloat(postal2.substring(0, 2)) + parseFloat(postal2.substring(2, 5)) / 1000;
+  const lon2 = parseFloat(postal2.substring(0, 2)) * 0.5;
+  
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  
+  const distance = Math.round(R * c);
+  console.log(`📏 Distance fallback: ${distance}km pour ${postal1} -> ${postal2}`);
+  return distance;
+};
+
 export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }: ClientMatchesDialogProps) => {
   const { toast } = useToast();
   const [client, setClient] = useState<Client | null>(null);
@@ -94,46 +144,53 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
 
       if (movesError) throw movesError;
 
-      console.log('📦 Trajets confirmés:', movesData?.length || 0);
+      console.log('📦 Trajets confirmés chargés:', movesData?.length || 0);
 
       if (!movesData || movesData.length === 0) {
         setMatches([]);
         return;
       }
 
-      // Calculer les matches avec distances exactes
+      // Calculer les matches avec distances exactes Google Maps
       const matchResults: MatchResult[] = [];
 
       for (const move of movesData) {
         try {
-          // Calculer la distance exacte via Google Maps
-          const distance = await pricingEngine.getExactDistance(
+          // Calculer la distance exacte via Google Maps pour les départs
+          const departureDistance = await calculateGoogleMapsDistance(
             clientData.departure_postal_code,
             move.departure_postal_code
           );
 
-          const arrivalDistance = await pricingEngine.getExactDistance(
+          // Calculer la distance exacte via Google Maps pour les arrivées
+          const arrivalDistance = await calculateGoogleMapsDistance(
             clientData.arrival_postal_code,
             move.arrival_postal_code
           );
 
-          const totalDistance = distance + arrivalDistance;
+          const totalDistance = departureDistance + arrivalDistance;
+
+          // FILTRE: Afficher uniquement les trajets ≤ 100km
+          if (totalDistance > 100) {
+            console.log(`❌ Trajet ${move.id} exclu: distance ${totalDistance}km > 100km`);
+            continue;
+          }
 
           // Calculer la différence de dates
           const clientDate = new Date(clientData.desired_date);
           const moveDate = new Date(move.departure_date);
           const dateDiff = Math.abs(clientDate.getTime() - moveDate.getTime()) / (1000 * 3600 * 24);
 
-          // Vérifier la compatibilité du volume - CORRECTION DE LA LOGIQUE
+          // Calculer la compatibilité du volume
           const volumeNeeded = clientData.estimated_volume || 0;
           const volumeAvailable = (move.max_volume || 0) - (move.used_volume || 0);
           const volumeCompatible = volumeNeeded <= volumeAvailable;
-          const availableVolumeAfter = volumeAvailable - volumeNeeded;
+          const availableVolumeAfter = Math.max(0, volumeAvailable - volumeNeeded);
 
-          // Critères de validation cohérents
+          // Critères de validation
           const isValid = 
-            totalDistance <= 100 && // Max 100km de distance totale
-            dateDiff <= 7 &&        // Max 7 jours de différence
+            totalDistance <= 100 && // ≤ 100km (déjà filtré ci-dessus)
+            dateDiff <= 7 &&        // ≤ 7 jours de différence
             volumeCompatible;       // Volume compatible
 
           // Calculer un score de match (plus c'est bas, mieux c'est)
@@ -148,7 +205,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             distance_km: Math.round(totalDistance),
             date_diff_days: Math.round(dateDiff),
             volume_compatible: volumeCompatible,
-            available_volume_after: Math.max(0, availableVolumeAfter),
+            available_volume_after: availableVolumeAfter,
             match_score: matchScore,
             is_valid: isValid,
             match_reference: `MTH-${clientId}-${move.id}`
@@ -156,7 +213,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
 
           matchResults.push(matchResult);
 
-          console.log(`📊 Match calculé: TRJ-${move.id}, Distance: ${totalDistance}km, Volume: ${volumeCompatible ? '✓' : '✗'} (${volumeNeeded}/${volumeAvailable}), Valide: ${isValid}`);
+          console.log(`📊 Match ajouté: TRJ-${move.id}, Distance: ${totalDistance}km, Volume: ${volumeCompatible ? '✓' : '✗'} (${volumeNeeded}/${volumeAvailable}), Valide: ${isValid}`);
 
         } catch (error) {
           console.error(`❌ Erreur calcul match pour trajet ${move.id}:`, error);
@@ -166,7 +223,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
       // Trier par score (meilleurs matches en premier)
       matchResults.sort((a, b) => a.match_score - b.match_score);
 
-      console.log('✅ Matches calculés:', {
+      console.log('✅ Matches calculés (≤100km uniquement):', {
         total: matchResults.length,
         valides: matchResults.filter(m => m.is_valid).length
       });
@@ -239,13 +296,16 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Target className="h-5 w-5 text-blue-600" />
-            <span>Recherche de correspondances</span>
+            <span>Recherche de correspondances (≤ 100km)</span>
           </DialogTitle>
           <DialogDescription>
             Client: <strong>{clientName}</strong> 
             {client?.client_reference && (
               <span className="ml-2">({client.client_reference})</span>
             )}
+            <div className="text-sm text-blue-600 mt-1">
+              Filtré: trajets avec distance totale ≤ 100km uniquement
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -303,15 +363,15 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p>Recherche de correspondances avec distances exactes...</p>
+                <p>Calcul distances exactes Google Maps (≤100km)...</p>
               </div>
             ) : filteredMatches.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="font-medium">Aucune correspondance trouvée</p>
+                <p className="font-medium">Aucune correspondance ≤ 100km trouvée</p>
                 <p className="text-sm mt-2">
                   {matches.length === 0 
-                    ? "Aucun trajet compatible disponible"
+                    ? "Aucun trajet compatible dans un rayon de 100km"
                     : "Ajustez vos critères de recherche"
                   }
                 </p>
@@ -319,7 +379,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
             ) : (
               <div className="space-y-3">
                 <div className="text-sm text-gray-600 mb-3">
-                  {filteredMatches.length} correspondance(s) trouvée(s) • 
+                  {filteredMatches.length} correspondance(s) ≤ 100km • 
                   {filteredMatches.filter(m => m.is_valid).length} valide(s)
                 </div>
                 
@@ -371,7 +431,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t">
                         <div className="flex items-center space-x-1">
                           <MapPin className="h-4 w-4 text-blue-600" />
-                          <span><strong>{match.distance_km}km</strong></span>
+                          <span><strong>{match.distance_km}km</strong> (Google Maps)</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Calendar className="h-4 w-4 text-purple-600" />
@@ -396,7 +456,6 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
                       {!match.is_valid && (
                         <div className="mt-2 text-xs text-orange-700 bg-orange-100 p-2 rounded">
                           <strong>Raisons de non-compatibilité:</strong>
-                          {match.distance_km > 100 && ' Distance > 100km •'}
                           {match.date_diff_days > 7 && ' Écart dates > 7j •'}
                           {!match.volume_compatible && ' Volume insuffisant'}
                         </div>
