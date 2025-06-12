@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X, Filter, Plus, Trash2 } from 'lucide-react';
@@ -260,23 +261,17 @@ const GoogleMap = () => {
       if (!isNaN(id)) {
         console.log('🔍 Recherche client ID:', id);
         
-        // Chercher dans client_requests avec l'ID décalé
-        let searchId = id;
-        if (id >= 100000) {
-          searchId = id - 100000;
-        }
-        
         const { data: client, error } = await supabase
-          .from('client_requests')
+          .from('clients')
           .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-          .eq('id', searchId)
+          .eq('id', id)
           .single();
 
         if (!error && client) {
           foundItem = {
             id: client.id,
             type: 'client',
-            reference: `CLI-${String(client.id + 100000).padStart(6, '0')}`,
+            reference: `CLI-${String(client.id).padStart(6, '0')}`,
             name: client.name || 'Client',
             date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
             details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
@@ -327,27 +322,27 @@ const GoogleMap = () => {
           .select(`
             id,
             created_at,
-            client_request:client_requests(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
+            client:clients(name, departure_postal_code, arrival_postal_code, departure_city, arrival_city),
             confirmed_move:confirmed_moves(company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city)
           `)
           .eq('id', id)
           .single();
 
         if (!error && match) {
-          const clientRequest = Array.isArray(match.client_request) ? match.client_request[0] : match.client_request;
+          const client = Array.isArray(match.client) ? match.client[0] : match.client;
           const confirmedMove = Array.isArray(match.confirmed_move) ? match.confirmed_move[0] : match.confirmed_move;
           
           foundItem = {
             id: match.id,
             type: 'match',
             reference: `MTH-${String(match.id).padStart(6, '0')}`,
-            name: `${clientRequest?.name || 'Client'} ↔ ${confirmedMove?.company_name || 'Déménageur'}`,
+            name: `${client?.name || 'Client'} ↔ ${confirmedMove?.company_name || 'Déménageur'}`,
             date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
-            details: `${clientRequest?.departure_postal_code || ''} → ${clientRequest?.arrival_postal_code || ''}`,
-            departure_postal_code: clientRequest?.departure_postal_code,
-            arrival_postal_code: clientRequest?.arrival_postal_code,
-            departure_city: clientRequest?.departure_city,
-            arrival_city: clientRequest?.arrival_city,
+            details: `${client?.departure_postal_code || ''} → ${client?.arrival_postal_code || ''}`,
+            departure_postal_code: client?.departure_postal_code,
+            arrival_postal_code: client?.arrival_postal_code,
+            departure_city: client?.departure_city,
+            arrival_city: client?.arrival_city,
             company_name: confirmedMove?.company_name
           };
         }
@@ -455,7 +450,7 @@ const GoogleMap = () => {
               <div key={index} className="flex items-center gap-3">
                 <div className="flex-1">
                   <Input
-                    placeholder={`Référence ${index + 1}: CLI-100001, TRJ-000001 ou MTH-000001...`}
+                    placeholder={`Référence ${index + 1}: CLI-000001, TRJ-000001 ou MTH-000001...`}
                     value={filter}
                     onChange={(e) => updateReferenceFilter(index, e.target.value)}
                     onKeyPress={handleKeyPress}

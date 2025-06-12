@@ -24,9 +24,9 @@ const AdminActions = () => {
 
       if (matchError) throw matchError;
 
-      // Remettre à zéro les statuts de match dans client_requests
+      // Remettre à zéro les statuts de match dans clients (plus client_requests)
       const { error: clientError } = await supabase
-        .from('client_requests')
+        .from('clients')
         .update({
           is_matched: false,
           matched_at: null,

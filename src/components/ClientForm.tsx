@@ -101,7 +101,7 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false, clientId }: Clie
     if (isEditing && clientId && user) {
       const autoSave = async () => {
         try {
-          // Préparer les données pour l'update
+          // Préparer les données pour l'update dans la table clients
           const updateData = {
             name: formData.name || null,
             email: formData.email || null,
@@ -132,7 +132,7 @@ const ClientForm = ({ onSubmit, initialData, isEditing = false, clientId }: Clie
           };
 
           const { error } = await supabase
-            .from('client_requests')
+            .from('clients')
             .update(updateData)
             .eq('id', clientId);
 

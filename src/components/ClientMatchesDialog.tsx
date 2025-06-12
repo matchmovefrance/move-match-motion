@@ -360,7 +360,7 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
       {/* Popup de carte */}
       {showMapPopup && selectedMatchForMap && (
         <MapPopup
-          isOpen={showMapPopup}
+          open={showMapPopup}
           onClose={() => setShowMapPopup(false)}
           clientData={clientData}
           matchData={selectedMatchForMap}
