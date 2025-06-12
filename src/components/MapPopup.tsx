@@ -250,7 +250,7 @@ const MapPopup = ({ open, onOpenChange, items, title }: MapPopupProps) => {
                   Codes postaux de départ et d'arrivée requis
                 </p>
               </div>
-            )}
+            </div>
           )}
         </div>
       </DialogContent>
