@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -33,6 +32,16 @@ interface Client {
   flexible_dates?: boolean;
   flexibility_days?: number;
   status?: string;
+  // Nouvelle propriété pour les informations de déménagement liées
+  move_request?: {
+    departure_city: string;
+    departure_postal_code: string;
+    arrival_city: string;
+    arrival_postal_code: string;
+    desired_date: string;
+    estimated_volume?: number;
+    status?: string;
+  };
 }
 
 const ClientList = () => {
@@ -60,10 +69,21 @@ const ClientList = () => {
       setLoading(true);
       console.log('📋 Chargement des clients depuis les deux tables...');
       
-      // Charger les clients de la table clients
+      // Charger les clients de la table clients avec leurs demandes associées
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
-        .select('*')
+        .select(`
+          *,
+          client_requests (
+            departure_city,
+            departure_postal_code,
+            arrival_city,
+            arrival_postal_code,
+            desired_date,
+            estimated_volume,
+            status
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (clientsError) {
@@ -85,10 +105,26 @@ const ClientList = () => {
       // Ajouter les clients de la table clients
       if (clientsData) {
         clientsData.forEach(client => {
-          allClients.push({
+          const clientData: Client = {
             ...client,
             source: 'clients'
-          });
+          };
+
+          // Si le client a une demande associée, ajouter les infos de déménagement
+          if (client.client_requests && client.client_requests.length > 0) {
+            const latestRequest = client.client_requests[0]; // Prendre la première (plus récente)
+            clientData.move_request = {
+              departure_city: latestRequest.departure_city,
+              departure_postal_code: latestRequest.departure_postal_code,
+              arrival_city: latestRequest.arrival_city,
+              arrival_postal_code: latestRequest.arrival_postal_code,
+              desired_date: latestRequest.desired_date,
+              estimated_volume: latestRequest.estimated_volume,
+              status: latestRequest.status
+            };
+          }
+
+          allClients.push(clientData);
         });
       }
 
@@ -347,14 +383,14 @@ const ClientList = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Informations de déménagement */}
-                {client.source === 'client_requests' && (
+                {/* Afficher les informations de déménagement si disponibles */}
+                {(client.source === 'client_requests' || client.move_request) && (
                   <>
                     <div className="text-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600">Départ:</span>
                         <span className="font-medium">
-                          {client.departure_postal_code} {client.departure_city}
+                          {client.move_request?.departure_postal_code || client.departure_postal_code} {client.move_request?.departure_city || client.departure_city}
                         </span>
                       </div>
                     </div>
@@ -363,35 +399,35 @@ const ClientList = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600">Arrivée:</span>
                         <span className="font-medium">
-                          {client.arrival_postal_code} {client.arrival_city}
+                          {client.move_request?.arrival_postal_code || client.arrival_postal_code} {client.move_request?.arrival_city || client.arrival_city}
                         </span>
                       </div>
                     </div>
 
-                    {client.desired_date && (
+                    {(client.move_request?.desired_date || client.desired_date) && (
                       <div className="text-sm">
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">Date souhaitée:</span>
                           <span className="font-medium">
-                            {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                            {new Date(client.move_request?.desired_date || client.desired_date!).toLocaleDateString('fr-FR')}
                           </span>
                         </div>
                       </div>
                     )}
 
-                    {client.estimated_volume && (
+                    {(client.move_request?.estimated_volume || client.estimated_volume) && (
                       <div className="text-sm">
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">Volume estimé:</span>
-                          <span className="font-medium">{client.estimated_volume} m³</span>
+                          <span className="font-medium">{client.move_request?.estimated_volume || client.estimated_volume} m³</span>
                         </div>
                       </div>
                     )}
                   </>
                 )}
 
-                {/* Informations client de base pour les clients sans demande */}
-                {client.source === 'clients' && (
+                {/* Afficher les informations de contact si pas d'infos de déménagement */}
+                {!client.move_request && client.source === 'clients' && (
                   <>
                     <div className="text-sm">
                       <div className="flex items-center justify-between">
