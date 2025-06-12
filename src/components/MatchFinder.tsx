@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { loadGoogleMapsScript, calculateDistanceByPostalCode } from '@/lib/google-maps-config';
 
 interface Client {
   id: number;
@@ -60,7 +61,7 @@ const MatchFinder = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      console.log('🔍 Chargement des données pour le matching amélioré...');
+      console.log('🔍 Chargement des données pour le matching...');
 
       // Charger les clients depuis la table unifiée
       const { data: clientsData, error: clientsError } = await supabase
@@ -117,49 +118,48 @@ const MatchFinder = () => {
     }
   };
 
-  // Calcul de distance via Google Maps API
-  const calculateGoogleMapsDistance = async (postal1: string, postal2: string): Promise<number> => {
-    const apiKey = 'AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y';
-    
+  // Calcul de distance optimisé avec timeout
+  const calculateDistance = async (postal1: string, postal2: string, city1?: string, city2?: string): Promise<number> => {
     try {
-      console.log(`🗺️ Calcul distance Google Maps: ${postal1} -> ${postal2}`);
+      console.log(`🗺️ Calcul distance: ${postal1} -> ${postal2}`);
       
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${postal1},France&destinations=${postal2},France&units=metric&key=${apiKey}&mode=driving`
-      );
+      // Charger Google Maps script si nécessaire
+      await loadGoogleMapsScript();
       
-      const data = await response.json();
-      
-      if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
-        const distanceInMeters = data.rows[0].elements[0].distance.value;
-        const distanceInKm = Math.round(distanceInMeters / 1000);
-        console.log(`✅ Distance Google Maps: ${distanceInKm}km`);
-        return distanceInKm;
+      // Utiliser l'API centralisée avec timeout
+      const result = await Promise.race([
+        calculateDistanceByPostalCode(postal1, postal2, city1, city2),
+        new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        )
+      ]);
+
+      if (result && result.distance) {
+        console.log(`✅ Distance calculée: ${result.distance}km`);
+        return result.distance;
       } else {
-        console.warn('⚠️ Google Maps API error, using fallback');
-        return calculateFallbackDistance(postal1, postal2);
+        throw new Error('Aucun résultat de distance');
       }
     } catch (error) {
-      console.error('❌ Erreur Google Maps API:', error);
+      console.warn(`⚠️ Erreur calcul distance ${postal1}->${postal2}, utilisation fallback:`, error);
       return calculateFallbackDistance(postal1, postal2);
     }
   };
 
   const calculateFallbackDistance = (postal1: string, postal2: string): number => {
-    const lat1 = parseFloat(postal1.substring(0, 2)) + parseFloat(postal1.substring(2, 5)) / 1000;
-    const lon1 = parseFloat(postal1.substring(0, 2)) * 0.5;
-    const lat2 = parseFloat(postal2.substring(0, 2)) + parseFloat(postal2.substring(2, 5)) / 1000;
-    const lon2 = parseFloat(postal2.substring(0, 2)) * 0.5;
+    // Calcul approximatif basé sur les codes postaux
+    const dept1 = parseInt(postal1.substring(0, 2));
+    const dept2 = parseInt(postal2.substring(0, 2));
     
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    // Distance approximative entre départements (en km)
+    const deptDistance = Math.abs(dept1 - dept2) * 50;
     
-    return Math.round(R * c);
+    // Ajouter variation locale
+    const localVariation = Math.abs(parseInt(postal1.substring(2, 5)) - parseInt(postal2.substring(2, 5))) / 10;
+    
+    const distance = Math.round(deptDistance + localVariation);
+    console.log(`📏 Distance fallback: ${distance}km pour ${postal1} -> ${postal2}`);
+    return distance;
   };
 
   const findMatches = async () => {
@@ -173,7 +173,7 @@ const MatchFinder = () => {
     }
 
     setIsMatching(true);
-    console.log('🎯 Début du processus de matching amélioré avec trajets retour...');
+    console.log('🎯 Début du processus de matching optimisé...');
 
     try {
       // Supprimer les anciens matches
@@ -188,6 +188,7 @@ const MatchFinder = () => {
 
       const matches: MatchResult[] = [];
       let totalProcessed = 0;
+      let validMatches = 0;
 
       for (const client of clients) {
         console.log(`🔍 Recherche matches pour client ${client.name} (${client.client_reference || `CLI-${client.id}`})`);
@@ -196,28 +197,41 @@ const MatchFinder = () => {
           try {
             totalProcessed++;
 
+            // Filtrer par volume dès le début
+            if (client.estimated_volume > move.available_volume) {
+              continue;
+            }
+
             // TRAJET DIRECT: Client départ -> Move départ ET Client arrivée -> Move arrivée
-            const directDepartureDistance = await calculateGoogleMapsDistance(
+            const directDepartureDistance = await calculateDistance(
               client.departure_postal_code,
-              move.departure_postal_code
+              move.departure_postal_code,
+              client.departure_city,
+              move.departure_city
             );
             
-            const directArrivalDistance = await calculateGoogleMapsDistance(
+            const directArrivalDistance = await calculateDistance(
               client.arrival_postal_code,
-              move.arrival_postal_code
+              move.arrival_postal_code,
+              client.arrival_city,
+              move.arrival_city
             );
             
             const directTotalDistance = directDepartureDistance + directArrivalDistance;
 
-            // TRAJET RETOUR: Client départ -> Move arrivée ET Client arrivée -> Move départ (retour à vide)
-            const returnDepartureDistance = await calculateGoogleMapsDistance(
+            // TRAJET RETOUR: Client départ -> Move arrivée ET Client arrivée -> Move départ
+            const returnDepartureDistance = await calculateDistance(
               client.departure_postal_code,
-              move.arrival_postal_code
+              move.arrival_postal_code,
+              client.departure_city,
+              move.arrival_city
             );
             
-            const returnArrivalDistance = await calculateGoogleMapsDistance(
+            const returnArrivalDistance = await calculateDistance(
               client.arrival_postal_code,
-              move.departure_postal_code
+              move.departure_postal_code,
+              client.arrival_city,
+              move.departure_city
             );
             
             const returnTotalDistance = returnDepartureDistance + returnArrivalDistance;
@@ -231,7 +245,7 @@ const MatchFinder = () => {
             const volumeOk = client.estimated_volume <= move.available_volume;
             const combinedVolume = volumeOk ? move.available_volume - client.estimated_volume : move.available_volume;
 
-            // ÉVALUER TRAJET DIRECT
+            // ÉVALUER TRAJET DIRECT (≤100km seulement)
             if (directTotalDistance <= 100) {
               const isDirectValid = 
                 directTotalDistance <= 100 &&
@@ -250,11 +264,12 @@ const MatchFinder = () => {
                 trip_type: 'direct'
               });
 
+              if (isDirectValid) validMatches++;
               console.log(`📊 DIRECT Match: Client ${client.id} -> Move ${move.id}, Distance: ${directTotalDistance}km, Valide: ${isDirectValid}`);
             }
 
-            // ÉVALUER TRAJET RETOUR (uniquement si le trajet direct n'est pas parfait)
-            if (returnTotalDistance <= 100 && move.available_volume >= client.estimated_volume) {
+            // ÉVALUER TRAJET RETOUR (≤100km seulement)
+            if (returnTotalDistance <= 100) {
               const isReturnValid = 
                 returnTotalDistance <= 100 &&
                 dateDiff <= 7 &&
@@ -272,6 +287,7 @@ const MatchFinder = () => {
                 trip_type: 'return'
               });
 
+              if (isReturnValid) validMatches++;
               console.log(`🔄 RETOUR Match: Client ${client.id} -> Move ${move.id}, Distance: ${returnTotalDistance}km, Valide: ${isReturnValid}`);
             }
 
@@ -281,12 +297,12 @@ const MatchFinder = () => {
         }
       }
 
-      console.log(`🔢 Statistiques de matching:`, {
+      console.log(`🔢 Résultats du matching:`, {
         totalProcessed,
         totalMatches: matches.length,
         directMatches: matches.filter(m => m.trip_type === 'direct').length,
         returnMatches: matches.filter(m => m.trip_type === 'return').length,
-        validMatches: matches.filter(m => m.is_valid).length
+        validMatches
       });
 
       // Sauvegarder les matches en base
@@ -318,12 +334,12 @@ const MatchFinder = () => {
         console.log('✅ Matches sauvegardés:', matches.length);
         toast({
           title: "Matching terminé avec succès",
-          description: `${matches.length} correspondances trouvées (${matches.filter(m => m.trip_type === 'direct').length} directes, ${matches.filter(m => m.trip_type === 'return').length} retours) dont ${matches.filter(m => m.is_valid).length} valides`,
+          description: `${matches.length} correspondances trouvées (${matches.filter(m => m.trip_type === 'direct').length} directes, ${matches.filter(m => m.trip_type === 'return').length} retours) dont ${validMatches} valides`,
         });
       } else {
         toast({
           title: "Aucun match trouvé",
-          description: "Aucune correspondance ≤100km trouvée pour les critères actuels",
+          description: "Aucune correspondance ≤100km trouvée avec les critères actuels",
           variant: "destructive",
         });
       }
@@ -350,18 +366,18 @@ const MatchFinder = () => {
     >
       <div className="flex items-center space-x-3">
         <Search className="h-6 w-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching Avancé</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Moteur de Matching Optimisé</h2>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
         <div className="flex items-center gap-2 text-blue-800 mb-2">
           <Target className="h-5 w-5" />
-          <span className="font-semibold">Algorithme de Matching Optimisé</span>
+          <span className="font-semibold">Algorithme de Matching Rapide</span>
         </div>
         <div className="text-sm text-blue-700">
           • <strong>Trajets directs</strong> : correspondance départ-départ + arrivée-arrivée<br/>
           • <strong>Trajets retour</strong> : utilisation des retours à vide (départ-arrivée + arrivée-départ)<br/>
-          • <strong>Distances exactes</strong> Google Maps API (≤100km max)<br/>
+          • <strong>Distances Google Maps</strong> avec fallback rapide (≤100km max)<br/>
           • <strong>Critères</strong> : ≤7 jours d'écart, volume compatible
         </div>
       </div>
