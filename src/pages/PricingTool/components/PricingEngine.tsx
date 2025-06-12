@@ -46,6 +46,7 @@ interface GeneratedQuote {
   original_quote_amount?: number;
   pricing_breakdown?: any;
   rank: number;
+  quote_type?: 'competitive' | 'standard' | 'premium';
 }
 
 class PricingEngine {
@@ -94,13 +95,30 @@ class PricingEngine {
     return Math.round(R * c);
   }
 
-  private calculatePrice(distance: number, volume: number, supplier: Supplier): { supplierPrice: number; margin: number; finalPrice: number } {
-    const basePrice = distance * 1.2 + volume * 45;
-    
+  private calculatePrice(distance: number, volume: number, supplier: Supplier, quoteType: 'competitive' | 'standard' | 'premium'): { supplierPrice: number; margin: number; finalPrice: number } {
     const supplierModel = supplier.pricing_model || {};
-    const pricePerKm = supplierModel.price_per_km || 1.2;
-    const pricePerM3 = supplierModel.price_per_m3 || 45;
-    const baseMargin = supplierModel.base_margin || 0.15;
+    let pricePerKm = supplierModel.price_per_km || 1.2;
+    let pricePerM3 = supplierModel.price_per_m3 || 45;
+    let baseMargin = supplierModel.base_margin || 0.15;
+    
+    // Apply different pricing strategies for 3 quotes
+    switch (quoteType) {
+      case 'competitive':
+        // Most competitive pricing - lower margins
+        pricePerKm *= 0.85;
+        pricePerM3 *= 0.90;
+        baseMargin *= 0.8;
+        break;
+      case 'standard':
+        // Standard pricing - no modifications
+        break;
+      case 'premium':
+        // Premium pricing - higher service level
+        pricePerKm *= 1.15;
+        pricePerM3 *= 1.10;
+        baseMargin *= 1.2;
+        break;
+    }
     
     const supplierPrice = Math.round(distance * pricePerKm + volume * pricePerM3);
     const margin = Math.round(supplierPrice * baseMargin);
@@ -129,7 +147,7 @@ class PricingEngine {
 
   async generateQuotesForClient(client: Client): Promise<GeneratedQuote[]> {
     try {
-      console.log(`💰 Génération devis pour client ${client.name} (${client.client_reference})`);
+      console.log(`💰 Génération de 3 devis pour client ${client.name} (${client.client_reference})`);
       
       const suppliers = await this.loadActiveSuppliers();
       if (suppliers.length === 0) {
@@ -144,12 +162,17 @@ class PricingEngine {
       );
 
       const quotes: GeneratedQuote[] = [];
+      const quoteTypes: Array<'competitive' | 'standard' | 'premium'> = ['competitive', 'standard', 'premium'];
 
-      for (const supplier of suppliers) {
-        const pricing = this.calculatePrice(exactDistance, client.estimated_volume, supplier);
+      // Generate 3 quotes with different pricing strategies
+      for (let i = 0; i < Math.min(3, suppliers.length); i++) {
+        const supplier = suppliers[i];
+        const quoteType = quoteTypes[i];
+        
+        const pricing = this.calculatePrice(exactDistance, client.estimated_volume, supplier, quoteType);
         
         const quote: GeneratedQuote = {
-          id: `quote-${client.id}-${supplier.id}-${Date.now()}`,
+          id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}`,
           client_id: client.id,
           client_name: client.name,
           client_email: client.email,
@@ -164,28 +187,74 @@ class PricingEngine {
           supplier_price: pricing.supplierPrice,
           matchmove_margin: pricing.margin,
           original_quote_amount: client.quote_amount,
+          quote_type: quoteType,
           pricing_breakdown: {
             exactDistance,
             marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
             estimatedVolume: client.estimated_volume,
-            estimatedFloors: Math.ceil(client.estimated_volume / 15), // Estimation étages
-            pricePerKm: 1.2,
-            pricePerM3: 45
+            estimatedFloors: Math.ceil(client.estimated_volume / 15),
+            pricePerKm: quoteType === 'competitive' ? 1.02 : quoteType === 'standard' ? 1.2 : 1.38,
+            pricePerM3: quoteType === 'competitive' ? 40.5 : quoteType === 'standard' ? 45 : 49.5,
+            quoteType: quoteType
           },
-          rank: 1
+          rank: i + 1
         };
 
         quotes.push(quote);
       }
 
-      // Sort by price and assign ranks
+      // If we have more suppliers, cycle through them for additional quotes
+      if (suppliers.length > 3) {
+        for (let i = 3; i < Math.min(suppliers.length, 6); i++) {
+          const supplier = suppliers[i];
+          const quoteType = quoteTypes[i % 3];
+          
+          const pricing = this.calculatePrice(exactDistance, client.estimated_volume, supplier, quoteType);
+          
+          const quote: GeneratedQuote = {
+            id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
+            client_id: client.id,
+            client_name: client.name,
+            client_email: client.email,
+            departure_city: client.departure_city,
+            arrival_city: client.arrival_city,
+            estimated_volume: client.estimated_volume,
+            desired_date: client.desired_date,
+            supplier_id: supplier.id,
+            supplier_name: supplier.contact_name,
+            supplier_company: supplier.company_name,
+            calculated_price: pricing.finalPrice,
+            supplier_price: pricing.supplierPrice,
+            matchmove_margin: pricing.margin,
+            original_quote_amount: client.quote_amount,
+            quote_type: quoteType,
+            pricing_breakdown: {
+              exactDistance,
+              marginPercentage: (pricing.margin / pricing.supplierPrice) * 100,
+              estimatedVolume: client.estimated_volume,
+              estimatedFloors: Math.ceil(client.estimated_volume / 15),
+              pricePerKm: quoteType === 'competitive' ? 1.02 : quoteType === 'standard' ? 1.2 : 1.38,
+              pricePerM3: quoteType === 'competitive' ? 40.5 : quoteType === 'standard' ? 45 : 49.5,
+              quoteType: quoteType
+            },
+            rank: i + 1
+          };
+
+          quotes.push(quote);
+        }
+      }
+
+      // Sort by price and limit to 3 best quotes
       quotes.sort((a, b) => a.calculated_price - b.calculated_price);
-      quotes.forEach((quote, index) => {
+      const bestQuotes = quotes.slice(0, 3);
+      
+      // Update ranks for final selection
+      bestQuotes.forEach((quote, index) => {
         quote.rank = index + 1;
       });
 
-      console.log(`✅ ${quotes.length} devis générés avec distance exacte ${exactDistance}km`);
-      return quotes;
+      console.log(`✅ ${bestQuotes.length} meilleurs devis générés avec distance exacte ${exactDistance}km`);
+      return bestQuotes;
 
     } catch (error) {
       console.error('❌ Erreur génération devis:', error);
