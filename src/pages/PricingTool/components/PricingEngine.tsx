@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { DistanceCalculator } from './PricingEngine/DistanceCalculator';
 
 // Interface for client data from the unified clients table
 interface Client {
@@ -65,49 +66,26 @@ interface GeneratedQuote {
 }
 
 class PricingEngine {
-  private googleMapsApiKey = 'AIzaSyA4qQbW8iBb1zUGW8XvKYeKzT7E8bZdY9A';
+  private distanceCalculator = new DistanceCalculator();
 
-  async getExactDistance(fromPostal: string, toPostal: string): Promise<number> {
-    try {
-      console.log(`🗺️ Calcul distance exacte Google Maps: ${fromPostal} -> ${toPostal}`);
-      
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${fromPostal},France&destinations=${toPostal},France&units=metric&key=${this.googleMapsApiKey}&mode=driving`
-      );
-      
-      const data = await response.json();
-      
-      if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
-        const distanceInMeters = data.rows[0].elements[0].distance.value;
-        const distanceInKm = Math.round(distanceInMeters / 1000);
-        console.log(`✅ Distance Google Maps: ${distanceInKm}km`);
-        return distanceInKm;
-      } else {
-        console.warn('⚠️ Google Maps API error, using fallback calculation');
-        return this.calculateFallbackDistance(fromPostal, toPostal);
+  private parsePricingModel(pricingModel: any): PricingModel {
+    // Handle different types of pricing model data
+    if (!pricingModel) return {};
+    
+    if (typeof pricingModel === 'string') {
+      try {
+        return JSON.parse(pricingModel);
+      } catch (error) {
+        console.warn('Error parsing pricing model string:', error);
+        return {};
       }
-    } catch (error) {
-      console.error('❌ Error with Google Maps API:', error);
-      return this.calculateFallbackDistance(fromPostal, toPostal);
     }
-  }
-
-  private calculateFallbackDistance(postal1: string, postal2: string): number {
-    // Fallback calculation based on postal codes
-    const lat1 = parseFloat(postal1.substring(0, 2)) + parseFloat(postal1.substring(2, 5)) / 1000;
-    const lon1 = parseFloat(postal1.substring(0, 2)) * 0.5;
-    const lat2 = parseFloat(postal2.substring(0, 2)) + parseFloat(postal2.substring(2, 5)) / 1000;
-    const lon2 = parseFloat(postal2.substring(0, 2)) * 0.5;
     
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    if (typeof pricingModel === 'object' && pricingModel !== null) {
+      return pricingModel as PricingModel;
+    }
     
-    return Math.round(R * c);
+    return {};
   }
 
   private calculateSupplierPrice(distance: number, volume: number, supplier: Supplier): number {
@@ -162,26 +140,6 @@ class PricingEngine {
     return finalSupplierPrice;
   }
 
-  private parsePricingModel(pricingModel: any): PricingModel {
-    // Handle different types of pricing model data
-    if (!pricingModel) return {};
-    
-    if (typeof pricingModel === 'string') {
-      try {
-        return JSON.parse(pricingModel);
-      } catch (error) {
-        console.warn('Error parsing pricing model string:', error);
-        return {};
-      }
-    }
-    
-    if (typeof pricingModel === 'object' && pricingModel !== null) {
-      return pricingModel as PricingModel;
-    }
-    
-    return {};
-  }
-
   private applyMatchMoveMargin(supplierPrice: number, supplier: Supplier): { margin: number; finalPrice: number; marginPercentage: number } {
     console.log(`📊 Application marge MatchMove sur prix prestataire: ${supplierPrice}€`);
     
@@ -227,7 +185,7 @@ class PricingEngine {
 
   async generateQuotesForClient(client: Client): Promise<GeneratedQuote[]> {
     try {
-      console.log(`💰 Génération de 3 devis pour client ${client.name} avec modèles de tarification exacts`);
+      console.log(`💰 Génération de 3 devis pour client ${client.name} avec Google Maps API`);
       
       const suppliers = await this.loadActiveSuppliers();
       if (suppliers.length === 0) {
@@ -235,11 +193,15 @@ class PricingEngine {
         return [];
       }
 
-      // Calculate exact distance using Google Maps
-      const exactDistance = await this.getExactDistance(
+      // Calculer la distance exacte avec Google Maps API
+      const exactDistance = await this.distanceCalculator.getDistanceFromGoogleMaps(
         client.departure_postal_code,
-        client.arrival_postal_code
+        client.departure_city,
+        client.arrival_postal_code,
+        client.arrival_city
       );
+
+      console.log(`🗺️ Distance Google Maps calculée: ${exactDistance}km pour ${client.departure_postal_code} -> ${client.arrival_postal_code}`);
 
       const quotes: GeneratedQuote[] = [];
       const quoteTypes: Array<'competitive' | 'standard' | 'premium'> = ['competitive', 'standard', 'premium'];
@@ -396,9 +358,9 @@ class PricingEngine {
         quote.rank = index + 1;
       });
 
-      console.log(`✅ 3 devis générés avec modèles de tarification exacts:`);
+      console.log(`✅ 3 devis générés avec distances Google Maps exactes:`);
       quotes.forEach(q => {
-        console.log(`  ${q.rank}. ${q.supplier_company} - ${q.calculated_price}€ (marge: ${q.pricing_breakdown?.marginPercentage}%, type: ${q.quote_type})`);
+        console.log(`  ${q.rank}. ${q.supplier_company} - ${q.calculated_price}€ (distance: ${q.pricing_breakdown?.exactDistance}km, marge: ${q.pricing_breakdown?.marginPercentage}%, type: ${q.quote_type})`);
       });
       
       return quotes;
