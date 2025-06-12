@@ -46,7 +46,7 @@ const MapView = () => {
 
       console.log('🔍 Recherche de référence:', cleanRef);
 
-      // Rechercher dans les clients (format CLI-XXXXXX) - table unifiée
+      // Rechercher dans les clients (format CLI-XXXXXX)
       if (cleanRef.startsWith('CLI-')) {
         const idStr = cleanRef.replace('CLI-', '');
         const id = parseInt(idStr);
@@ -64,7 +64,7 @@ const MapView = () => {
             foundItem = {
               id: client.id,
               type: 'client',
-              reference: client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`,
+              reference: `CLI-${String(client.id).padStart(6, '0')}`,
               name: client.name || 'Client',
               date: client.desired_date ? new Date(client.desired_date).toLocaleDateString('fr-FR') : '',
               details: `${client.departure_postal_code} → ${client.arrival_postal_code}`,
@@ -78,10 +78,14 @@ const MapView = () => {
         }
       }
 
-      // Rechercher dans les trajets
+      // Rechercher dans les trajets (format TRJ-XXXXXX)
       if (!foundItem && cleanRef.startsWith('TRJ-')) {
-        const id = parseInt(cleanRef.replace('TRJ-', ''));
+        const idStr = cleanRef.replace('TRJ-', '');
+        const id = parseInt(idStr);
+        
         if (!isNaN(id)) {
+          console.log('🔍 Recherche trajet ID:', id);
+          
           const { data: move, error } = await supabase
             .from('confirmed_moves')
             .select('id, company_name, departure_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
@@ -102,11 +106,12 @@ const MapView = () => {
               arrival_city: move.arrival_city,
               company_name: move.company_name
             };
+            console.log('✅ Trajet trouvé:', foundItem);
           }
         }
       }
 
-      // Rechercher dans les matchs - utiliser client_id maintenant
+      // Rechercher dans les matchs
       if (!foundItem && cleanRef.startsWith('MTH-')) {
         const id = parseInt(cleanRef.replace('MTH-', ''));
         if (!isNaN(id)) {

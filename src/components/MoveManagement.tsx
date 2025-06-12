@@ -150,19 +150,24 @@ const MoveManagement = () => {
     }
   };
 
+  const generateMoveReference = (id: number) => {
+    return `TRJ-${String(id).padStart(6, '0')}`;
+  };
+
   const filteredMoves = moves.filter(move =>
     move.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     move.mover_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     move.departure_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     move.arrival_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     move.departure_postal_code?.includes(searchTerm) ||
-    move.arrival_postal_code?.includes(searchTerm)
+    move.arrival_postal_code?.includes(searchTerm) ||
+    generateMoveReference(move.id).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const formatMapItem = (move: ConfirmedMove) => ({
     id: move.id,
     type: 'move' as const,
-    reference: `TRJ-${move.id}`,
+    reference: generateMoveReference(move.id),
     name: move.company_name,
     date: format(new Date(move.departure_date), 'dd/MM/yyyy', { locale: fr }),
     details: `${move.departure_city} → ${move.arrival_city} (${move.available_volume}m³ dispo)`,
@@ -226,7 +231,7 @@ const MoveManagement = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Rechercher par entreprise, déménageur, ville ou code postal..."
+              placeholder="Rechercher par référence, entreprise, déménageur, ville ou code postal..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -253,6 +258,7 @@ const MoveManagement = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Référence</TableHead>
                     <TableHead>Entreprise</TableHead>
                     <TableHead>Responsable</TableHead>
                     <TableHead>Trajet</TableHead>
@@ -265,6 +271,11 @@ const MoveManagement = () => {
                 <TableBody>
                   {filteredMoves.map((move) => (
                     <TableRow key={move.id}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono">
+                          {generateMoveReference(move.id)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="font-medium">
                         {move.company_name}
                       </TableCell>
@@ -343,7 +354,7 @@ const MoveManagement = () => {
           open={showMapPopup}
           onOpenChange={setShowMapPopup}
           items={[formatMapItem(selectedMoveForMap)]}
-          title={`Trajet ${selectedMoveForMap.company_name}`}
+          title={`Trajet ${generateMoveReference(selectedMoveForMap.id)}`}
         />
       )}
     </>
