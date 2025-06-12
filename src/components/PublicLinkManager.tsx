@@ -1,11 +1,13 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Link, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
+import { Plus, Link, Trash2, Copy, Eye, EyeOff, Users, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import LinkTypeSelector from './LinkTypeSelector';
 
 interface PublicLink {
   id: string;
@@ -13,12 +15,14 @@ interface PublicLink {
   password: string;
   expires_at: string;
   created_at: string;
+  link_type: 'client' | 'mover';
 }
 
 const PublicLinkManager = () => {
   const { user } = useAuth();
   const [links, setLinks] = useState<PublicLink[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
   const { toast } = useToast();
 
@@ -43,7 +47,6 @@ const PublicLinkManager = () => {
     }
   };
 
-  // Fonction pour générer un token directement côté client
   const generateToken = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
@@ -53,7 +56,6 @@ const PublicLinkManager = () => {
     return result;
   };
 
-  // Fonction pour générer un mot de passe directement côté client
   const generatePassword = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
@@ -63,14 +65,14 @@ const PublicLinkManager = () => {
     return result;
   };
 
-  const createLink = async () => {
+  const createLink = async (linkType: 'client' | 'mover') => {
     if (!user) return;
 
     try {
       const linkToken = generateToken();
       const password = generatePassword();
 
-      console.log('Generating link with token:', linkToken, 'and password:', password);
+      console.log('Generating', linkType, 'link with token:', linkToken, 'and password:', password);
 
       const { error } = await supabase
         .from('public_links')
@@ -78,16 +80,18 @@ const PublicLinkManager = () => {
           link_token: linkToken,
           password: password,
           mover_id: null,
-          created_by: user.id
+          created_by: user.id,
+          link_type: linkType
         });
 
       if (error) throw error;
 
       toast({
         title: "Succès",
-        description: "Lien public créé avec succès",
+        description: `Lien public ${linkType === 'client' ? 'CLIENT' : 'DÉMÉNAGEUR'} créé avec succès`,
       });
 
+      setShowTypeSelector(false);
       fetchLinks();
     } catch (error: any) {
       console.error('Error creating link:', error);
@@ -138,8 +142,21 @@ const PublicLinkManager = () => {
     setShowPasswords(prev => ({ ...prev, [linkId]: !prev[linkId] }));
   };
 
-  const getPublicUrl = (token: string) => {
+  const getPublicUrl = (token: string, linkType: 'client' | 'mover') => {
+    if (linkType === 'client') {
+      return `${window.location.origin}/public-client/${token}`;
+    }
     return `${window.location.origin}/public-mover/${token}`;
+  };
+
+  const getLinkTypeIcon = (linkType: 'client' | 'mover') => {
+    return linkType === 'client' ? 
+      <Users className="h-4 w-4 text-blue-600" /> : 
+      <Truck className="h-4 w-4 text-green-600" />;
+  };
+
+  const getLinkTypeLabel = (linkType: 'client' | 'mover') => {
+    return linkType === 'client' ? 'CLIENT' : 'DÉMÉNAGEUR';
   };
 
   if (loading) {
@@ -150,18 +167,27 @@ const PublicLinkManager = () => {
     );
   }
 
+  if (showTypeSelector) {
+    return (
+      <LinkTypeSelector
+        onTypeSelect={createLink}
+        onCancel={() => setShowTypeSelector(false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Link className="h-6 w-6 text-blue-600" />
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Liens publics - Saisie de trajets</h2>
-            <p className="text-gray-600">Créez des liens pour que les déménageurs saisissent leurs trajets</p>
+            <h2 className="text-2xl font-bold text-gray-800">Liens publics</h2>
+            <p className="text-gray-600">Créez des liens pour la saisie de demandes clients ou trajets déménageurs</p>
           </div>
         </div>
         <Button
-          onClick={createLink}
+          onClick={() => setShowTypeSelector(true)}
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -171,7 +197,7 @@ const PublicLinkManager = () => {
 
       <div className="grid gap-4">
         {links.map((link) => {
-          const publicUrl = getPublicUrl(link.link_token);
+          const publicUrl = getPublicUrl(link.link_token, link.link_type);
           
           return (
             <motion.div
@@ -182,9 +208,12 @@ const PublicLinkManager = () => {
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800 mb-2">
-                    Lien de saisie de trajet
-                  </h3>
+                  <div className="flex items-center space-x-2 mb-2">
+                    {getLinkTypeIcon(link.link_type)}
+                    <h3 className="font-semibold text-gray-800">
+                      Lien {getLinkTypeLabel(link.link_type)}
+                    </h3>
+                  </div>
                   
                   <div className="space-y-2 text-sm text-gray-600">
                     <div>
@@ -256,7 +285,7 @@ const PublicLinkManager = () => {
             <Link className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">Aucun lien public créé</p>
             <p className="text-gray-400 text-sm mt-2">
-              Créez un lien pour permettre aux déménageurs de saisir leurs trajets
+              Créez un lien pour permettre la saisie de demandes clients ou trajets déménageurs
             </p>
           </div>
         )}

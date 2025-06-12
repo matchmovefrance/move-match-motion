@@ -9,6 +9,7 @@ import Index from './pages/Index';
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 import PublicMoverForm from './pages/PublicMoverForm';
+import PublicClientForm from './pages/PublicClientForm';
 // Import the PricingTool using React.lazy()
 const PricingTool = React.lazy(() => import('./pages/PricingTool/Index'));
 
@@ -35,6 +36,7 @@ function App() {
               <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/public-mover/:token" element={<PublicMoverForm />} />
+              <Route path="/public-client/:token" element={<PublicClientForm />} />
               <Route path="/pricing-tool" element={<ProtectedRoute><PricingTool /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>

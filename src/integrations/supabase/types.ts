@@ -707,6 +707,7 @@ export type Database = {
           expires_at: string | null
           id: string
           link_token: string
+          link_type: string
           mover_id: number | null
           password: string
         }
@@ -716,6 +717,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           link_token: string
+          link_type?: string
           mover_id?: number | null
           password: string
         }
@@ -725,6 +727,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           link_token?: string
+          link_type?: string
           mover_id?: number | null
           password?: string
         }

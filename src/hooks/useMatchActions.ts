@@ -12,21 +12,41 @@ export const useMatchActions = () => {
       setLoading(true);
       console.log('✅ Acceptation du match:', matchData.match_reference);
 
-      // Insérer le match accepté dans move_matches
-      const { error: matchError } = await supabase
-        .from('move_matches')
+      // Auto-enregistrer TOUS les matchs valides dans analytics avant l'acceptation
+      if (matchData.is_valid) {
+        console.log('📊 Auto-enregistrement match analytics:', matchData.match_reference);
+        
+        const { error: analyticsError } = await supabase
+          .from('move_matches')
+          .insert({
+            client_id: matchData.client.id,
+            move_id: matchData.move.id,
+            match_type: 'valid_auto',
+            volume_ok: matchData.volume_compatible,
+            combined_volume: matchData.available_volume_after,
+            distance_km: matchData.distance_km,
+            date_diff_days: matchData.date_diff_days,
+            is_valid: true
+          });
+
+        if (analyticsError) {
+          console.warn('⚠️ Erreur enregistrement analytics (non bloquant):', analyticsError);
+        } else {
+          console.log('✅ Match auto-enregistré dans analytics');
+        }
+      }
+
+      // Insérer l'action d'acceptation
+      const { error: actionError } = await supabase
+        .from('match_actions')
         .insert({
           client_id: matchData.client.id,
           move_id: matchData.move.id,
-          match_type: matchData.is_valid ? 'perfect' : 'partial',
-          volume_ok: matchData.volume_compatible,
-          combined_volume: matchData.available_volume_after,
-          distance_km: matchData.distance_km,
-          date_diff_days: matchData.date_diff_days,
-          is_valid: matchData.is_valid
+          action_type: 'accepted',
+          user_id: (await supabase.auth.getUser()).data.user?.id
         });
 
-      if (matchError) throw matchError;
+      if (actionError) throw actionError;
 
       // Mettre à jour le statut du client
       const { error: clientError } = await supabase
@@ -78,21 +98,37 @@ export const useMatchActions = () => {
       setLoading(true);
       console.log('❌ Rejet du match:', matchData.match_reference);
 
-      // Insérer le match rejeté dans move_matches avec statut rejeté
-      const { error: matchError } = await supabase
+      // Auto-enregistrer le match rejeté dans analytics
+      console.log('📊 Auto-enregistrement match rejeté analytics:', matchData.match_reference);
+      
+      const { error: analyticsError } = await supabase
         .from('move_matches')
         .insert({
           client_id: matchData.client.id,
           move_id: matchData.move.id,
-          match_type: 'rejected',
+          match_type: 'rejected_manual',
           volume_ok: matchData.volume_compatible,
           combined_volume: 0,
           distance_km: matchData.distance_km,
           date_diff_days: matchData.date_diff_days,
-          is_valid: false
+          is_valid: matchData.is_valid
         });
 
-      if (matchError) throw matchError;
+      if (analyticsError) {
+        console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
+      }
+
+      // Insérer l'action de rejet
+      const { error: actionError } = await supabase
+        .from('match_actions')
+        .insert({
+          client_id: matchData.client.id,
+          move_id: matchData.move.id,
+          action_type: 'rejected',
+          user_id: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (actionError) throw actionError;
 
       // Mettre à jour le statut du client
       const { error: clientError } = await supabase
