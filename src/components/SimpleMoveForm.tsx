@@ -40,8 +40,8 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     used_volume: ''
   });
 
-  // Utiliser exactement la même query que SuppliersTab pour récupérer les prestataires
-  const { data: suppliers, isLoading: suppliersLoading } = useQuery({
+  // Récupérer les prestataires depuis confirmed_moves (exactement comme SuppliersTab)
+  const { data: suppliersFromMoves, isLoading: suppliersLoading } = useQuery({
     queryKey: ['suppliers-from-moves'],
     queryFn: async () => {
       console.log('🏢 Chargement des prestataires depuis les trajets...');
@@ -81,7 +81,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
     enabled: !!user,
   });
 
-  // Récupérer aussi les prestataires depuis service_providers
+  // Récupérer les prestataires depuis service_providers (exactement comme SuppliersTab)
   const { data: dbProviders = [], isLoading: dbProvidersLoading } = useQuery({
     queryKey: ['service-providers'],
     queryFn: async () => {
@@ -117,7 +117,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
       source: 'database'
     })) || []),
     // Prestataires des trajets
-    ...(suppliers || [])
+    ...(suppliersFromMoves || [])
   ];
 
   const providersLoading = suppliersLoading || dbProvidersLoading;
@@ -207,7 +207,6 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
         contact_phone: selectedProvider.phone,
         contact_email: selectedProvider.email,
         created_by: user.id,
-        move_reference: moveReference,
         mover_id: selectedProvider.service_provider_id || 1,
         truck_id: 1
       };
@@ -225,7 +224,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
 
       toast({
         title: "Succès",
-        description: `Trajet ${isEditing ? 'modifié' : 'créé'} avec la référence ${moveReference} (${availableVolume.toFixed(1)}m³ disponible)`,
+        description: `Trajet ${isEditing ? 'modifié' : 'créé'} avec succès (${availableVolume.toFixed(1)}m³ disponible)`,
       });
 
       // Reset form si nouveau trajet
@@ -262,7 +261,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
 
   console.log('📊 Providers summary dans SimpleMoveForm:', {
     dbProviders: dbProviders?.length || 0,
-    suppliersFromMoves: suppliers?.length || 0,
+    suppliersFromMoves: suppliersFromMoves?.length || 0,
     allProviders: allProviders.length,
     loading: providersLoading
   });
@@ -323,7 +322,14 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
                 variant="outline" 
                 size="sm"
                 onClick={() => {
-                  window.open('/pricing-tool#suppliers', '_blank');
+                  // Ouvrir le Pricing Tool dans un nouvel onglet sur l'onglet Suppliers
+                  const newWindow = window.open('/pricing-tool', '_blank');
+                  if (newWindow) {
+                    // Attendre que la page charge puis naviguer vers l'onglet suppliers
+                    setTimeout(() => {
+                      newWindow.location.hash = '#suppliers';
+                    }, 500);
+                  }
                 }}
               >
                 <Plus className="h-4 w-4" />
@@ -338,7 +344,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
             {allProviders.length > 0 && (
               <p className="text-xs text-gray-600 mt-1">
                 {allProviders.length} prestataire(s) disponible(s) 
-                ({dbProviders?.length || 0} depuis DB + {suppliers?.length || 0} depuis trajets)
+                ({dbProviders?.length || 0} depuis DB + {suppliersFromMoves?.length || 0} depuis trajets)
               </p>
             )}
           </div>
@@ -389,9 +395,6 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
                 required
               />
             </div>
-            <p className="text-xs text-gray-600 mt-1">
-              ⚠️ Date fixe - non modifiable (contrairement aux clients qui ont de la flexibilité)
-            </p>
           </div>
 
           {/* Volumes */}
