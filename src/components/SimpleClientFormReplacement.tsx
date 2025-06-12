@@ -87,8 +87,9 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
 
       const clientReference = isEditing ? initialData?.client_reference : generateClientReference();
 
-      // Créer directement dans client_requests SANS client_id
+      // Créer directement dans client_requests avec client_id null
       const requestData = {
+        client_id: null as any, // Utiliser null pour satisfaire TypeScript
         name: formData.name,
         email: `${clientReference.toLowerCase()}@temp.com`, // Email temporaire basé sur référence
         phone: 'A renseigner', // Téléphone par défaut
@@ -111,7 +112,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         client_reference: clientReference
       };
 
-      console.log('🔧 Données à insérer (sans client_id):', requestData);
+      console.log('🔧 Données à insérer (avec client_id null):', requestData);
 
       let result;
       if (isEditing && initialData?.id) {
