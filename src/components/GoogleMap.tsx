@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X, Filter, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import GoogleMapRoute from './GoogleMapRoute';
 
 interface FilteredItem {
   id: number;
@@ -34,6 +33,191 @@ const ROUTE_COLORS = [
   '#0891b2', // cyan
   '#be185d', // pink
 ];
+
+// Nouveau composant pour afficher plusieurs routes
+const MultipleRoutesGoogleMap = ({ items }: { items: FilteredItem[] }) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const directionsRenderers = useRef<google.maps.DirectionsRenderer[]>([]);
+
+  useEffect(() => {
+    const initMap = async () => {
+      if (!mapRef.current) return;
+
+      // Attendre que Google Maps soit disponible
+      if (!window.google || !window.google.maps) {
+        console.log('Google Maps pas encore chargé, attente...');
+        return;
+      }
+
+      try {
+        console.log('Initialisation de la carte pour plusieurs trajets:', items.length);
+        
+        const geocoder = new google.maps.Geocoder();
+        const bounds = new google.maps.LatLngBounds();
+
+        // Créer la carte
+        const map = new google.maps.Map(mapRef.current, {
+          zoom: 7,
+          center: { lat: 46.603354, lng: 1.888334 }, // Centre de la France
+          mapTypeId: google.maps.MapTypeId.ROADMAP,
+        });
+
+        mapInstanceRef.current = map;
+
+        // Nettoyer les anciens renderers
+        directionsRenderers.current.forEach(renderer => renderer.setMap(null));
+        directionsRenderers.current = [];
+
+        // Traiter chaque trajet
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          
+          if (!item.departure_postal_code || !item.arrival_postal_code) continue;
+
+          const departureQuery = `${item.departure_postal_code}, ${item.departure_city || ''}, France`;
+          const arrivalQuery = `${item.arrival_postal_code}, ${item.arrival_city || ''}, France`;
+
+          try {
+            const [departureResult, arrivalResult] = await Promise.all([
+              new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                geocoder.geocode({ address: departureQuery }, (results, status) => {
+                  if (status === 'OK' && results) resolve(results);
+                  else reject(new Error(`Geocoding failed for departure: ${status}`));
+                });
+              }),
+              new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                geocoder.geocode({ address: arrivalQuery }, (results, status) => {
+                  if (status === 'OK' && results) resolve(results);
+                  else reject(new Error(`Geocoding failed for arrival: ${status}`));
+                });
+              })
+            ]);
+
+            const departureLocation = departureResult[0].geometry.location;
+            const arrivalLocation = arrivalResult[0].geometry.location;
+
+            // Ajouter les positions aux bounds
+            bounds.extend(departureLocation);
+            bounds.extend(arrivalLocation);
+
+            // Ajouter les marqueurs
+            new google.maps.Marker({
+              position: departureLocation,
+              map: map,
+              title: `${item.reference} - Départ: ${item.departure_city || item.departure_postal_code}`,
+              icon: {
+                url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                scaledSize: new google.maps.Size(32, 32)
+              },
+              label: {
+                text: item.reference,
+                color: 'white',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }
+            });
+
+            new google.maps.Marker({
+              position: arrivalLocation,
+              map: map,
+              title: `${item.reference} - Arrivée: ${item.arrival_city || item.arrival_postal_code}`,
+              icon: {
+                url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                scaledSize: new google.maps.Size(32, 32)
+              },
+              label: {
+                text: item.reference,
+                color: 'white',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }
+            });
+
+            // Ajouter la route
+            const directionsService = new google.maps.DirectionsService();
+            const directionsRenderer = new google.maps.DirectionsRenderer();
+
+            directionsRenderer.setOptions({
+              polylineOptions: {
+                strokeColor: item.color || ROUTE_COLORS[i % ROUTE_COLORS.length],
+                strokeWeight: 4,
+                strokeOpacity: 0.8
+              },
+              suppressMarkers: true // On utilise nos propres marqueurs
+            });
+
+            directionsRenderer.setMap(map);
+            directionsRenderers.current.push(directionsRenderer);
+
+            directionsService.route({
+              origin: departureLocation,
+              destination: arrivalLocation,
+              travelMode: google.maps.TravelMode.DRIVING
+            }, (result, status) => {
+              if (status === 'OK' && result) {
+                directionsRenderer.setDirections(result);
+              }
+            });
+
+          } catch (error) {
+            console.error(`Erreur pour le trajet ${item.reference}:`, error);
+          }
+        }
+
+        // Ajuster la vue pour inclure tous les points
+        if (!bounds.getNorthEast().equals(bounds.getSouthWest())) {
+          map.fitBounds(bounds);
+        }
+
+        console.log('Carte multi-trajets initialisée avec succès');
+
+      } catch (error) {
+        console.error('Erreur lors de l\'initialisation de la carte:', error);
+      }
+    };
+
+    // Fonction pour charger le script Google Maps
+    const loadGoogleMaps = () => {
+      if (window.google && window.google.maps) {
+        initMap();
+        return;
+      }
+
+      if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+        const script = document.createElement('script');
+        script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y&libraries=places';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          setTimeout(initMap, 100);
+        };
+        document.head.appendChild(script);
+      } else {
+        const checkGoogleMaps = setInterval(() => {
+          if (window.google && window.google.maps) {
+            clearInterval(checkGoogleMaps);
+            initMap();
+          }
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(checkGoogleMaps);
+        }, 10000);
+      }
+    };
+
+    loadGoogleMaps();
+
+    // Cleanup function
+    return () => {
+      directionsRenderers.current.forEach(renderer => renderer.setMap(null));
+      directionsRenderers.current = [];
+    };
+  }, [items]);
+
+  return <div ref={mapRef} className="h-96 w-full rounded-lg border" />;
+};
 
 const GoogleMap = () => {
   const { toast } = useToast();
@@ -365,191 +549,6 @@ const GoogleMap = () => {
       </motion.div>
     </div>
   );
-};
-
-// Nouveau composant pour afficher plusieurs routes
-const MultipleRoutesGoogleMap = ({ items }: { items: FilteredItem[] }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const directionsRenderers = useRef<google.maps.DirectionsRenderer[]>([]);
-
-  useEffect(() => {
-    const initMap = async () => {
-      if (!mapRef.current) return;
-
-      // Attendre que Google Maps soit disponible
-      if (!window.google || !window.google.maps) {
-        console.log('Google Maps pas encore chargé, attente...');
-        return;
-      }
-
-      try {
-        console.log('Initialisation de la carte pour plusieurs trajets:', items.length);
-        
-        const geocoder = new google.maps.Geocoder();
-        const bounds = new google.maps.LatLngBounds();
-
-        // Créer la carte
-        const map = new google.maps.Map(mapRef.current, {
-          zoom: 7,
-          center: { lat: 46.603354, lng: 1.888334 }, // Centre de la France
-          mapTypeId: google.maps.MapTypeId.ROADMAP,
-        });
-
-        mapInstanceRef.current = map;
-
-        // Nettoyer les anciens renderers
-        directionsRenderers.current.forEach(renderer => renderer.setMap(null));
-        directionsRenderers.current = [];
-
-        // Traiter chaque trajet
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          
-          if (!item.departure_postal_code || !item.arrival_postal_code) continue;
-
-          const departureQuery = `${item.departure_postal_code}, ${item.departure_city}, France`;
-          const arrivalQuery = `${item.arrival_postal_code}, ${item.arrival_city}, France`;
-
-          try {
-            const [departureResult, arrivalResult] = await Promise.all([
-              new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-                geocoder.geocode({ address: departureQuery }, (results, status) => {
-                  if (status === 'OK' && results) resolve(results);
-                  else reject(new Error(`Geocoding failed for departure: ${status}`));
-                });
-              }),
-              new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-                geocoder.geocode({ address: arrivalQuery }, (results, status) => {
-                  if (status === 'OK' && results) resolve(results);
-                  else reject(new Error(`Geocoding failed for arrival: ${status}`));
-                });
-              })
-            ]);
-
-            const departureLocation = departureResult[0].geometry.location;
-            const arrivalLocation = arrivalResult[0].geometry.location;
-
-            // Ajouter les positions aux bounds
-            bounds.extend(departureLocation);
-            bounds.extend(arrivalLocation);
-
-            // Ajouter les marqueurs
-            new google.maps.Marker({
-              position: departureLocation,
-              map: map,
-              title: `${item.reference} - Départ: ${item.departure_city}`,
-              icon: {
-                url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                scaledSize: new google.maps.Size(32, 32)
-              },
-              label: {
-                text: item.reference,
-                color: 'white',
-                fontSize: '12px',
-                fontWeight: 'bold'
-              }
-            });
-
-            new google.maps.Marker({
-              position: arrivalLocation,
-              map: map,
-              title: `${item.reference} - Arrivée: ${item.arrival_city}`,
-              icon: {
-                url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-                scaledSize: new google.maps.Size(32, 32)
-              },
-              label: {
-                text: item.reference,
-                color: 'white',
-                fontSize: '12px',
-                fontWeight: 'bold'
-              }
-            });
-
-            // Ajouter la route
-            const directionsService = new google.maps.DirectionsService();
-            const directionsRenderer = new google.maps.DirectionsRenderer();
-
-            directionsRenderer.setOptions({
-              polylineOptions: {
-                strokeColor: item.color || ROUTE_COLORS[i % ROUTE_COLORS.length],
-                strokeWeight: 4,
-                strokeOpacity: 0.8
-              },
-              suppressMarkers: true // On utilise nos propres marqueurs
-            });
-
-            directionsRenderer.setMap(map);
-            directionsRenderers.current.push(directionsRenderer);
-
-            directionsService.route({
-              origin: departureLocation,
-              destination: arrivalLocation,
-              travelMode: google.maps.TravelMode.DRIVING
-            }, (result, status) => {
-              if (status === 'OK' && result) {
-                directionsRenderer.setDirections(result);
-              }
-            });
-
-          } catch (error) {
-            console.error(`Erreur pour le trajet ${item.reference}:`, error);
-          }
-        }
-
-        // Ajuster la vue pour inclure tous les points
-        if (!bounds.isEmpty()) {
-          map.fitBounds(bounds);
-        }
-
-        console.log('Carte multi-trajets initialisée avec succès');
-
-      } catch (error) {
-        console.error('Erreur lors de l\'initialisation de la carte:', error);
-      }
-    };
-
-    // Fonction pour charger le script Google Maps
-    const loadGoogleMaps = () => {
-      if (window.google && window.google.maps) {
-        initMap();
-        return;
-      }
-
-      if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
-        const script = document.createElement('script');
-        script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyDgAn_xJ5IsZBJjlwLkMYhWP7DQXvoxK4Y&libraries=places';
-        script.async = true;
-        script.defer = true;
-        script.onload = () => {
-          setTimeout(initMap, 100);
-        };
-        document.head.appendChild(script);
-      } else {
-        const checkGoogleMaps = setInterval(() => {
-          if (window.google && window.google.maps) {
-            clearInterval(checkGoogleMaps);
-            initMap();
-          }
-        }, 100);
-
-        setTimeout(() => {
-          clearInterval(checkGoogleMaps);
-        }, 10000);
-      }
-    };
-
-    loadGoogleMaps();
-
-    // Cleanup function
-    return () => {
-      directionsRenderers.current.forEach(renderer => renderer.setMap(null));
-      directionsRenderers.current = [];
-    };
-  }, [items]);
-
-  return <div ref={mapRef} className="h-96 w-full rounded-lg border" />;
 };
 
 export default GoogleMap;
