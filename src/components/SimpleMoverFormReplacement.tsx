@@ -18,7 +18,6 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
   const [formData, setFormData] = useState({
     company_name: '',
     mover_name: '',
-    contact_phone: '',
     departure_postal_code: '',
     arrival_postal_code: '',
     departure_date: '',
@@ -51,7 +50,7 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
             name: moverData.mover_name,
             company_name: moverData.company_name,
             email: '',
-            phone: moverData.contact_phone || '',
+            phone: '',
             address: `CP ${moverData.departure_postal_code}`,
             city: `CP ${moverData.departure_postal_code}`,
             postal_code: moverData.departure_postal_code,
@@ -72,7 +71,7 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.company_name || !formData.mover_name || !formData.contact_phone || 
+    if (!formData.company_name || !formData.mover_name || 
         !formData.departure_postal_code || !formData.arrival_postal_code || 
         !formData.departure_date || !formData.max_volume) {
       toast({
@@ -99,7 +98,7 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
       const moveData = {
         company_name: formData.company_name,
         mover_name: formData.mover_name,
-        contact_phone: formData.contact_phone,
+        contact_phone: '',
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         arrival_city: `CP ${formData.arrival_postal_code}`,
@@ -141,7 +140,6 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
       setFormData({
         company_name: '',
         mover_name: '',
-        contact_phone: '',
         departure_postal_code: '',
         arrival_postal_code: '',
         departure_date: '',
@@ -196,17 +194,6 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
                 required
               />
             </div>
-          </div>
-
-          <div>
-            <Label htmlFor="contact_phone">Téléphone *</Label>
-            <Input
-              id="contact_phone"
-              value={formData.contact_phone}
-              onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-              placeholder="Votre numéro de téléphone"
-              required
-            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
