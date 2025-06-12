@@ -22,6 +22,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
+    phone: '',
     departure_postal_code: '',
     arrival_postal_code: '',
     desired_date: '',
@@ -34,6 +36,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
     if (initialData) {
       setFormData({
         name: initialData.name || '',
+        email: initialData.email || '',
+        phone: initialData.phone || '',
         departure_postal_code: initialData.departure_postal_code || '',
         arrival_postal_code: initialData.arrival_postal_code || '',
         desired_date: initialData.desired_date || '',
@@ -61,8 +65,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       return;
     }
 
-    if (!formData.name || !formData.departure_postal_code || !formData.arrival_postal_code || 
-        !formData.desired_date || !formData.estimated_volume) {
+    if (!formData.name || !formData.email || !formData.phone || !formData.departure_postal_code || 
+        !formData.arrival_postal_code || !formData.desired_date || !formData.estimated_volume) {
       toast({
         title: "Erreur",
         description: "Tous les champs sont obligatoires",
@@ -88,37 +92,11 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
 
       const clientReference = isEditing ? initialData?.client_reference : generateClientReference();
 
-      // Créer le client d'abord
-      const clientData = {
-        name: formData.name,
-        email: `${clientReference.toLowerCase()}@temp.com`,
-        phone: 'A renseigner',
-        client_reference: clientReference,
-        created_by: user.id,
-      };
-
-      let clientId;
-      if (isEditing && initialData?.client_id) {
-        clientId = initialData.client_id;
-        await supabase
-          .from('clients')
-          .update(clientData)
-          .eq('id', clientId);
-      } else {
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert(clientData)
-          .select('id')
-          .single();
-
-        if (clientError) throw clientError;
-        clientId = newClient.id;
-      }
-
-      // Créer/mettre à jour la demande client
+      // Créer directement dans client_requests avec toutes les informations
       const requestData = {
         name: formData.name,
-        client_id: clientId,
+        email: formData.email,
+        phone: formData.phone,
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         departure_country: 'France',
@@ -157,6 +135,8 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
       if (!isEditing) {
         setFormData({
           name: '',
+          email: '',
+          phone: '',
           departure_postal_code: '',
           arrival_postal_code: '',
           desired_date: '',
@@ -201,6 +181,30 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
               placeholder="Nom complet du client"
               required
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="email@exemple.com"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Téléphone *</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="06 12 34 56 78"
+                required
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

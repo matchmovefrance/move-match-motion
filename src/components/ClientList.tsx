@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -21,8 +22,6 @@ interface Client {
   client_reference?: string;
   created_at: string;
   created_by: string;
-  source?: 'clients' | 'client_requests';
-  // Propriétés optionnelles pour la compatibilité
   departure_city?: string;
   departure_postal_code?: string;
   arrival_city?: string;
@@ -32,16 +31,6 @@ interface Client {
   flexible_dates?: boolean;
   flexibility_days?: number;
   status?: string;
-  // Nouvelle propriété pour les informations de déménagement liées
-  move_request?: {
-    departure_city: string;
-    departure_postal_code: string;
-    arrival_city: string;
-    arrival_postal_code: string;
-    desired_date: string;
-    estimated_volume?: number;
-    status?: string;
-  };
 }
 
 const ClientList = () => {
@@ -67,97 +56,42 @@ const ClientList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      console.log('📋 Chargement des clients depuis les deux tables...');
+      console.log('📋 Chargement des clients depuis client_requests...');
       
-      // Charger les clients de la table clients avec leurs demandes associées
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('clients')
-        .select(`
-          *,
-          client_requests (
-            departure_city,
-            departure_postal_code,
-            arrival_city,
-            arrival_postal_code,
-            desired_date,
-            estimated_volume,
-            status
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (clientsError) {
-        console.error('❌ Erreur lors du chargement de la table clients:', clientsError);
-      }
-
-      // Charger les clients de la table client_requests qui ne sont pas dans la table clients
+      // Charger uniquement depuis client_requests
       const { data: requestsData, error: requestsError } = await supabase
         .from('client_requests')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (requestsError) {
-        console.error('❌ Erreur lors du chargement de la table client_requests:', requestsError);
+        console.error('❌ Erreur lors du chargement de client_requests:', requestsError);
+        throw requestsError;
       }
 
       const allClients: Client[] = [];
 
-      // Ajouter les clients de la table clients
-      if (clientsData) {
-        clientsData.forEach(client => {
-          const clientData: Client = {
-            ...client,
-            source: 'clients'
-          };
-
-          // Si le client a une demande associée, ajouter les infos de déménagement
-          if (client.client_requests && client.client_requests.length > 0) {
-            const latestRequest = client.client_requests[0]; // Prendre la première (plus récente)
-            clientData.move_request = {
-              departure_city: latestRequest.departure_city,
-              departure_postal_code: latestRequest.departure_postal_code,
-              arrival_city: latestRequest.arrival_city,
-              arrival_postal_code: latestRequest.arrival_postal_code,
-              desired_date: latestRequest.desired_date,
-              estimated_volume: latestRequest.estimated_volume,
-              status: latestRequest.status
-            };
-          }
-
-          allClients.push(clientData);
-        });
-      }
-
-      // Ajouter les clients de client_requests qui ont des infos client et qui ne sont pas déjà dans la table clients
+      // Ajouter tous les clients de client_requests
       if (requestsData) {
         requestsData.forEach(request => {
-          if (request.name && request.email && request.phone) {
-            // Vérifier si ce client existe déjà dans la table clients
-            const existsInClients = clientsData?.some(client => 
-              client.email === request.email || 
-              (client.name === request.name && client.phone === request.phone)
-            );
-
-            if (!existsInClients) {
-              allClients.push({
-                id: request.id,
-                name: request.name,
-                email: request.email,
-                phone: request.phone,
-                client_reference: `REQ-${String(request.id).padStart(6, '0')}`,
-                created_at: request.created_at,
-                created_by: request.created_by,
-                source: 'client_requests',
-                departure_city: request.departure_city,
-                departure_postal_code: request.departure_postal_code,
-                arrival_city: request.arrival_city,
-                arrival_postal_code: request.arrival_postal_code,
-                desired_date: request.desired_date,
-                estimated_volume: request.estimated_volume,
-                status: request.status
-              });
-            }
-          }
+          allClients.push({
+            id: request.id,
+            name: request.name || 'Client sans nom',
+            email: request.email || 'Email manquant',
+            phone: request.phone || 'Téléphone manquant',
+            client_reference: request.client_reference || `REQ-${String(request.id).padStart(6, '0')}`,
+            created_at: request.created_at,
+            created_by: request.created_by,
+            departure_city: request.departure_city,
+            departure_postal_code: request.departure_postal_code,
+            arrival_city: request.arrival_city,
+            arrival_postal_code: request.arrival_postal_code,
+            desired_date: request.desired_date,
+            estimated_volume: request.estimated_volume,
+            flexible_dates: request.flexible_dates,
+            flexibility_days: request.flexibility_days,
+            status: request.status
+          });
         });
       }
 
@@ -187,35 +121,15 @@ const ClientList = () => {
 
     setIsDeleting(true);
     try {
-      console.log('🗑️ Suppression du client:', clientToDelete.id, 'source:', clientToDelete.source);
+      console.log('🗑️ Suppression du client:', clientToDelete.id);
       
-      if (clientToDelete.source === 'clients') {
-        // Supprimer d'abord les demandes client associées
-        const { error: requestError } = await supabase
-          .from('client_requests')
-          .delete()
-          .eq('client_id', clientToDelete.id);
+      // Supprimer de client_requests
+      const { error } = await supabase
+        .from('client_requests')
+        .delete()
+        .eq('id', clientToDelete.id);
 
-        if (requestError) {
-          console.error('❌ Erreur suppression demandes:', requestError);
-        }
-
-        // Puis supprimer le client
-        const { error } = await supabase
-          .from('clients')
-          .delete()
-          .eq('id', clientToDelete.id);
-
-        if (error) throw error;
-      } else {
-        // Supprimer de client_requests
-        const { error } = await supabase
-          .from('client_requests')
-          .delete()
-          .eq('id', clientToDelete.id);
-
-        if (error) throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "Client supprimé",
@@ -344,13 +258,13 @@ const ClientList = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map((client) => (
-            <Card key={`${client.source}-${client.id}`} className="hover:shadow-lg transition-shadow">
+            <Card key={client.id} className="hover:shadow-lg transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{client.name}</CardTitle>
                   <div className="flex items-center space-x-1">
                     <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                      {client.source === 'clients' ? 'Client' : 'Demande'}
+                      Client
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -379,71 +293,64 @@ const ClientList = () => {
                   </div>
                 </div>
                 <div className="text-sm text-gray-600">
-                  <strong>Réf:</strong> {client.client_reference || `CLI-${String(client.id).padStart(6, '0')}`}
+                  <strong>Réf:</strong> {client.client_reference}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Afficher les informations de déménagement si disponibles */}
-                {(client.source === 'client_requests' || client.move_request) && (
-                  <>
-                    <div className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Départ:</span>
-                        <span className="font-medium">
-                          {client.move_request?.departure_postal_code || client.departure_postal_code} {client.move_request?.departure_city || client.departure_city}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Arrivée:</span>
-                        <span className="font-medium">
-                          {client.move_request?.arrival_postal_code || client.arrival_postal_code} {client.move_request?.arrival_city || client.arrival_city}
-                        </span>
-                      </div>
-                    </div>
+                {/* Afficher les informations de déménagement */}
+                <div className="text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Départ:</span>
+                    <span className="font-medium">
+                      {client.departure_postal_code} {client.departure_city}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Arrivée:</span>
+                    <span className="font-medium">
+                      {client.arrival_postal_code} {client.arrival_city}
+                    </span>
+                  </div>
+                </div>
 
-                    {(client.move_request?.desired_date || client.desired_date) && (
-                      <div className="text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-600">Date souhaitée:</span>
-                          <span className="font-medium">
-                            {new Date(client.move_request?.desired_date || client.desired_date!).toLocaleDateString('fr-FR')}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {(client.move_request?.estimated_volume || client.estimated_volume) && (
-                      <div className="text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-600">Volume estimé:</span>
-                          <span className="font-medium">{client.move_request?.estimated_volume || client.estimated_volume} m³</span>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                {client.desired_date && (
+                  <div className="text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Date souhaitée:</span>
+                      <span className="font-medium">
+                        {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                      </span>
+                    </div>
+                  </div>
                 )}
 
-                {/* Afficher les informations de contact si pas d'infos de déménagement */}
-                {!client.move_request && client.source === 'clients' && (
-                  <>
-                    <div className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Email:</span>
-                        <span className="font-medium">{client.email}</span>
-                      </div>
+                {client.estimated_volume && (
+                  <div className="text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Volume estimé:</span>
+                      <span className="font-medium">{client.estimated_volume} m³</span>
                     </div>
-                    
-                    <div className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Téléphone:</span>
-                        <span className="font-medium">{client.phone}</span>
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
+
+                {client.flexible_dates && client.flexibility_days && (
+                  <div className="text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Flexibilité:</span>
+                      <span className="font-medium">±{client.flexibility_days} jours</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Contact:</span>
+                    <span className="font-medium text-xs">{client.email}</span>
+                  </div>
+                </div>
 
                 <div className="text-sm">
                   <div className="flex items-center justify-between">
