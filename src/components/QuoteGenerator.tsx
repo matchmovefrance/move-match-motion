@@ -1,4 +1,3 @@
-
 import jsPDF from 'jspdf';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -41,7 +40,7 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
   const generatePDF = () => {
-    console.log('🎯 Génération PDF - Design professionnel corrigé');
+    console.log('🎯 Génération PDF - Adresses complètes');
     
     if (!client.quote_amount || !client.name) {
       console.error('❌ Données essentielles manquantes');
@@ -136,9 +135,18 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     yPos += 15;
     
+    // Construire les adresses complètes
+    const departureFullAddress = client.departure_address 
+      ? `${client.departure_address}, ${client.departure_postal_code} ${client.departure_city}`
+      : `${client.departure_postal_code} ${client.departure_city}`;
+    
+    const arrivalFullAddress = client.arrival_address 
+      ? `${client.arrival_address}, ${client.arrival_postal_code} ${client.arrival_city}`
+      : `${client.arrival_postal_code} ${client.arrival_city}`;
+    
     const tableData = [
-      ['Départ', `${client.departure_postal_code} ${client.departure_city}`],
-      ['Arrivée', `${client.arrival_postal_code} ${client.arrival_city}`],
+      ['Départ', departureFullAddress],
+      ['Arrivée', arrivalFullAddress],
       ['Date souhaitée', new Date(client.desired_date).toLocaleDateString('fr-FR')],
       ['Volume estimé', client.estimated_volume ? `${client.estimated_volume} m³` : 'Non spécifié']
     ];
@@ -157,7 +165,11 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
       doc.setFont('helvetica', 'bold');
       doc.text(row[0] + ':', 25, rowY + 2);
       doc.setFont('helvetica', 'normal');
-      doc.text(row[1], 80, rowY + 2);
+      
+      // Gérer les adresses longues avec retour à la ligne si nécessaire
+      const maxWidth = 120;
+      const textLines = doc.splitTextToSize(row[1], maxWidth);
+      doc.text(textLines, 80, rowY + 2);
     });
     
     yPos += 50;
@@ -213,7 +225,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     } else {
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(150, 150, 150);
-      doc.text('RIB: (non renseigné)', 20, yPos + 5);
+      doc.text('RIB: (non renseigné)', 20, yPos + 15);
       doc.text('Les coordonnées bancaires seront communiquées', 20, yPos + 15);
       doc.text('lors de la confirmation du devis.', 20, yPos + 23);
     }
@@ -246,7 +258,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     const fileName = `devis_${supplierInfo.company_name.replace(/\s+/g, '_')}_${client.name?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
     
-    console.log('✅ PDF généré avec succès:', fileName);
+    console.log('✅ PDF généré avec adresses complètes:', fileName);
   };
 
   const hasRequiredClientData = !!(client.quote_amount && client.name);
