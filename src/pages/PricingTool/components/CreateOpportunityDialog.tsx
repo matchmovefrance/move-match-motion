@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [creationMode, setCreationMode] = useState<'existing' | 'new' | 'search'>('existing');
-  const [selectedClientRequest, setSelectedClientRequest] = useState<string>('');
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   
@@ -105,28 +105,19 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
         client_phone: '',
       });
       setSelectedDate(undefined);
-      setSelectedClientRequest('');
       setSelectedClient('');
       setClientSearchTerm('');
     }
   }, [opportunity, open]);
 
-  // Récupérer les demandes clients existantes
-  const { data: clientRequests } = useQuery({
-    queryKey: ['client-requests'],
+  // Récupérer les clients existants pour la sélection
+  const { data: existingClients } = useQuery({
+    queryKey: ['existing-clients'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('client_requests')
-        .select(`
-          *,
-          clients (
-            id,
-            name,
-            email,
-            phone
-          )
-        `)
-        .eq('status', 'pending')
+        .from('clients')
+        .select('*')
+        .in('status', ['pending', 'confirmed'])
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -141,12 +132,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
     queryFn: async () => {
       let query = supabase
         .from('clients')
-        .select(`
-          *,
-          client_requests (
-            *
-          )
-        `);
+        .select('*');
       
       if (clientSearchTerm) {
         query = query.or(`name.ilike.%${clientSearchTerm}%,email.ilike.%${clientSearchTerm}%`);
@@ -165,8 +151,8 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleClientRequestSelect = (requestId: string) => {
-    const selected = clientRequests?.find(req => req.id.toString() === requestId);
+  const handleClientSelect = (clientId: string) => {
+    const selected = existingClients?.find(client => client.id.toString() === clientId);
     if (selected) {
       setFormData(prev => ({
         ...prev,
@@ -182,45 +168,41 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
         arrival_city: selected.arrival_city,
         arrival_postal_code: selected.arrival_postal_code,
         special_requirements: selected.special_requirements || '',
-        client_name: (selected.clients as any)?.name || selected.name || '',
-        client_email: (selected.clients as any)?.email || selected.email || '',
-        client_phone: (selected.clients as any)?.phone || selected.phone || '',
+        client_name: selected.name || '',
+        client_email: selected.email || '',
+        client_phone: selected.phone || '',
       }));
-      setSelectedDate(new Date(selected.desired_date));
-      setSelectedClientRequest(requestId);
+      if (selected.desired_date) {
+        setSelectedDate(new Date(selected.desired_date));
+      }
+      setSelectedClient(clientId);
     }
   };
 
-  const handleClientSelect = (clientId: string) => {
+  const handleSearchClientSelect = (clientId: string) => {
     const selected = clients?.find(client => client.id.toString() === clientId);
     if (selected) {
-      // Remplir toutes les informations du client
-      const clientRequests = selected.client_requests as any[];
-      const latestRequest = clientRequests?.length > 0 ? clientRequests[clientRequests.length - 1] : null;
-
       setFormData(prev => ({
         ...prev,
         client_name: selected.name,
         client_email: selected.email,
         client_phone: selected.phone,
-        // Si le client a des demandes précédentes, remplir avec les dernières données
-        title: latestRequest ? `Déménagement ${latestRequest.departure_city} → ${latestRequest.arrival_city}` : `Déménagement pour ${selected.name}`,
-        description: latestRequest?.description || '',
-        estimated_volume: latestRequest?.estimated_volume?.toString() || '',
-        budget_range_min: latestRequest?.budget_min?.toString() || '',
-        budget_range_max: latestRequest?.budget_max?.toString() || '',
-        departure_address: latestRequest?.departure_address || '',
-        departure_city: latestRequest?.departure_city || '',
-        departure_postal_code: latestRequest?.departure_postal_code || '',
-        arrival_address: latestRequest?.arrival_address || '',
-        arrival_city: latestRequest?.arrival_city || '',
-        arrival_postal_code: latestRequest?.arrival_postal_code || '',
-        special_requirements: latestRequest?.special_requirements || '',
+        title: `Déménagement pour ${selected.name}`,
+        description: selected.description || '',
+        estimated_volume: selected.estimated_volume?.toString() || '',
+        budget_range_min: selected.budget_min?.toString() || '',
+        budget_range_max: selected.budget_max?.toString() || '',
+        departure_address: selected.departure_address || '',
+        departure_city: selected.departure_city || '',
+        departure_postal_code: selected.departure_postal_code || '',
+        arrival_address: selected.arrival_address || '',
+        arrival_city: selected.arrival_city || '',
+        arrival_postal_code: selected.arrival_postal_code || '',
+        special_requirements: selected.special_requirements || '',
       }));
 
-      // Si il y a une date souhaitée dans la dernière demande
-      if (latestRequest?.desired_date) {
-        setSelectedDate(new Date(latestRequest.desired_date));
+      if (selected.desired_date) {
+        setSelectedDate(new Date(selected.desired_date));
       }
 
       setSelectedClient(clientId);
@@ -246,7 +228,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
         priority: parseInt(formData.priority),
         desired_date: format(selectedDate, 'yyyy-MM-dd'),
         created_by: user.id,
-        client_request_id: selectedClientRequest ? parseInt(selectedClientRequest) : null,
+        client_request_id: selectedClient ? parseInt(selectedClient) : null,
       };
 
       if (opportunity) {
@@ -305,7 +287,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
           <DialogDescription>
             {opportunity 
               ? 'Modifiez les informations de cette opportunité.'
-              : 'Créez une opportunité depuis une demande client existante ou manuellement.'
+              : 'Créez une opportunité depuis un client existant ou manuellement.'
             }
           </DialogDescription>
         </DialogHeader>
@@ -315,7 +297,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="existing" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                Demande existante
+                Client existant
               </TabsTrigger>
               <TabsTrigger value="search" className="flex items-center gap-2">
                 <Search className="h-4 w-4" />
@@ -329,20 +311,20 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
 
             <TabsContent value="existing" className="space-y-4">
               <div>
-                <Label htmlFor="client_request">Sélectionner une demande client *</Label>
-                <Select value={selectedClientRequest} onValueChange={handleClientRequestSelect}>
+                <Label htmlFor="existing_client">Sélectionner un client existant *</Label>
+                <Select value={selectedClient} onValueChange={handleClientSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choisir une demande client..." />
+                    <SelectValue placeholder="Choisir un client..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {clientRequests?.map((request) => (
-                      <SelectItem key={request.id} value={request.id.toString()}>
+                    {existingClients?.map((client) => (
+                      <SelectItem key={client.id} value={client.id.toString()}>
                         <div className="flex flex-col">
                           <span className="font-medium">
-                            {(request.clients as any)?.name || request.name} - {request.departure_city} → {request.arrival_city}
+                            {client.name} - {client.departure_city} → {client.arrival_city}
                           </span>
                           <span className="text-sm text-gray-500">
-                            {request.estimated_volume}m³ - {format(new Date(request.desired_date), 'dd/MM/yyyy')}
+                            {client.estimated_volume}m³ - {format(new Date(client.desired_date), 'dd/MM/yyyy')}
                           </span>
                         </div>
                       </SelectItem>
@@ -363,7 +345,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
                     onChange={(e) => setClientSearchTerm(e.target.value)}
                   />
                   {clientSearchTerm && clients && clients.length > 0 && (
-                    <Select value={selectedClient} onValueChange={handleClientSelect}>
+                    <Select value={selectedClient} onValueChange={handleSearchClientSelect}>
                       <SelectTrigger>
                         <SelectValue placeholder="Sélectionner un client..." />
                       </SelectTrigger>
@@ -373,7 +355,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
                             <div className="flex flex-col">
                               <span className="font-medium">{client.name}</span>
                               <span className="text-sm text-gray-500">
-                                {client.email} • {(client.client_requests as any[])?.length || 0} demande(s)
+                                {client.email}
                               </span>
                             </div>
                           </SelectItem>
@@ -423,7 +405,7 @@ const CreateOpportunityDialog = ({ open, onOpenChange, opportunity = null, onSuc
         )}
 
         {/* Informations client affichées */}
-        {(formData.client_name || selectedClientRequest || selectedClient) && (
+        {(formData.client_name || selectedClient) && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-medium text-blue-900 mb-2">Informations client</h4>
             <div className="grid grid-cols-2 gap-4 text-sm">

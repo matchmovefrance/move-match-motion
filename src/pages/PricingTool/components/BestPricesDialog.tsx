@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,8 @@ const BestPricesDialog = ({ open, onOpenChange, opportunity }: BestPricesDialogP
         arrival_postal_code: opportunity.arrival_postal_code,
         estimated_volume: opportunity.estimated_volume,
         desired_date: opportunity.desired_date,
-        quote_amount: opportunity.budget_max || opportunity.quote_amount
+        quote_amount: opportunity.budget_max || opportunity.quote_amount,
+        client_reference: opportunity.client_reference || `CLI-${String(opportunity.id).padStart(6, '0')}`
       };
 
       console.log(`🗺️ Calcul distances exactes pour ${clientForPricing.name}: ${clientForPricing.departure_postal_code} -> ${clientForPricing.arrival_postal_code}`);

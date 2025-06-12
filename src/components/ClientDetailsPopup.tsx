@@ -72,6 +72,23 @@ const ClientDetailsPopup = ({ client, isOpen, onClose }: ClientDetailsPopupProps
     }];
   };
 
+  // Convert client to the format expected by EmailQuoteButton
+  const clientForEmailButton = {
+    id: client.id,
+    name: client.name,
+    email: client.email,
+    quote_amount: client.quote_amount,
+    desired_date: client.desired_date,
+    phone: client.phone,
+    departure_address: client.departure_address,
+    departure_postal_code: client.departure_postal_code,
+    departure_city: client.departure_city,
+    arrival_address: client.arrival_address,
+    arrival_postal_code: client.arrival_postal_code,
+    arrival_city: client.arrival_city,
+    estimated_volume: client.estimated_volume
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -207,7 +224,7 @@ const ClientDetailsPopup = ({ client, isOpen, onClose }: ClientDetailsPopupProps
                     <p className="text-sm text-gray-600">Montant du devis</p>
                   </div>
                   <div className="flex space-x-2">
-                    <EmailQuoteButton />
+                    <EmailQuoteButton client={clientForEmailButton} />
                   </div>
                 </div>
               </div>
