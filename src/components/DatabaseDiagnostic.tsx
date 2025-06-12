@@ -32,7 +32,7 @@ const DatabaseDiagnostic = () => {
         details: tableError
       });
 
-      // Test 2: Tester une insertion simple
+      // Test 2: Tester une insertion simple avec tous les champs obligatoires
       console.log('🔍 Testing simple insert...');
       const testData = {
         mover_name: 'Test Mover',
@@ -47,7 +47,10 @@ const DatabaseDiagnostic = () => {
         available_volume: 10,
         created_by: user?.id || '',
         status: 'confirmed',
-        status_custom: 'en_cours'
+        status_custom: 'en_cours',
+        // Champs obligatoires manquants
+        mover_id: 1,
+        truck_id: 1
       };
 
       const { data: insertData, error: insertError } = await supabase
@@ -71,18 +74,18 @@ const DatabaseDiagnostic = () => {
           .eq('id', insertData[0].id);
       }
 
-      // Test 3: Vérifier les colonnes obligatoires
-      console.log('🔍 Checking required columns...');
-      const { data: schemaData, error: schemaError } = await supabase
-        .rpc('get_table_schema', { table_name: 'confirmed_moves' })
-        .then(() => ({ data: 'Schema accessible', error: null }))
-        .catch(err => ({ data: null, error: err }));
+      // Test 3: Vérifier l'accès aux prestataires
+      console.log('🔍 Checking service_providers table...');
+      const { data: providersData, error: providersError } = await supabase
+        .from('service_providers')
+        .select('id, name, company_name')
+        .limit(1);
 
       diagnosticResults.push({
-        test: 'Schema check',
-        success: !schemaError,
-        message: schemaError ? 'Cannot access schema info' : 'Schema accessible',
-        details: schemaError
+        test: 'Service providers accessible',
+        success: !providersError,
+        message: providersError ? providersError.message : `${providersData?.length || 0} prestataires trouvés`,
+        details: providersError
       });
 
     } catch (error) {

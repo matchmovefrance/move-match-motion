@@ -114,7 +114,7 @@ const SimpleMoveForm = ({ onSuccess, initialData, isEditing }: SimpleMoveFormPro
       const { data: provider, error: providerError } = await supabase
         .from('service_providers')
         .select('*')
-        .eq('id', formData.provider_id)
+        .eq('id', parseInt(formData.provider_id))
         .single();
 
       if (providerError) throw providerError;
