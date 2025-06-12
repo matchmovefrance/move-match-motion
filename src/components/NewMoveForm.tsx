@@ -5,30 +5,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Truck, MapPin, Calendar, Volume2, Plus } from 'lucide-react';
+import { Truck, MapPin, Calendar, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
 
-interface ServiceProvider {
-  id: number;
+interface Provider {
+  id: string;
   name: string;
   company_name: string;
-  phone: string;
   email: string;
+  phone: string;
+  source: string;
 }
 
-interface SimpleMoveFormReplacementProps {
+interface NewMoveFormProps {
   onSuccess?: () => void;
   initialData?: any;
   isEditing?: boolean;
 }
 
-const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: SimpleMoveFormReplacementProps) => {
+const NewMoveForm = ({ onSuccess, initialData, isEditing = false }: NewMoveFormProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [formData, setFormData] = useState({
     provider_id: '',
     departure_postal_code: '',
@@ -38,8 +39,97 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
     used_volume: ''
   });
 
+  // Récupération des prestataires depuis la table service_providers
+  const { data: serviceProviders = [], isLoading: serviceProvidersLoading } = useQuery({
+    queryKey: ['service-providers'],
+    queryFn: async () => {
+      console.log('🔄 Récupération des prestataires depuis service_providers');
+      
+      const { data, error } = await supabase
+        .from('service_providers')
+        .select('*')
+        .order('company_name');
+
+      if (error) {
+        console.error('❌ Erreur récupération des prestataires:', error);
+        throw error;
+      }
+      
+      // Transformer les données au format requis
+      const formattedProviders = data?.map(provider => ({
+        id: provider.id.toString(),
+        name: provider.name,
+        company_name: provider.company_name,
+        email: provider.email || '',
+        phone: provider.phone || '',
+        source: 'service_providers'
+      })) || [];
+      
+      console.log('✅ Prestataires depuis service_providers:', formattedProviders.length);
+      return formattedProviders;
+    },
+    enabled: !!user
+  });
+
+  // Récupération des prestataires uniques depuis confirmed_moves
+  const { data: moveProviders = [], isLoading: moveProvidersLoading } = useQuery({
+    queryKey: ['move-providers'],
+    queryFn: async () => {
+      console.log('🔄 Récupération des prestataires depuis confirmed_moves');
+      
+      const { data, error } = await supabase
+        .from('confirmed_moves')
+        .select('mover_id, mover_name, company_name, contact_email, contact_phone')
+        .not('mover_id', 'is', null)
+        .not('company_name', 'is', null);
+
+      if (error) {
+        console.error('❌ Erreur récupération des prestataires depuis trajets:', error);
+        throw error;
+      }
+      
+      // Création d'un Map pour éviter les doublons
+      const uniqueProvidersMap = new Map();
+      
+      data?.forEach((move) => {
+        // Clé unique basée sur le nom du prestataire et le nom de l'entreprise
+        const key = `${move.mover_name}-${move.company_name}`.toLowerCase();
+        
+        if (!uniqueProvidersMap.has(key)) {
+          uniqueProvidersMap.set(key, {
+            id: `move-${move.mover_id || '0'}`,
+            name: move.mover_name || 'Sans nom',
+            company_name: move.company_name || 'Sans entreprise',
+            email: move.contact_email || '',
+            phone: move.contact_phone || '',
+            source: 'confirmed_moves'
+          });
+        }
+      });
+
+      const uniqueProviders = Array.from(uniqueProvidersMap.values());
+      console.log('✅ Prestataires uniques depuis confirmed_moves:', uniqueProviders.length);
+      return uniqueProviders;
+    },
+    enabled: !!user
+  });
+
+  // Combiner les prestataires des deux sources
+  const allProviders = [
+    ...serviceProviders,
+    ...moveProviders.filter(moveProvider => 
+      // Exclure les prestataires de confirmed_moves qui sont déjà présents dans service_providers
+      !serviceProviders.some(sp => 
+        sp.name.toLowerCase() === moveProvider.name.toLowerCase() && 
+        sp.company_name.toLowerCase() === moveProvider.company_name.toLowerCase()
+      )
+    )
+  ];
+
+  const providersLoading = serviceProvidersLoading || moveProvidersLoading;
+
+  // Initialiser le formulaire avec les données existantes si on est en mode édition
   useEffect(() => {
-    fetchProviders();
     if (initialData) {
       setFormData({
         provider_id: initialData.provider_id?.toString() || '',
@@ -52,20 +142,7 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
     }
   }, [initialData]);
 
-  const fetchProviders = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('service_providers')
-        .select('id, name, company_name, phone, email')
-        .order('company_name');
-
-      if (error) throw error;
-      setProviders(data || []);
-    } catch (error) {
-      console.error('Error fetching providers:', error);
-    }
-  };
-
+  // Génération d'une référence de trajet unique
   const generateMoveReference = () => {
     const timestamp = Date.now().toString().slice(-6);
     return `TRJ-${timestamp}`;
@@ -77,29 +154,31 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
     if (!user) {
       toast({
         title: "Erreur",
-        description: "Vous devez être connecté",
+        description: "Vous devez être connecté pour créer un trajet",
         variant: "destructive",
       });
       return;
     }
 
+    // Validation basique des champs requis
     if (!formData.provider_id || !formData.departure_postal_code || !formData.arrival_postal_code || 
         !formData.departure_date || !formData.max_volume) {
       toast({
-        title: "Erreur",
-        description: "Tous les champs obligatoires doivent être remplis",
+        title: "Champs manquants",
+        description: "Veuillez remplir tous les champs obligatoires",
         variant: "destructive",
       });
       return;
     }
 
-    const usedVolume = parseFloat(formData.used_volume) || 0;
+    // Validation des volumes
     const maxVolume = parseFloat(formData.max_volume);
-
+    const usedVolume = parseFloat(formData.used_volume) || 0;
+    
     if (usedVolume > maxVolume) {
       toast({
         title: "Erreur",
-        description: "Le volume utilisé ne peut pas dépasser le volume total",
+        description: "Le volume utilisé ne peut pas être supérieur au volume total",
         variant: "destructive",
       });
       return;
@@ -108,20 +187,24 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
     try {
       setLoading(true);
 
-      const { data: provider, error: providerError } = await supabase
-        .from('service_providers')
-        .select('*')
-        .eq('id', parseInt(formData.provider_id))
-        .single();
+      // Recherche du prestataire sélectionné
+      const selectedProvider = allProviders.find(p => p.id === formData.provider_id);
+      
+      if (!selectedProvider) {
+        toast({
+          title: "Erreur",
+          description: "Prestataire non trouvé",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      if (providerError) throw providerError;
-
-      const moveReference = isEditing ? initialData?.move_reference : generateMoveReference();
       const availableVolume = maxVolume - usedVolume;
 
+      // Préparer les données du trajet
       const moveData = {
-        mover_name: provider.name,
-        company_name: provider.company_name,
+        mover_name: selectedProvider.name,
+        company_name: selectedProvider.company_name,
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         departure_country: 'France',
@@ -134,30 +217,39 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
         available_volume: availableVolume,
         status: 'confirmed',
         status_custom: 'en_cours',
-        contact_phone: provider.phone,
-        contact_email: provider.email,
+        contact_phone: selectedProvider.phone,
+        contact_email: selectedProvider.email,
         created_by: user.id,
-        move_reference: moveReference,
-        mover_id: 1,
+        // Si le prestataire vient de service_providers, utiliser son ID, sinon 1 par défaut
+        mover_id: selectedProvider.source === 'service_providers' 
+          ? parseInt(selectedProvider.id) 
+          : parseInt(selectedProvider.id.replace('move-', '')) || 1,
         truck_id: 1
       };
 
+      // Créer ou modifier le trajet
       if (isEditing && initialData?.id) {
-        await supabase
+        const { error } = await supabase
           .from('confirmed_moves')
           .update(moveData)
           .eq('id', initialData.id);
+          
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('confirmed_moves')
           .insert(moveData);
+          
+        if (error) throw error;
       }
 
+      // Notification de succès
       toast({
-        title: "Succès",
-        description: `Trajet ${isEditing ? 'modifié' : 'créé'} avec la référence ${moveReference} (${availableVolume.toFixed(1)}m³ disponible)`,
+        title: "Trajet enregistré",
+        description: `Trajet ${isEditing ? 'modifié' : 'créé'} avec succès (${availableVolume.toFixed(1)}m³ disponible)`,
       });
 
+      // Réinitialiser le formulaire si ce n'est pas une modification
       if (!isEditing) {
         setFormData({
           provider_id: '',
@@ -169,15 +261,16 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
         });
       }
 
+      // Appeler la fonction de callback si elle existe
       if (onSuccess) {
         onSuccess();
       }
 
     } catch (error: any) {
-      console.error('Error saving move:', error);
+      console.error('❌ Erreur lors de la sauvegarde du trajet:', error);
       toast({
         title: "Erreur",
-        description: `Impossible de sauvegarder: ${error.message}`,
+        description: `Impossible de sauvegarder le trajet: ${error.message}`,
         variant: "destructive",
       });
     } finally {
@@ -185,9 +278,18 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
     }
   };
 
+  // Calculer le volume disponible pour affichage
   const availableVolume = formData.max_volume && formData.used_volume 
     ? parseFloat(formData.max_volume) - parseFloat(formData.used_volume)
     : parseFloat(formData.max_volume) || 0;
+
+  // Logging pour le débogage
+  console.log('📊 Résumé des prestataires dans NewMoveForm:', {
+    serviceProviders: serviceProviders.length,
+    moveProviders: moveProviders.length,
+    allProviders: allProviders.length,
+    loading: providersLoading
+  });
 
   return (
     <Card>
@@ -198,21 +300,36 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Sélection du prestataire */}
           <div>
             <Label htmlFor="provider_id">Prestataire *</Label>
             <div className="flex items-center space-x-2">
               <Select 
                 value={formData.provider_id} 
                 onValueChange={(value) => setFormData({ ...formData, provider_id: value })}
+                disabled={providersLoading}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un prestataire" />
+                <SelectTrigger className="w-full">
+                  <SelectValue 
+                    placeholder={
+                      providersLoading 
+                        ? "Chargement des prestataires..." 
+                        : allProviders.length === 0 
+                          ? "Aucun prestataire disponible"
+                          : "Sélectionner un prestataire"
+                    } 
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {providers.map((provider) => (
-                    <SelectItem key={provider.id} value={provider.id.toString()}>
+                  {allProviders.map((provider) => (
+                    <SelectItem key={provider.id} value={provider.id}>
                       {provider.company_name} - {provider.name}
+                      {provider.source === 'service_providers' ? (
+                        <span className="text-xs text-blue-600 ml-2">(DB)</span>
+                      ) : (
+                        <span className="text-xs text-green-600 ml-2">(Trajet)</span>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -221,9 +338,16 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
                 type="button" 
                 variant="outline" 
                 size="sm"
-                onClick={() => window.open('/#', '_blank')}
+                onClick={() => {
+                  const newWindow = window.open('/pricing-tool', '_blank');
+                  if (newWindow) {
+                    setTimeout(() => {
+                      newWindow.location.hash = '#suppliers';
+                    }, 500);
+                  }
+                }}
               >
-                <Plus className="h-4 w-4" />
+                +
               </Button>
             </div>
             <p className="text-xs text-gray-600 mt-1">
@@ -231,6 +355,7 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
             </p>
           </div>
 
+          {/* Codes postaux */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="departure_postal_code">Code postal départ *</Label>
@@ -262,6 +387,7 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
             </div>
           </div>
 
+          {/* Date du trajet */}
           <div>
             <Label htmlFor="departure_date">Date du trajet *</Label>
             <div className="flex items-center space-x-2">
@@ -280,6 +406,7 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
             </p>
           </div>
 
+          {/* Volumes */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="max_volume">Volume total camion (m³) *</Label>
@@ -314,6 +441,7 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
             </div>
           </div>
 
+          {/* Résumé des volumes */}
           {formData.max_volume && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -345,8 +473,19 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
             </div>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Enregistrement...' : (isEditing ? 'Mettre à jour le trajet' : 'Créer le trajet')}
+          {/* Bouton de soumission */}
+          <Button 
+            type="submit" 
+            disabled={loading || allProviders.length === 0} 
+            className="w-full"
+          >
+            {loading 
+              ? 'Enregistrement...' 
+              : (isEditing 
+                ? 'Mettre à jour le trajet' 
+                : 'Créer le trajet'
+              )
+            }
           </Button>
         </form>
       </CardContent>
@@ -354,4 +493,4 @@ const SimpleMoveFormReplacement = ({ onSuccess, initialData, isEditing }: Simple
   );
 };
 
-export default SimpleMoveFormReplacement;
+export default NewMoveForm;
