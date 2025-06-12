@@ -61,6 +61,7 @@ export type Database = {
           budget_max: number | null
           budget_min: number | null
           client_id: number
+          client_reference: string | null
           created_at: string | null
           created_by: string
           date_range_end: string | null
@@ -77,6 +78,7 @@ export type Database = {
           estimated_arrival_time: string | null
           estimated_volume: number | null
           estimated_volume_backup: number
+          flexibility_days: number | null
           flexible_dates: boolean | null
           id: number
           inventory_list: string | null
@@ -100,6 +102,7 @@ export type Database = {
           budget_max?: number | null
           budget_min?: number | null
           client_id: number
+          client_reference?: string | null
           created_at?: string | null
           created_by: string
           date_range_end?: string | null
@@ -116,6 +119,7 @@ export type Database = {
           estimated_arrival_time?: string | null
           estimated_volume?: number | null
           estimated_volume_backup?: number
+          flexibility_days?: number | null
           flexible_dates?: boolean | null
           id?: number
           inventory_list?: string | null
@@ -139,6 +143,7 @@ export type Database = {
           budget_max?: number | null
           budget_min?: number | null
           client_id?: number
+          client_reference?: string | null
           created_at?: string | null
           created_by?: string
           date_range_end?: string | null
@@ -155,6 +160,7 @@ export type Database = {
           estimated_arrival_time?: string | null
           estimated_volume?: number | null
           estimated_volume_backup?: number
+          flexibility_days?: number | null
           flexible_dates?: boolean | null
           id?: number
           inventory_list?: string | null
