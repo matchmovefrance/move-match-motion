@@ -41,7 +41,7 @@ interface QuoteGeneratorProps {
 
 const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
   const generatePDF = () => {
-    console.log('🎯 Génération PDF - Design professionnel amélioré');
+    console.log('🎯 Génération PDF - Design professionnel corrigé');
     
     if (!client.quote_amount || !client.name) {
       console.error('❌ Données essentielles manquantes');
@@ -59,17 +59,14 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     let yPos = 30;
     
     // === EN-TÊTE PRINCIPAL ===
-    // Fond bleu pour l'en-tête
     doc.setFillColor(37, 99, 235);
     doc.rect(0, 0, 210, 50, 'F');
     
-    // Titre principal en blanc
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(28);
     doc.setFont('helvetica', 'bold');
     doc.text('DEVIS DE DÉMÉNAGEMENT', 20, 25);
     
-    // Numéro de devis et date
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
     const quoteNumber = `DEV-${Date.now().toString().slice(-6)}`;
@@ -78,42 +75,39 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     yPos = 70;
     
-    // === SECTION PRESTATAIRE (Encadré) ===
+    // === SECTION PRESTATAIRE ===
     doc.setFillColor(248, 250, 252);
-    doc.rect(15, yPos - 5, 180, 35, 'F');
+    doc.rect(15, yPos - 5, 180, 40, 'F');
     doc.setDrawColor(37, 99, 235);
     doc.setLineWidth(0.5);
-    doc.rect(15, yPos - 5, 180, 35);
+    doc.rect(15, yPos - 5, 180, 40);
     
+    // Nom du prestataire en titre
     doc.setTextColor(37, 99, 235);
-    doc.setFontSize(14);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('PRESTATAIRE SÉLECTIONNÉ', 20, yPos + 5);
-    
-    // Nom du prestataire en évidence
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(supplierInfo.company_name, 20, yPos + 15);
+    doc.text(supplierInfo.company_name, 20, yPos + 10);
     
     // Coordonnées du prestataire
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(60, 60, 60);
-    doc.text(`Contact: ${supplierInfo.contact_name} | ${supplierInfo.email} | ${supplierInfo.phone}`, 20, yPos + 25);
+    doc.text(`Contact: ${supplierInfo.contact_name}`, 20, yPos + 20);
+    doc.text(`Email: ${supplierInfo.email}`, 20, yPos + 28);
+    doc.text(`Téléphone: ${supplierInfo.phone}`, 20, yPos + 36);
     
-    yPos += 50;
+    yPos += 55;
     
     // === SECTION CLIENT ===
     doc.setTextColor(37, 99, 235);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('INFORMATIONS CLIENT', 20, yPos);
+    doc.text('CLIENT', 20, yPos);
     
     yPos += 10;
     
     doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.text(client.name, 20, yPos);
     
@@ -142,7 +136,6 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     yPos += 15;
     
-    // Tableau des détails
     const tableData = [
       ['Départ', `${client.departure_postal_code} ${client.departure_city}`],
       ['Arrivée', `${client.arrival_postal_code} ${client.arrival_city}`],
@@ -156,7 +149,6 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     tableData.forEach((row, index) => {
       const rowY = yPos + (index * 8);
       
-      // Fond alterné pour les lignes
       if (index % 2 === 0) {
         doc.setFillColor(248, 250, 252);
         doc.rect(20, rowY - 3, 170, 8, 'F');
@@ -170,68 +162,65 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
     
     yPos += 50;
     
-    // === MONTANT - SECTION SÉPARÉE ET MISE EN VALEUR ===
+    // === MONTANT TOTAL - SECTION SÉPARÉE ===
     doc.setFillColor(34, 197, 94);
-    doc.rect(15, yPos, 180, 35, 'F');
+    doc.rect(15, yPos, 180, 30, 'F');
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT TOTAL TTC', 25, yPos + 15);
+    doc.text('MONTANT TOTAL TTC', 25, yPos + 12);
     
-    doc.setFontSize(28);
+    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${client.quote_amount.toFixed(2)} €`, 25, yPos + 28);
+    doc.text(`${client.quote_amount.toFixed(2)} €`, 25, yPos + 24);
     
-    yPos += 55;
+    yPos += 45;
     
     // === COORDONNÉES BANCAIRES ===
+    doc.setTextColor(37, 99, 235);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('COORDONNÉES BANCAIRES', 20, yPos);
+    
+    yPos += 15;
+    
+    // Encadré pour les coordonnées bancaires
+    doc.setFillColor(248, 250, 252);
+    doc.rect(15, yPos - 5, 180, 45, 'F');
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 5, 180, 45);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    
     if (supplier?.bank_details) {
-      doc.setTextColor(37, 99, 235);
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('COORDONNÉES BANCAIRES', 20, yPos);
-      
-      yPos += 15;
-      
-      // Encadré pour les coordonnées bancaires
-      doc.setFillColor(248, 250, 252);
-      doc.rect(15, yPos - 5, 180, 40, 'F');
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.3);
-      doc.rect(15, yPos - 5, 180, 40);
-      
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
       const bankData = [
-        ['Titulaire du compte', supplier.bank_details.account_holder],
-        ['IBAN', supplier.bank_details.iban],
-        ['BIC', supplier.bank_details.bic],
-        ['Banque', supplier.bank_details.bank_name]
+        ['Titulaire du compte:', supplier.bank_details.account_holder],
+        ['IBAN:', supplier.bank_details.iban],
+        ['BIC:', supplier.bank_details.bic],
+        ['Banque:', supplier.bank_details.bank_name]
       ];
       
       bankData.forEach((row, index) => {
         const rowY = yPos + (index * 8);
         doc.setFont('helvetica', 'bold');
-        doc.text(row[0] + ':', 20, rowY);
+        doc.text(row[0], 20, rowY);
         doc.setFont('helvetica', 'normal');
         doc.text(row[1], 85, rowY);
       });
-      
-      yPos += 50;
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(150, 150, 150);
+      doc.text('RIB: (non renseigné)', 20, yPos + 5);
+      doc.text('Les coordonnées bancaires seront communiquées', 20, yPos + 15);
+      doc.text('lors de la confirmation du devis.', 20, yPos + 23);
     }
     
-    // === INSTRUCTIONS DE PAIEMENT - SECTION SÉPARÉE ===
-    yPos += 10;
+    yPos += 60;
     
-    doc.setTextColor(37, 99, 235);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CONDITIONS ET INSTRUCTIONS', 20, yPos);
-    
-    yPos += 10;
-    
+    // === INSTRUCTIONS SIMPLES ===
     doc.setTextColor(60, 60, 60);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -240,8 +229,7 @@ const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: Qu
       '• Devis valable 30 jours à compter de la date d\'émission',
       '• Paiement par virement bancaire uniquement',
       '• Confirmation écrite requise pour validation du devis',
-      '• Merci d\'indiquer le numéro de devis lors du paiement',
-      '• Prix incluant toutes les prestations mentionnées'
+      '• Merci d\'indiquer le numéro de devis lors du paiement'
     ];
     
     instructions.forEach((instruction, index) => {
