@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Table, 
   TableBody, 
@@ -22,7 +23,9 @@ import {
   Users, 
   Map,
   Search,
-  Truck
+  Truck,
+  Filter,
+  Check
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +34,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import SimpleMoverFormReplacement from './SimpleMoverFormReplacement';
 import MapPopup from './MapPopup';
+import StatusToggle from './StatusToggle';
 
 interface ConfirmedMove {
   id: number;
@@ -45,12 +49,14 @@ interface ConfirmedMove {
   used_volume: number;
   available_volume: number;
   status: string;
+  status_custom: string;
   truck_type: string;
   contact_phone: string;
   created_at: string;
   departure_address?: string;
   arrival_address?: string;
   description?: string;
+  number_of_clients?: number;
 }
 
 const MoveManagement = () => {
@@ -63,6 +69,10 @@ const MoveManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showMapPopup, setShowMapPopup] = useState(false);
   const [selectedMoveForMap, setSelectedMoveForMap] = useState<ConfirmedMove | null>(null);
+  
+  // Nouveaux états pour les filtres
+  const [dateFilter, setDateFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     loadMoves();
@@ -135,18 +145,49 @@ const MoveManagement = () => {
     setShowMapPopup(true);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const handleStatusChange = async (moveId: number, newStatus: 'en_cours' | 'termine') => {
+    try {
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .update({ 
+          status_custom: newStatus,
+          status: newStatus === 'termine' ? 'completed' : 'confirmed'
+        })
+        .eq('id', moveId);
+
+      if (error) throw error;
+
+      toast({
+        title: newStatus === 'termine' ? "Trajet terminé" : "Trajet remis en cours",
+        description: newStatus === 'termine' 
+          ? "Le trajet a été marqué comme terminé et sera exclu des futurs matchings"
+          : "Le trajet a été remis en cours",
+      });
+      
+      loadMoves();
+    } catch (error) {
+      console.error('Error updating move status:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut du trajet",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string, statusCustom: string) => {
+    const displayStatus = statusCustom || status;
+    switch (displayStatus) {
       case 'confirmed':
-        return <Badge className="bg-green-100 text-green-800">Confirmé</Badge>;
       case 'en_cours':
-        return <Badge className="bg-blue-100 text-blue-800">En cours</Badge>;
+        return <Badge className="bg-green-100 text-green-800">En cours</Badge>;
       case 'completed':
+      case 'termine':
         return <Badge className="bg-gray-100 text-gray-800">Terminé</Badge>;
       case 'cancelled':
         return <Badge variant="destructive">Annulé</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline">{displayStatus}</Badge>;
     }
   };
 
@@ -154,15 +195,30 @@ const MoveManagement = () => {
     return `TRJ-${String(id).padStart(6, '0')}`;
   };
 
-  const filteredMoves = moves.filter(move =>
-    move.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.mover_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.departure_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.arrival_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    move.departure_postal_code?.includes(searchTerm) ||
-    move.arrival_postal_code?.includes(searchTerm) ||
-    generateMoveReference(move.id).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const generateClientReference = (clientCount: number) => {
+    return `CLI-${String(clientCount || 0).padStart(6, '0')}`;
+  };
+
+  const filteredMoves = moves.filter(move => {
+    const matchesSearch = 
+      move.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      move.mover_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      move.departure_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      move.arrival_city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      move.departure_postal_code?.includes(searchTerm) ||
+      move.arrival_postal_code?.includes(searchTerm) ||
+      generateMoveReference(move.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      generateClientReference(move.number_of_clients || 0).toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesDate = !dateFilter || move.departure_date === dateFilter;
+    
+    const moveStatus = move.status_custom || move.status;
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'en_cours' && ['confirmed', 'en_cours'].includes(moveStatus)) ||
+      (statusFilter === 'termine' && ['completed', 'termine'].includes(moveStatus));
+
+    return matchesSearch && matchesDate && matchesStatus;
+  });
 
   const formatMapItem = (move: ConfirmedMove) => ({
     id: move.id,
@@ -227,7 +283,7 @@ const MoveManagement = () => {
           </Button>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -237,13 +293,38 @@ const MoveManagement = () => {
               className="pl-10"
             />
           </div>
+          
+          <div className="flex items-center space-x-2">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <Input
+              type="date"
+              placeholder="Filtrer par date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="w-40"
+            />
+            
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="en_cours">En cours</SelectItem>
+                <SelectItem value="termine">Terminé</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {filteredMoves.length === 0 ? (
           <div className="text-center py-12">
             <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">
-              {searchTerm ? 'Aucun trajet trouvé pour cette recherche' : 'Aucun trajet de déménagement'}
+              {searchTerm || dateFilter || statusFilter !== 'all' 
+                ? 'Aucun trajet trouvé pour ces filtres' 
+                : 'Aucun trajet de déménagement'
+              }
             </p>
             <p className="text-sm text-gray-500 mt-2">
               Cliquez sur "Nouveau Trajet" pour ajouter un trajet
@@ -258,7 +339,8 @@ const MoveManagement = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Référence</TableHead>
+                    <TableHead>Référence Trajet</TableHead>
+                    <TableHead>Référence Client</TableHead>
                     <TableHead>Entreprise</TableHead>
                     <TableHead>Responsable</TableHead>
                     <TableHead>Trajet</TableHead>
@@ -274,6 +356,11 @@ const MoveManagement = () => {
                       <TableCell>
                         <Badge variant="outline" className="font-mono">
                           {generateMoveReference(move.id)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-purple-600">
+                          {generateClientReference(move.number_of_clients || 0)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium">
@@ -310,7 +397,14 @@ const MoveManagement = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(move.status)}
+                        <div className="flex items-center space-x-2">
+                          {getStatusBadge(move.status, move.status_custom)}
+                          <StatusToggle
+                            status={move.status_custom || move.status}
+                            onStatusChange={(newStatus) => handleStatusChange(move.id, newStatus)}
+                            variant="button"
+                          />
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-2">
