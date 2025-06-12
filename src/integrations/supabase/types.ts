@@ -166,12 +166,17 @@ export type Database = {
       }
       company_settings: {
         Row: {
+          address: string | null
           company_address: string
           company_email: string
           company_name: string
           company_phone: string
           created_at: string | null
+          email: string | null
           id: number
+          phone: string | null
+          pricing_margin: number | null
+          siret: string | null
           smtp_auth_method: string | null
           smtp_enabled: boolean
           smtp_from_name: string | null
@@ -183,14 +188,20 @@ export type Database = {
           smtp_timeout: number | null
           smtp_username: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
+          address?: string | null
           company_address?: string
           company_email?: string
           company_name?: string
           company_phone?: string
           created_at?: string | null
+          email?: string | null
           id?: number
+          phone?: string | null
+          pricing_margin?: number | null
+          siret?: string | null
           smtp_auth_method?: string | null
           smtp_enabled?: boolean
           smtp_from_name?: string | null
@@ -202,14 +213,20 @@ export type Database = {
           smtp_timeout?: number | null
           smtp_username?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
+          address?: string | null
           company_address?: string
           company_email?: string
           company_name?: string
           company_phone?: string
           created_at?: string | null
+          email?: string | null
           id?: number
+          phone?: string | null
+          pricing_margin?: number | null
+          siret?: string | null
           smtp_auth_method?: string | null
           smtp_enabled?: boolean
           smtp_from_name?: string | null
@@ -221,6 +238,7 @@ export type Database = {
           smtp_timeout?: number | null
           smtp_username?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }

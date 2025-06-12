@@ -356,13 +356,21 @@ export const ClientMatchesDialog = ({ open, onOpenChange, clientId, clientName }
         </DialogContent>
       </Dialog>
 
-      {/* Popup de carte avec les bons props */}
-      {showMapPopup && selectedMatchForMap && (
+      {/* Popup de carte avec les props correctes */}
+      {showMapPopup && selectedMatchForMap && clientData && (
         <MapPopup
           open={showMapPopup}
           onOpenChange={setShowMapPopup}
-          clientData={clientData}
-          matchData={selectedMatchForMap}
+          departure_postal_code={clientData.departure_postal_code}
+          departure_city={clientData.departure_city}
+          arrival_postal_code={clientData.arrival_postal_code}
+          arrival_city={clientData.arrival_city}
+          moveData={{
+            departure_postal_code: selectedMatchForMap.confirmed_move?.departure_postal_code,
+            departure_city: selectedMatchForMap.confirmed_move?.departure_city,
+            arrival_postal_code: selectedMatchForMap.confirmed_move?.arrival_postal_code,
+            arrival_city: selectedMatchForMap.confirmed_move?.arrival_city
+          }}
         />
       )}
     </>

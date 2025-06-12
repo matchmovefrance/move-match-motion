@@ -1,347 +1,255 @@
 
-import jsPDF from 'jspdf';
-import { FileDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calculator, Download, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
 
-interface ClientRequest {
+interface Client {
   id: number;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  departure_address: string | null;
+  name: string;
+  email: string;
+  departure_address: string;
   departure_city: string;
   departure_postal_code: string;
-  departure_country: string | null;
-  arrival_address: string | null;
+  arrival_address: string;
   arrival_city: string;
   arrival_postal_code: string;
-  arrival_country: string | null;
+  estimated_volume: number;
   desired_date: string;
-  estimated_volume: number | null;
-  quote_amount: number | null;
+  quote_amount?: number;
 }
 
-interface QuoteGeneratorProps {
-  client: ClientRequest;
-  supplier?: {
-    company_name: string;
-    contact_name: string;
-    email: string;
-    phone: string;
-    bank_details?: {
-      iban: string;
-      bic: string;
-      bank_name: string;
-      account_holder: string;
-    };
+interface Quote {
+  clientId: number;
+  clientName: string;
+  price: number;
+  breakdown: {
+    basePrice: number;
+    volumeCost: number;
+    distanceCost: number;
+    additionalFees: number;
   };
-  supplierPrice?: number;
-  matchMoveMargin?: number;
 }
 
-const QuoteGenerator = ({ client, supplier, supplierPrice, matchMoveMargin }: QuoteGeneratorProps) => {
-  const [fullClientData, setFullClientData] = useState<any>(null);
+const QuoteGenerator = () => {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadFullClientData();
-  }, [client.id]);
+    loadClients();
+  }, []);
 
-  const loadFullClientData = async () => {
+  const loadClients = async () => {
     try {
-      console.log('🔄 Chargement des données complètes du client ID:', client.id);
+      setLoading(true);
+      
       const { data, error } = await supabase
-        .from('client_requests')
+        .from('clients')
         .select('*')
-        .eq('id', client.id)
-        .single();
+        .in('status', ['pending', 'confirmed'])
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('❌ Erreur chargement client:', error);
-        return;
-      }
+      if (error) throw error;
 
-      console.log('✅ Données complètes du client chargées:', {
-        id: data.id,
-        name: data.name,
-        departure_address: data.departure_address,
-        departure_city: data.departure_city,
-        departure_postal_code: data.departure_postal_code,
-        arrival_address: data.arrival_address,
-        arrival_city: data.arrival_city,
-        arrival_postal_code: data.arrival_postal_code
-      });
+      const clientsData = data?.filter(client => 
+        client.name && 
+        client.departure_address && 
+        client.departure_city && 
+        client.departure_postal_code &&
+        client.arrival_address &&
+        client.arrival_city &&
+        client.arrival_postal_code
+      ) || [];
 
-      setFullClientData(data);
+      setClients(clientsData);
     } catch (error) {
-      console.error('❌ Erreur chargement données client:', error);
+      console.error('Error loading clients:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les clients",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const generatePDF = () => {
-    console.log('🎯 Génération PDF avec adresses complètes de la base de données');
+  const calculateQuote = (client: Client): Quote => {
+    // Calcul basique du devis
+    const basePrice = 150;
+    const volumeCost = client.estimated_volume * 25;
     
-    if (!client.quote_amount || !client.name) {
-      console.error('❌ Données essentielles manquantes');
-      return;
-    }
+    // Estimation de distance basée sur les codes postaux
+    const departureCode = parseInt(client.departure_postal_code.substring(0, 2));
+    const arrivalCode = parseInt(client.arrival_postal_code.substring(0, 2));
+    const estimatedDistance = Math.abs(departureCode - arrivalCode) * 50;
+    const distanceCost = estimatedDistance * 1.2;
+    
+    const additionalFees = client.estimated_volume > 20 ? 100 : 50;
+    
+    const totalPrice = basePrice + volumeCost + distanceCost + additionalFees;
 
-    const clientData = fullClientData || client;
-    console.log('📋 Données client utilisées pour PDF:', {
-      departure_address: clientData.departure_address,
-      departure_city: clientData.departure_city,
-      departure_postal_code: clientData.departure_postal_code,
-      arrival_address: clientData.arrival_address,
-      arrival_city: clientData.arrival_city,
-      arrival_postal_code: clientData.arrival_postal_code
-    });
-
-    const supplierInfo = supplier || {
-      company_name: "Amini Transport",
-      contact_name: "Service Commercial",
-      email: "contact@amini-transport.fr",
-      phone: "01 23 45 67 89"
+    return {
+      clientId: client.id,
+      clientName: client.name,
+      price: Math.round(totalPrice),
+      breakdown: {
+        basePrice,
+        volumeCost,
+        distanceCost,
+        additionalFees
+      }
     };
+  };
+
+  const generateAllQuotes = async () => {
+    setGenerating(true);
+    
+    try {
+      const newQuotes = clients.map(client => calculateQuote(client));
+      setQuotes(newQuotes);
+      
+      toast({
+        title: "Devis générés",
+        description: `${newQuotes.length} devis ont été générés avec succès`,
+      });
+    } catch (error) {
+      console.error('Error generating quotes:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer les devis",
+        variant: "destructive",
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const downloadQuotePDF = (quote: Quote) => {
+    const client = clients.find(c => c.id === quote.clientId);
+    if (!client) return;
 
     const doc = new jsPDF();
-    const pageWidth = 210;
-    const margin = 20;
-    let yPos = 25;
     
-    // === EN-TÊTE ===
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DEVIS DE DÉMÉNAGEMENT', margin, yPos);
+    // En-tête
+    doc.setFontSize(20);
+    doc.text('DEVIS DÉMÉNAGEMENT', 20, 30);
     
-    // Numéro et date
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    const quoteNumber = `DEV-${Date.now().toString().slice(-6)}`;
-    doc.text(`N° ${quoteNumber}`, margin, yPos + 8);
-    doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - 60, yPos + 8);
-    
-    yPos += 20;
-    
-    // === INFORMATIONS ENTREPRISE ===
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ENTREPRISE', margin, yPos);
-    
-    yPos += 8;
+    // Informations client
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(supplierInfo.company_name, margin, yPos);
+    doc.text(`Client: ${client.name}`, 20, 50);
+    doc.text(`Email: ${client.email}`, 20, 60);
+    doc.text(`Départ: ${client.departure_address}, ${client.departure_city}`, 20, 70);
+    doc.text(`Arrivée: ${client.arrival_address}, ${client.arrival_city}`, 20, 80);
+    doc.text(`Volume estimé: ${client.estimated_volume} m³`, 20, 90);
+    doc.text(`Date souhaitée: ${new Date(client.desired_date).toLocaleDateString('fr-FR')}`, 20, 100);
     
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    yPos += 6;
-    doc.text(`Contact: ${supplierInfo.contact_name}`, margin, yPos);
-    yPos += 5;
-    doc.text(`Email: ${supplierInfo.email}`, margin, yPos);
-    yPos += 5;
-    doc.text(`Téléphone: ${supplierInfo.phone}`, margin, yPos);
+    // Détail du devis
+    doc.text('DÉTAIL DU DEVIS:', 20, 120);
+    doc.text(`Prix de base: ${quote.breakdown.basePrice}€`, 20, 140);
+    doc.text(`Coût volume (${client.estimated_volume} m³): ${quote.breakdown.volumeCost}€`, 20, 150);
+    doc.text(`Coût distance: ${quote.breakdown.distanceCost}€`, 20, 160);
+    doc.text(`Frais additionnels: ${quote.breakdown.additionalFees}€`, 20, 170);
     
-    yPos += 15;
-    
-    // === INFORMATIONS CLIENT ===
+    // Total
     doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CLIENT', margin, yPos);
+    doc.text(`TOTAL: ${quote.price}€`, 20, 190);
     
-    yPos += 8;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(client.name, margin, yPos);
+    // Téléchargement
+    doc.save(`devis-${client.name.replace(/\s+/g, '-').toLowerCase()}.pdf`);
     
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    yPos += 6;
-    if (client.email) {
-      doc.text(`Email: ${client.email}`, margin, yPos);
-      yPos += 5;
-    }
-    if (client.phone) {
-      doc.text(`Téléphone: ${client.phone}`, margin, yPos);
-      yPos += 5;
-    }
-    
-    yPos += 10;
-    
-    // === ADRESSES DE DÉMÉNAGEMENT ===
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ADRESSES DE DÉMÉNAGEMENT', margin, yPos);
-    
-    yPos += 10;
-    
-    // ADRESSE DE DÉPART
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ADRESSE DE DÉPART', margin, yPos);
-    
-    yPos += 6;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    
-    // Afficher l'adresse complète depuis la DB
-    if (clientData.departure_address) {
-      doc.text(clientData.departure_address, margin, yPos);
-      yPos += 5;
-    }
-    doc.text(`${clientData.departure_postal_code} ${clientData.departure_city}`, margin, yPos);
-    yPos += 5;
-    if (clientData.departure_country && clientData.departure_country !== 'France') {
-      doc.text(clientData.departure_country, margin, yPos);
-      yPos += 5;
-    }
-    
-    yPos += 8;
-    
-    // ADRESSE D'ARRIVÉE
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ADRESSE D\'ARRIVÉE', margin, yPos);
-    
-    yPos += 6;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    
-    // Afficher l'adresse complète depuis la DB
-    if (clientData.arrival_address) {
-      doc.text(clientData.arrival_address, margin, yPos);
-      yPos += 5;
-    }
-    doc.text(`${clientData.arrival_postal_code} ${clientData.arrival_city}`, margin, yPos);
-    yPos += 5;
-    if (clientData.arrival_country && clientData.arrival_country !== 'France') {
-      doc.text(clientData.arrival_country, margin, yPos);
-      yPos += 5;
-    }
-    
-    yPos += 12;
-    
-    // === DÉTAILS DU DÉMÉNAGEMENT ===
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DÉTAILS DU DÉMÉNAGEMENT', margin, yPos);
-    
-    yPos += 8;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('Date souhaitée:', margin, yPos);
-    doc.setFont('helvetica', 'normal');
-    doc.text(new Date(client.desired_date).toLocaleDateString('fr-FR'), margin + 40, yPos);
-    
-    yPos += 6;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Volume estimé:', margin, yPos);
-    doc.setFont('helvetica', 'normal');
-    doc.text(client.estimated_volume ? `${client.estimated_volume} m³` : 'Non spécifié', margin + 40, yPos);
-    
-    yPos += 15;
-    
-    // === MONTANT TOTAL ===
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MONTANT TOTAL TTC', margin, yPos);
-    
-    yPos += 8;
-    doc.setFontSize(18);
-    doc.text(`${client.quote_amount.toFixed(2)} €`, margin, yPos);
-    
-    yPos += 18;
-    
-    // === COORDONNÉES BANCAIRES ===
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('COORDONNÉES BANCAIRES', margin, yPos);
-    
-    yPos += 8;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    
-    if (supplier?.bank_details) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('Titulaire:', margin, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(supplier.bank_details.account_holder, margin + 30, yPos);
-      
-      yPos += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('IBAN:', margin, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(supplier.bank_details.iban, margin + 25, yPos);
-      
-      yPos += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('BIC:', margin, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(supplier.bank_details.bic, margin + 20, yPos);
-      
-      yPos += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Banque:', margin, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(supplier.bank_details.bank_name, margin + 28, yPos);
-    } else {
-      doc.setFont('helvetica', 'bold');
-      doc.text('RIB: Non renseigné', margin, yPos);
-      yPos += 6;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text('Les coordonnées bancaires seront communiquées lors de la confirmation.', margin, yPos);
-    }
-    
-    yPos += 15;
-    
-    // === CONDITIONS ===
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('• Devis valable 30 jours à compter de la date d\'émission', margin, yPos);
-    yPos += 5;
-    doc.text('• Paiement par virement bancaire uniquement', margin, yPos);
-    yPos += 5;
-    doc.text('• Confirmation écrite requise pour validation du devis', margin, yPos);
-    
-    // === PIED DE PAGE ===
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.text(`${supplierInfo.company_name} - Devis généré le ${new Date().toLocaleDateString('fr-FR')}`, margin, 285);
-    
-    // Télécharger
-    const fileName = `devis_${supplierInfo.company_name.replace(/\s+/g, '_')}_${client.name?.replace(/\s+/g, '_') || 'client'}_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
-    
-    console.log('✅ PDF généré avec adresses complètes de la base de données:', fileName);
-    console.log('📋 Adresses utilisées:', {
-      departure: clientData.departure_address ? `${clientData.departure_address}, ${clientData.departure_postal_code} ${clientData.departure_city}` : `${clientData.departure_postal_code} ${clientData.departure_city}`,
-      arrival: clientData.arrival_address ? `${clientData.arrival_address}, ${clientData.arrival_postal_code} ${clientData.arrival_city}` : `${clientData.arrival_postal_code} ${clientData.arrival_city}`
+    toast({
+      title: "PDF téléchargé",
+      description: `Le devis pour ${client.name} a été téléchargé`,
     });
   };
 
-  const hasRequiredClientData = !!(client.quote_amount && client.name);
-  
   return (
-    <Button
-      onClick={generatePDF}
-      variant="outline"
-      size="sm"
-      className={`
-        transition-all duration-200 
-        ${!hasRequiredClientData
-          ? 'text-gray-400 border-gray-200 cursor-not-allowed opacity-50' 
-          : 'text-blue-600 border-blue-200 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-300'
-        }
-      `}
-      disabled={!hasRequiredClientData}
-      title={hasRequiredClientData ? "Télécharger le devis en PDF" : "Données manquantes pour générer le PDF"}
-    >
-      <FileDown className="h-4 w-4" />
-    </Button>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Calculator className="h-5 w-5 mr-2" />
+            Générateur de Devis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm text-gray-600">
+                {clients.length} client{clients.length > 1 ? 's' : ''} éligible{clients.length > 1 ? 's' : ''} pour génération de devis
+              </p>
+            </div>
+            <Button 
+              onClick={generateAllQuotes}
+              disabled={generating || clients.length === 0}
+            >
+              {generating ? 'Génération...' : 'Générer tous les devis'}
+            </Button>
+          </div>
+          
+          {loading && (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300 mx-auto"></div>
+              <p className="text-gray-600 mt-2">Chargement des clients...</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {quotes.length > 0 && (
+        <div className="grid gap-4">
+          {quotes.map((quote) => {
+            const client = clients.find(c => c.id === quote.clientId);
+            if (!client) return null;
+
+            return (
+              <Card key={quote.clientId}>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>{quote.clientName}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg font-bold text-green-600">
+                        {quote.price}€
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => downloadQuotePDF(quote)}
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        PDF
+                      </Button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p><strong>Départ:</strong> {client.departure_city}</p>
+                      <p><strong>Arrivée:</strong> {client.arrival_city}</p>
+                      <p><strong>Volume:</strong> {client.estimated_volume} m³</p>
+                    </div>
+                    <div>
+                      <p><strong>Prix de base:</strong> {quote.breakdown.basePrice}€</p>
+                      <p><strong>Coût volume:</strong> {quote.breakdown.volumeCost}€</p>
+                      <p><strong>Coût distance:</strong> {quote.breakdown.distanceCost}€</p>
+                      <p><strong>Frais additionnels:</strong> {quote.breakdown.additionalFees}€</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 };
 

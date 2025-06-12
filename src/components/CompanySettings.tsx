@@ -35,9 +35,9 @@ const CompanySettings = () => {
       
       const { data, error } = await supabase
         .from('company_settings')
-        .select('*')
+        .select('company_name, address, phone, email, siret, pricing_margin')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
         throw error;
