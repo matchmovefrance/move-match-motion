@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { DistanceCalculator } from './PricingEngine/DistanceCalculator';
 
@@ -236,6 +237,10 @@ class PricingEngine {
           
           const pricingModel: PricingModel = this.parsePricingModel(supplier.pricing_model);
           
+          // Calculer les prix au km et au m³
+          const pricePerKm = exactDistance > 0 ? finalPrice / exactDistance : 0;
+          const pricePerM3 = client.estimated_volume > 0 ? finalPrice / client.estimated_volume : 0;
+          
           const quote: GeneratedQuote = {
             id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
             client_id: client.id,
@@ -264,6 +269,8 @@ class PricingEngine {
               distanceRate: pricingModel.distanceRate || 1.2,
               matchMoveMarginUsed: marginPercentage,
               quoteType: quoteType,
+              pricePerKm: pricePerKm,
+              pricePerM3: pricePerM3,
               calculationDetails: {
                 baseCalculation: (pricingModel.basePrice || 150) + 
                                (client.estimated_volume * (pricingModel.volumeRate || 12)) + 
@@ -306,6 +313,10 @@ class PricingEngine {
           
           const pricingModel: PricingModel = this.parsePricingModel(supplier.pricing_model);
           
+          // Calculer les prix au km et au m³
+          const pricePerKm = exactDistance > 0 ? finalPrice / exactDistance : 0;
+          const pricePerM3 = client.estimated_volume > 0 ? finalPrice / client.estimated_volume : 0;
+          
           const quote: GeneratedQuote = {
             id: `quote-${client.id}-${supplier.id}-${quoteType}-${Date.now()}-${i}`,
             client_id: client.id,
@@ -334,6 +345,8 @@ class PricingEngine {
               distanceRate: pricingModel.distanceRate || 1.2,
               matchMoveMarginUsed: marginPercentage,
               quoteType: quoteType,
+              pricePerKm: pricePerKm,
+              pricePerM3: pricePerM3,
               calculationDetails: {
                 baseCalculation: (pricingModel.basePrice || 150) + 
                                (client.estimated_volume * (pricingModel.volumeRate || 12)) + 
