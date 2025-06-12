@@ -55,7 +55,7 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
             address: `CP ${moverData.departure_postal_code}`,
             city: `CP ${moverData.departure_postal_code}`,
             postal_code: moverData.departure_postal_code,
-            created_by: null
+            created_by: null // Accepter null pour les saisies publiques
           });
 
         if (providerError) {
@@ -93,6 +93,9 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
       // Synchroniser le prestataire dans service_providers
       await syncServiceProvider(formData);
 
+      // Préparer les données du trajet - utiliser un UUID par défaut pour created_by
+      const defaultUserId = '00000000-0000-0000-0000-000000000000'; // UUID par défaut pour les saisies publiques
+      
       const moveData = {
         company_name: formData.company_name,
         mover_name: formData.mover_name,
@@ -115,14 +118,19 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
         status: 'confirmed',
         mover_id: 1,
         truck_id: 1,
-        created_by: null
+        created_by: defaultUserId // Utiliser l'UUID par défaut
       };
+
+      console.log('📝 Données du trajet à insérer:', moveData);
 
       const { error } = await supabase
         .from('confirmed_moves')
         .insert(moveData);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur lors de l\'insertion:', error);
+        throw error;
+      }
 
       toast({
         title: "Trajet enregistré",
