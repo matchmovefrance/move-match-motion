@@ -37,13 +37,21 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const directionsRenderers = useRef<google.maps.DirectionsRenderer[]>([]);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     const initMap = async () => {
       console.log('Initialisation MapPopup avec:', items.length, 'éléments');
       
+      // Vérification plus robuste du DOM
       if (!mapRef.current) {
-        console.log('mapRef.current est null');
+        console.log('mapRef.current est null, attente...');
+        return;
+      }
+
+      // Vérifier que l'élément est visible et dans le DOM
+      if (!mapRef.current.offsetParent && mapRef.current.style.display !== 'block') {
+        console.log('Element not visible yet, waiting...');
         return;
       }
 
@@ -58,6 +66,8 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
         const bounds = new google.maps.LatLngBounds();
         let hasAddedBounds = false;
 
+        console.log('Création de la carte sur l\'élément:', mapRef.current);
+
         // Créer la carte
         const map = new google.maps.Map(mapRef.current, {
           zoom: 7,
@@ -66,6 +76,7 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
         });
 
         mapInstanceRef.current = map;
+        setMapReady(true);
 
         // Nettoyer les anciens renderers
         directionsRenderers.current.forEach(renderer => renderer.setMap(null));
@@ -171,20 +182,54 @@ const MapDisplay = ({ items }: { items: FilteredItem[] }) => {
       }
     };
 
-    // Délai pour s'assurer que le composant est monté et le DOM prêt
-    const timeout = setTimeout(() => {
-      initMap();
-    }, 200);
+    // Utiliser requestAnimationFrame pour s'assurer que le DOM est complètement rendu
+    const initMapWithDelay = () => {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          initMap();
+        }, 100);
+      });
+    };
+
+    // Réessayer plusieurs fois si nécessaire
+    let retryCount = 0;
+    const maxRetries = 5;
+    
+    const tryInitMap = () => {
+      if (mapRef.current && (!mapInstanceRef.current || !mapReady)) {
+        initMapWithDelay();
+      } else if (retryCount < maxRetries) {
+        retryCount++;
+        setTimeout(tryInitMap, 200 * retryCount);
+      }
+    };
+
+    tryInitMap();
 
     // Cleanup function
     return () => {
-      clearTimeout(timeout);
       directionsRenderers.current.forEach(renderer => renderer.setMap(null));
       directionsRenderers.current = [];
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current = null;
+      }
+      setMapReady(false);
     };
   }, [items]);
 
-  return <div ref={mapRef} className="h-96 w-full rounded-lg border" />;
+  return (
+    <div className="w-full h-96">
+      <div ref={mapRef} className="h-full w-full rounded-lg border" style={{ minHeight: '384px' }} />
+      {!mapReady && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-gray-500">Chargement de la carte...</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 interface MapPopupProps {
