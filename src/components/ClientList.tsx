@@ -347,19 +347,67 @@ const ClientList = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-medium">{client.email}</span>
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Téléphone:</span>
-                    <span className="font-medium">{client.phone}</span>
-                  </div>
-                </div>
+                {/* Informations de déménagement */}
+                {client.source === 'client_requests' && (
+                  <>
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Départ:</span>
+                        <span className="font-medium">
+                          {client.departure_postal_code} {client.departure_city}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Arrivée:</span>
+                        <span className="font-medium">
+                          {client.arrival_postal_code} {client.arrival_city}
+                        </span>
+                      </div>
+                    </div>
+
+                    {client.desired_date && (
+                      <div className="text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Date souhaitée:</span>
+                          <span className="font-medium">
+                            {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {client.estimated_volume && (
+                      <div className="text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Volume estimé:</span>
+                          <span className="font-medium">{client.estimated_volume} m³</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Informations client de base pour les clients sans demande */}
+                {client.source === 'clients' && (
+                  <>
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium">{client.email}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Téléphone:</span>
+                        <span className="font-medium">{client.phone}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="text-sm">
                   <div className="flex items-center justify-between">
