@@ -8,6 +8,8 @@ interface AcceptedQuoteWithDetails {
   status: string;
   notes: string | null;
   submitted_at: string;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   supplier: {
     company_name: string;
     contact_name: string;
@@ -25,6 +27,7 @@ interface AcceptedQuotesTableProps {
   quotes: AcceptedQuoteWithDetails[];
   onMarkAsValidated: (quoteId: string) => void;
   onComplete: (quote: AcceptedQuoteWithDetails) => void;
+  onReject: (quote: AcceptedQuoteWithDetails) => void;
   onDownloadPDF: (quote: AcceptedQuoteWithDetails) => void;
 }
 
@@ -32,6 +35,7 @@ export const AcceptedQuotesTable = ({
   quotes,
   onMarkAsValidated,
   onComplete,
+  onReject,
   onDownloadPDF
 }: AcceptedQuotesTableProps) => {
   return (
@@ -41,7 +45,7 @@ export const AcceptedQuotesTable = ({
           <TableHead>Opportunité</TableHead>
           <TableHead>Fournisseur</TableHead>
           <TableHead className="text-center">Prix</TableHead>
-          <TableHead className="text-center">Date d'acceptation</TableHead>
+          <TableHead className="text-center">Date</TableHead>
           <TableHead className="text-center">Statut</TableHead>
           <TableHead className="text-center">Actions</TableHead>
         </TableRow>
@@ -53,6 +57,7 @@ export const AcceptedQuotesTable = ({
             quote={quote}
             onMarkAsValidated={onMarkAsValidated}
             onComplete={onComplete}
+            onReject={onReject}
             onDownloadPDF={onDownloadPDF}
           />
         ))}

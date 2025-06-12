@@ -1,8 +1,7 @@
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building, Euro, Calendar, Download, Check, Archive } from 'lucide-react';
+import { Building, Euro, Calendar, Download, Check, Archive, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -12,6 +11,8 @@ interface AcceptedQuoteWithDetails {
   status: string;
   notes: string | null;
   submitted_at: string;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   supplier: {
     company_name: string;
     contact_name: string;
@@ -29,6 +30,7 @@ interface AcceptedQuoteCardProps {
   quote: AcceptedQuoteWithDetails;
   onMarkAsValidated: (quoteId: string) => void;
   onComplete: (quote: AcceptedQuoteWithDetails) => void;
+  onReject: (quote: AcceptedQuoteWithDetails) => void;
   onDownloadPDF: (quote: AcceptedQuoteWithDetails) => void;
 }
 
@@ -36,6 +38,7 @@ export const AcceptedQuoteCard = ({
   quote,
   onMarkAsValidated,
   onComplete,
+  onReject,
   onDownloadPDF
 }: AcceptedQuoteCardProps) => {
   const getStatusBadge = (status: string) => {
@@ -44,10 +47,27 @@ export const AcceptedQuoteCard = ({
         return <Badge variant="secondary">En attente validation client</Badge>;
       case 'validated_by_client':
         return <Badge className="bg-green-100 text-green-800">Validé par le client</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive">Rejeté</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  const getDateToDisplay = () => {
+    if (quote.status === 'rejected' && quote.rejected_at) {
+      return {
+        date: quote.rejected_at,
+        label: 'Date de rejet'
+      };
+    }
+    return {
+      date: quote.submitted_at,
+      label: "Date d'acceptation"
+    };
+  };
+
+  const dateInfo = getDateToDisplay();
 
   return (
     <tr>
@@ -57,6 +77,11 @@ export const AcceptedQuoteCard = ({
           {quote.opportunity && (
             <div className="text-sm text-muted-foreground">
               {quote.opportunity.departure_city} → {quote.opportunity.arrival_city}
+            </div>
+          )}
+          {quote.status === 'rejected' && quote.rejection_reason && (
+            <div className="text-xs text-red-600 mt-1">
+              Raison: {quote.rejection_reason}
             </div>
           )}
         </div>
@@ -87,9 +112,10 @@ export const AcceptedQuoteCard = ({
       <td className="p-4 text-center">
         <div className="flex items-center justify-center gap-1">
           <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">
-            {format(new Date(quote.submitted_at), 'dd/MM/yyyy à HH:mm', { locale: fr })}
-          </span>
+          <div className="text-sm">
+            <div>{format(new Date(dateInfo.date), 'dd/MM/yyyy à HH:mm', { locale: fr })}</div>
+            <div className="text-xs text-muted-foreground">{dateInfo.label}</div>
+          </div>
         </div>
       </td>
       
@@ -109,14 +135,24 @@ export const AcceptedQuoteCard = ({
           </Button>
           
           {quote.status === 'accepted' && (
-            <Button
-              size="sm"
-              onClick={() => onMarkAsValidated(quote.id)}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Check className="h-4 w-4 mr-1" />
-              Validé
-            </Button>
+            <>
+              <Button
+                size="sm"
+                onClick={() => onMarkAsValidated(quote.id)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Check className="h-4 w-4 mr-1" />
+                Validé
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onReject(quote)}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Rejeter
+              </Button>
+            </>
           )}
           
           {quote.status === 'validated_by_client' && (

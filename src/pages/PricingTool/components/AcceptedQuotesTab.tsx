@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CheckCircle } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AcceptedQuotesTable } from './AcceptedQuotesTab/AcceptedQuotesTable';
+import { QuoteFilters } from './AcceptedQuotesTab/QuoteFilters';
+import { RejectQuoteDialog } from './AcceptedQuotesTab/RejectQuoteDialog';
 import { useAcceptedQuotes } from './AcceptedQuotesTab/useAcceptedQuotes';
 
 const AcceptedQuotesTab = () => {
@@ -11,12 +13,28 @@ const AcceptedQuotesTab = () => {
     isLoading,
     showCompleteDialog,
     setShowCompleteDialog,
+    showRejectDialog,
+    setShowRejectDialog,
     selectedQuote,
+    rejectionReason,
+    setRejectionReason,
+    filter,
+    setFilter,
     handleMarkAsValidated,
     handleShowCompleteDialog,
+    handleShowRejectDialog,
     handleConfirmComplete,
+    handleConfirmReject,
     handleDownloadPDF
   } = useAcceptedQuotes();
+
+  // Calculer les compteurs pour les filtres
+  const quoteCounts = {
+    all: acceptedQuotes?.length || 0,
+    accepted: acceptedQuotes?.filter(q => q.status === 'accepted').length || 0,
+    validated_by_client: acceptedQuotes?.filter(q => q.status === 'validated_by_client').length || 0,
+    rejected: acceptedQuotes?.filter(q => q.status === 'rejected').length || 0
+  };
 
   if (isLoading) {
     return (
@@ -42,13 +60,19 @@ const AcceptedQuotesTab = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-600" />
-            Devis acceptés en cours de validation
+            Gestion des devis acceptés
           </CardTitle>
           <CardDescription>
-            Gestion des devis acceptés et validation par les clients
+            Suivi et validation des devis acceptés par les clients
           </CardDescription>
         </CardHeader>
       </Card>
+
+      <QuoteFilters
+        filter={filter}
+        onFilterChange={setFilter}
+        quoteCounts={quoteCounts}
+      />
 
       {acceptedQuotes && acceptedQuotes.length > 0 ? (
         <Card>
@@ -57,6 +81,7 @@ const AcceptedQuotesTab = () => {
               quotes={acceptedQuotes}
               onMarkAsValidated={handleMarkAsValidated}
               onComplete={handleShowCompleteDialog}
+              onReject={handleShowRejectDialog}
               onDownloadPDF={handleDownloadPDF}
             />
           </CardContent>
@@ -66,9 +91,17 @@ const AcceptedQuotesTab = () => {
           <CardContent className="text-center py-8">
             <div className="text-muted-foreground mb-4">
               <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium mb-2">Aucun devis accepté</h3>
+              <h3 className="text-lg font-medium mb-2">
+                {filter === 'all' ? 'Aucun devis' : 
+                 filter === 'accepted' ? 'Aucun devis en attente' :
+                 filter === 'validated_by_client' ? 'Aucun devis validé' :
+                 'Aucun devis rejeté'}
+              </h3>
               <p className="text-sm">
-                Les devis acceptés apparaîtront ici en attente de validation client.
+                {filter === 'all' ? 'Les devis acceptés apparaîtront ici.' :
+                 filter === 'accepted' ? 'Aucun devis en attente de validation client.' :
+                 filter === 'validated_by_client' ? 'Aucun devis validé par le client.' :
+                 'Aucun devis rejeté.'}
               </p>
             </div>
           </CardContent>
@@ -84,6 +117,15 @@ const AcceptedQuotesTab = () => {
         cancelText="Annuler"
         onConfirm={handleConfirmComplete}
         variant="default"
+      />
+
+      <RejectQuoteDialog
+        open={showRejectDialog}
+        onOpenChange={setShowRejectDialog}
+        onConfirm={handleConfirmReject}
+        supplierName={selectedQuote?.supplier?.company_name || ''}
+        rejectionReason={rejectionReason}
+        onReasonChange={setRejectionReason}
       />
     </div>
   );

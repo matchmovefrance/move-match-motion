@@ -10,6 +10,8 @@ interface AcceptedQuoteWithDetails {
   status: string;
   notes: string | null;
   submitted_at: string;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   supplier: {
     company_name: string;
     contact_name: string;
@@ -23,16 +25,36 @@ interface AcceptedQuoteWithDetails {
   };
 }
 
+export type QuoteFilter = 'all' | 'accepted' | 'validated_by_client' | 'rejected';
+
 export const useAcceptedQuotes = () => {
   const { toast } = useToast();
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<AcceptedQuoteWithDetails | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [filter, setFilter] = useState<QuoteFilter>('all');
 
-  const { data: acceptedQuotes, isLoading, refetch } = useQuery({
-    queryKey: ['accepted-quotes'],
+  const { data: allQuotes, isLoading, refetch } = useQuery({
+    queryKey: ['accepted-quotes', filter],
     queryFn: async () => {
-      console.log('📋 Chargement des devis acceptés...');
+      console.log('📋 Chargement des devis avec filtre:', filter);
       
+      let statusFilter: string[];
+      switch (filter) {
+        case 'accepted':
+          statusFilter = ['accepted'];
+          break;
+        case 'validated_by_client':
+          statusFilter = ['validated_by_client'];
+          break;
+        case 'rejected':
+          statusFilter = ['rejected'];
+          break;
+        default:
+          statusFilter = ['accepted', 'validated_by_client', 'rejected'];
+      }
+
       const { data, error } = await supabase
         .from('quotes')
         .select(`
@@ -40,7 +62,7 @@ export const useAcceptedQuotes = () => {
           supplier:suppliers(company_name, contact_name, email, phone),
           opportunity:pricing_opportunities(title, departure_city, arrival_city)
         `)
-        .in('status', ['accepted', 'validated_by_client']);
+        .in('status', statusFilter);
 
       if (error) throw error;
       
@@ -53,7 +75,7 @@ export const useAcceptedQuotes = () => {
         return !isDemo && quote.supplier && quote.opportunity;
       }) || [];
 
-      console.log('✅ Devis acceptés chargés (sans demo):', filteredData.length);
+      console.log('✅ Devis chargés (sans demo):', filteredData.length);
       return filteredData;
     },
     refetchInterval: 5000,
@@ -87,6 +109,12 @@ export const useAcceptedQuotes = () => {
   const handleShowCompleteDialog = (quote: AcceptedQuoteWithDetails) => {
     setSelectedQuote(quote);
     setShowCompleteDialog(true);
+  };
+
+  const handleShowRejectDialog = (quote: AcceptedQuoteWithDetails) => {
+    setSelectedQuote(quote);
+    setShowRejectDialog(true);
+    setRejectionReason('');
   };
 
   const handleConfirmComplete = async () => {
@@ -148,6 +176,40 @@ export const useAcceptedQuotes = () => {
     }
   };
 
+  const handleConfirmReject = async () => {
+    if (!selectedQuote) return;
+
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({ 
+          status: 'rejected',
+          rejected_at: new Date().toISOString(),
+          rejection_reason: rejectionReason || 'Devis rejeté par le client'
+        })
+        .eq('id', selectedQuote.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Devis rejeté",
+        description: `Le devis de ${selectedQuote.supplier?.company_name} a été rejeté.`,
+      });
+
+      setShowRejectDialog(false);
+      setSelectedQuote(null);
+      setRejectionReason('');
+      refetch();
+    } catch (error) {
+      console.error('❌ Erreur rejet devis:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de rejeter le devis",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDownloadPDF = (quote: AcceptedQuoteWithDetails) => {
     toast({
       title: "Téléchargement PDF",
@@ -156,14 +218,22 @@ export const useAcceptedQuotes = () => {
   };
 
   return {
-    acceptedQuotes,
+    acceptedQuotes: allQuotes,
     isLoading,
     showCompleteDialog,
     setShowCompleteDialog,
+    showRejectDialog,
+    setShowRejectDialog,
     selectedQuote,
+    rejectionReason,
+    setRejectionReason,
+    filter,
+    setFilter,
     handleMarkAsValidated,
     handleShowCompleteDialog,
+    handleShowRejectDialog,
     handleConfirmComplete,
+    handleConfirmReject,
     handleDownloadPDF
   };
 };
