@@ -49,7 +49,7 @@ const Dashboard = () => {
         </TabsContent>
         
         <TabsContent value="moves" className="mt-6">
-          <MoveManagement />
+          <MoverList />
         </TabsContent>
         
         <TabsContent value="services" className="mt-6">
