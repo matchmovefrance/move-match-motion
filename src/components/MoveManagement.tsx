@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, Plus, Search, MapPin } from 'lucide-react';
@@ -28,6 +27,36 @@ interface Move {
   contact_phone: string;
   contact_email: string;
   created_at: string;
+  // Optional properties that might come from the database
+  mover_id?: number;
+  truck_id?: number;
+  departure_address?: string;
+  arrival_address?: string;
+  departure_country?: string;
+  arrival_country?: string;
+  departure_time?: string;
+  arrival_time?: string;
+  estimated_arrival_date?: string;
+  estimated_arrival_time?: string;
+  route_type?: string;
+  price_per_m3?: number;
+  total_price?: number;
+  status_custom?: string;
+  number_of_clients?: number;
+  max_weight?: number;
+  base_rate?: number;
+  fuel_surcharge?: number;
+  additional_fees?: number;
+  total_cost?: number;
+  truck_type?: string;
+  truck_identifier?: string;
+  access_conditions?: string;
+  special_requirements?: string;
+  description?: string;
+  insurance_details?: string;
+  equipment_available?: string;
+  special_conditions?: string;
+  created_by?: string;
 }
 
 const MoveManagement = () => {

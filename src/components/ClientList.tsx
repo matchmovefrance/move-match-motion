@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target } from 'lucide-react';
@@ -27,6 +26,31 @@ interface Client {
   flexibility_days: number;
   status: string;
   created_at: string;
+  // Optional properties that might come from the database but not always used
+  departure_address?: string;
+  arrival_address?: string;
+  departure_country?: string;
+  arrival_country?: string;
+  budget_min?: number;
+  budget_max?: number;
+  special_requirements?: string;
+  access_conditions?: string;
+  description?: string;
+  departure_time?: string;
+  arrival_time?: string;
+  estimated_arrival_date?: string;
+  estimated_arrival_time?: string;
+  status_custom?: string;
+  match_status?: string;
+  is_matched?: boolean;
+  matched_at?: string;
+  quote_amount?: number;
+  inventory_list?: string;
+  estimated_volume_backup?: number;
+  date_range_start?: string;
+  date_range_end?: string;
+  client_id?: number;
+  created_by?: string;
 }
 
 const ClientList = () => {
@@ -208,7 +232,7 @@ const ClientList = () => {
                   </div>
                 </div>
 
-                {client.flexible_dates && (
+                {client.flexible_dates && client.flexibility_days && (
                   <div className="text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Flexibilité:</span>
