@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -13,6 +12,7 @@ import SimpleClientFormReplacement from './SimpleClientFormReplacement';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { ClientMatchesDialog } from './ClientMatchesDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ClientFilter from './ClientFilter';
 
 interface Client {
   id: number;
@@ -39,6 +39,7 @@ const ClientList = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -88,7 +89,11 @@ const ClientList = () => {
     }
   };
 
-  const filteredClients = clients.filter(client =>
+  const handleFilteredData = (filtered: Client[]) => {
+    setFilteredClients(filtered);
+  };
+
+  const finalFilteredClients = filteredClients.filter(client =>
     client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.client_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -211,7 +216,7 @@ const ClientList = () => {
         <div className="flex items-center space-x-3">
           <Users className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Clients</h2>
-          <Badge variant="secondary">{filteredClients.length}</Badge>
+          <Badge variant="secondary">{finalFilteredClients.length}</Badge>
         </div>
         <Button onClick={() => setShowAddForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -219,144 +224,158 @@ const ClientList = () => {
         </Button>
       </div>
 
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Rechercher par nom, référence, email ou téléphone..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Filtres */}
+        <div className="lg:col-span-1">
+          <ClientFilter
+            data={clients}
+            onFilter={handleFilteredData}
+            label="Filtrer les clients"
           />
         </div>
+
+        {/* Liste des clients */}
+        <div className="lg:col-span-3 space-y-4">
+          <div className="flex items-center space-x-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Rechercher par nom, référence, email ou téléphone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p>Chargement...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {finalFilteredClients.map((client) => (
+                <Card key={client.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{client.name}</CardTitle>
+                      <div className="flex items-center space-x-1">
+                        <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                          Client
+                        </Badge>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <span className="sr-only">Ouvrir menu</span>
+                              <div className="h-4 w-4">⋮</div>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditingClient(client)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Modifier
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setClientToDelete(client);
+                                setShowDeleteDialog(true);
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <strong>Réf:</strong> {client.client_reference}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Départ:</span>
+                        <span className="font-medium">
+                          {client.departure_postal_code} {client.departure_city}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Arrivée:</span>
+                        <span className="font-medium">
+                          {client.arrival_postal_code} {client.arrival_city}
+                        </span>
+                      </div>
+                    </div>
+
+                    {client.desired_date && (
+                      <div className="text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Date souhaitée:</span>
+                          <span className="font-medium">
+                            {new Date(client.desired_date).toLocaleDateString('fr-FR')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {client.estimated_volume && (
+                      <div className="text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Volume estimé:</span>
+                          <span className="font-medium">{client.estimated_volume} m³</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Statut:</span>
+                        <Badge variant={client.status === 'pending' ? 'secondary' : 'default'}>
+                          {client.status === 'pending' ? 'En attente' : client.status}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-2 pt-3">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setEditingClient(client)}
+                        className="flex-1"
+                      >
+                        Modifier
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => handleFindMatch(client)}
+                        className="flex-1"
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Trouver un match
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {finalFilteredClients.length === 0 && !loading && (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">
+                {searchTerm ? 'Aucun client trouvé pour cette recherche' : 'Aucun client enregistré'}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-
-      {loading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Chargement...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClients.map((client) => (
-            <Card key={client.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{client.name}</CardTitle>
-                  <div className="flex items-center space-x-1">
-                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                      Client
-                    </Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <span className="sr-only">Ouvrir menu</span>
-                          <div className="h-4 w-4">⋮</div>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditingClient(client)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Modifier
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setClientToDelete(client);
-                            setShowDeleteDialog(true);
-                          }}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600">
-                  <strong>Réf:</strong> {client.client_reference}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Départ:</span>
-                    <span className="font-medium">
-                      {client.departure_postal_code} {client.departure_city}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Arrivée:</span>
-                    <span className="font-medium">
-                      {client.arrival_postal_code} {client.arrival_city}
-                    </span>
-                  </div>
-                </div>
-
-                {client.desired_date && (
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Date souhaitée:</span>
-                      <span className="font-medium">
-                        {new Date(client.desired_date).toLocaleDateString('fr-FR')}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {client.estimated_volume && (
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Volume estimé:</span>
-                      <span className="font-medium">{client.estimated_volume} m³</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Statut:</span>
-                    <Badge variant={client.status === 'pending' ? 'secondary' : 'default'}>
-                      {client.status === 'pending' ? 'En attente' : client.status}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="flex space-x-2 pt-3">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => setEditingClient(client)}
-                    className="flex-1"
-                  >
-                    Modifier
-                  </Button>
-                  <Button 
-                    size="sm"
-                    onClick={() => handleFindMatch(client)}
-                    className="flex-1"
-                  >
-                    <Target className="h-4 w-4 mr-1" />
-                    Trouver un match
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {filteredClients.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">
-            {searchTerm ? 'Aucun client trouvé pour cette recherche' : 'Aucun client enregistré'}
-          </p>
-        </div>
-      )}
 
       <DeleteConfirmDialog
         open={showDeleteDialog}
