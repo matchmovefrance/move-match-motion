@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Search, X } from 'lucide-react';
@@ -556,109 +557,124 @@ const MapView = () => {
         if (!isNaN(id)) {
           console.log('🔍 Recherche match ID:', id);
           
-          // Rechercher le match avec une requête plus permissive
-          const { data: matches, error: matchError } = await supabase
+          // D'abord, vérifier que le match existe
+          const { data: matchCheck, error: matchCheckError } = await supabase
             .from('move_matches')
-            .select(`
-              id,
-              created_at,
-              client_id,
-              move_id
-            `)
+            .select('id, created_at, client_id, move_id')
             .eq('id', id);
 
-          console.log('🔍 Résultat recherche match brute:', { matches, matchError, searchId: id });
+          console.log('🔍 Vérification match existence:', { 
+            searchId: id, 
+            matchCheck, 
+            matchCheckError,
+            found: matchCheck?.length > 0 
+          });
 
-          if (!matchError && matches && matches.length > 0) {
-            const match = matches[0];
-            console.log('🔍 Match trouvé:', match);
-
-            // Charger les données du client et du trajet en parallèle
-            const [clientResult, moveResult] = await Promise.all([
-              supabase
-                .from('clients')
-                .select('name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-                .eq('id', match.client_id)
-                .single(),
-              supabase
-                .from('confirmed_moves')
-                .select('company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-                .eq('id', match.move_id)
-                .single()
-            ]);
-
-            const { data: clientData, error: clientError } = clientResult;
-            const { data: moveData, error: moveError } = moveResult;
-
-            console.log('🔍 Données chargées:', { 
-              clientData, 
-              clientError, 
-              moveData, 
-              moveError,
+          if (!matchCheckError && matchCheck && matchCheck.length > 0) {
+            const match = matchCheck[0];
+            console.log('🔍 Match trouvé, chargement des détails:', {
+              matchId: match.id,
               clientId: match.client_id,
-              moveId: match.move_id 
+              moveId: match.move_id
             });
 
-            if (!clientError && !moveError && clientData && moveData) {
+            // Charger les données du client et du trajet
+            console.log('🔍 Chargement client ID:', match.client_id);
+            const { data: clientData, error: clientError } = await supabase
+              .from('clients')
+              .select('id, name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+              .eq('id', match.client_id);
+
+            console.log('🔍 Résultat client:', { clientData, clientError });
+
+            console.log('🔍 Chargement trajet ID:', match.move_id);
+            const { data: moveData, error: moveError } = await supabase
+              .from('confirmed_moves')
+              .select('id, company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+              .eq('id', match.move_id);
+
+            console.log('🔍 Résultat trajet:', { moveData, moveError });
+
+            // Vérifier que nous avons les données des deux côtés
+            const client = clientData?.[0];
+            const move = moveData?.[0];
+
+            console.log('🔍 Données extraites:', { 
+              client: client ? 'OK' : 'MANQUANT',
+              move: move ? 'OK' : 'MANQUANT',
+              clientData: client,
+              moveData: move
+            });
+
+            if (client && move) {
+              console.log('✅ Données complètes trouvées pour le match');
+              
               foundItem = {
                 id: match.id,
                 type: 'match',
                 reference: `MTH-${String(match.id).padStart(6, '0')}`,
-                name: `${clientData.name || 'Client'} ↔ ${moveData.company_name || 'Déménageur'}`,
+                name: `${client.name || 'Client'} ↔ ${move.company_name || 'Déménageur'}`,
                 date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
-                details: `Client: ${clientData.departure_postal_code || ''} → ${clientData.arrival_postal_code || ''} | Déménageur: ${moveData.departure_postal_code || ''} → ${moveData.arrival_postal_code || ''}`,
-                departure_postal_code: clientData.departure_postal_code,
-                arrival_postal_code: clientData.arrival_postal_code,
-                departure_city: clientData.departure_city,
-                arrival_city: clientData.arrival_city,
-                company_name: moveData.company_name
+                details: `Client: ${client.departure_postal_code || ''} → ${client.arrival_postal_code || ''} | Déménageur: ${move.departure_postal_code || ''} → ${move.arrival_postal_code || ''}`,
+                departure_postal_code: client.departure_postal_code,
+                arrival_postal_code: client.arrival_postal_code,
+                departure_city: client.departure_city,
+                arrival_city: client.arrival_city,
+                company_name: move.company_name
               };
 
               // Créer les données pour les deux trajets
               foundMatchRoutes = {
                 client: {
-                  departure_postal_code: clientData.departure_postal_code || '',
-                  arrival_postal_code: clientData.arrival_postal_code || '',
-                  departure_city: clientData.departure_city || '',
-                  arrival_city: clientData.arrival_city || '',
-                  name: clientData.name || 'Client'
+                  departure_postal_code: client.departure_postal_code || '',
+                  arrival_postal_code: client.arrival_postal_code || '',
+                  departure_city: client.departure_city || '',
+                  arrival_city: client.arrival_city || '',
+                  name: client.name || 'Client'
                 },
                 move: {
-                  departure_postal_code: moveData.departure_postal_code || '',
-                  arrival_postal_code: moveData.arrival_postal_code || '',
-                  departure_city: moveData.departure_city || '',
-                  arrival_city: moveData.arrival_city || '',
-                  company_name: moveData.company_name || 'Déménageur'
+                  departure_postal_code: move.departure_postal_code || '',
+                  arrival_postal_code: move.arrival_postal_code || '',
+                  departure_city: move.departure_city || '',
+                  arrival_city: move.arrival_city || '',
+                  company_name: move.company_name || 'Déménageur'
                 }
               };
 
               console.log('✅ Match trouvé avec 2 trajets:', foundItem);
               console.log('🗺️ Routes du match:', foundMatchRoutes);
             } else {
-              console.error('❌ Erreur lors du chargement des données du match:', { 
-                clientError, 
-                moveError,
+              console.error('❌ Données incomplètes pour le match:', { 
+                matchId: match.id,
                 clientId: match.client_id,
-                moveId: match.move_id
+                moveId: match.move_id,
+                clientFound: !!client,
+                moveFound: !!move,
+                clientError,
+                moveError
               });
               
-              // Si il y a une erreur, on essaie de donner plus d'infos
               toast({
                 title: "Données incomplètes",
-                description: `Match ${cleanRef} trouvé mais données manquantes (client: ${clientError ? 'erreur' : 'ok'}, trajet: ${moveError ? 'erreur' : 'ok'})`,
+                description: `Match ${cleanRef} trouvé mais données client ou trajet manquantes`,
                 variant: "destructive",
               });
             }
           } else {
-            console.error('❌ Match non trouvé:', { matchError, searchId: id, matches });
+            console.error('❌ Match non trouvé:', { matchCheckError, searchId: id });
             
-            // Vérifier si le match existe vraiment en listant tous les matchs
+            // Lister tous les matchs disponibles pour debug
             const { data: allMatches, error: listError } = await supabase
               .from('move_matches')
-              .select('id')
+              .select('id, client_id, move_id')
               .order('id');
             
-            console.log('🔍 Tous les matchs disponibles:', allMatches?.map(m => `MTH-${String(m.id).padStart(6, '0')}`));
+            console.log('🔍 Tous les matchs disponibles:', allMatches?.map(m => ({
+              ref: `MTH-${String(m.id).padStart(6, '0')}`,
+              id: m.id,
+              clientId: m.client_id,
+              moveId: m.move_id
+            })));
           }
         }
       }
