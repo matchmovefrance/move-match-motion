@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Calendar, CalendarDays, CalendarRange, MapPin } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarRange, MapPin, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +42,7 @@ interface ClientFilterProps {
 export default function ClientFilter({ 
   data, 
   onFilter, 
-  label = "Filtrer les clients" 
+  label = "Filtres" 
 }: ClientFilterProps) {
   const [filterType, setFilterType] = useState<'all' | 'range' | 'month' | 'year'>('all');
   const [startDate, setStartDate] = useState('');
@@ -142,45 +142,65 @@ export default function ClientFilter({
     setCityFilter('');
   };
 
+  const hasActiveFilters = filterType !== 'all' || postalCodeFilter || cityFilter;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Calendar className="h-5 w-5" />
-          <span>{label}</span>
+    <Card className="mb-6">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center justify-between text-lg">
+          <div className="flex items-center space-x-2">
+            <Filter className="h-5 w-5 text-primary" />
+            <span>{label}</span>
+          </div>
+          {hasActiveFilters && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={resetFilters}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Réinitialiser
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Filtres par localisation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="postal-code-filter">Code postal</Label>
+        {/* Filtres par localisation - en haut */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="postal-code-filter" className="text-sm flex items-center">
+              <MapPin className="h-4 w-4 mr-1" />
+              Code postal
+            </Label>
             <Input
               id="postal-code-filter"
               placeholder="Ex: 75001, 69000..."
               value={postalCodeFilter}
               onChange={(e) => setPostalCodeFilter(e.target.value)}
+              className="h-9"
             />
           </div>
-          <div>
-            <Label htmlFor="city-filter">Ville</Label>
+          <div className="space-y-2">
+            <Label htmlFor="city-filter" className="text-sm">Ville</Label>
             <Input
               id="city-filter"
               placeholder="Ex: Paris, Lyon..."
               value={cityFilter}
               onChange={(e) => setCityFilter(e.target.value)}
+              className="h-9"
             />
           </div>
         </div>
 
         {/* Filtres par date */}
         <div className="space-y-3">
-          <Label>Filtrer par date</Label>
-          <div className="flex space-x-2">
+          <Label className="text-sm">Filtrer par date</Label>
+          <div className="flex flex-wrap gap-2">
             <Button
               variant={filterType === 'all' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilterType('all')}
+              className="h-8"
             >
               Tout
             </Button>
@@ -188,58 +208,63 @@ export default function ClientFilter({
               variant={filterType === 'range' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilterType('range')}
+              className="h-8"
             >
-              <CalendarRange className="h-4 w-4 mr-1" />
+              <CalendarRange className="h-3 w-3 mr-1" />
               Période
             </Button>
             <Button
               variant={filterType === 'month' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilterType('month')}
+              className="h-8"
             >
-              <CalendarDays className="h-4 w-4 mr-1" />
+              <CalendarDays className="h-3 w-3 mr-1" />
               Mois
             </Button>
             <Button
               variant={filterType === 'year' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilterType('year')}
+              className="h-8"
             >
-              <Calendar className="h-4 w-4 mr-1" />
+              <Calendar className="h-3 w-3 mr-1" />
               Année
             </Button>
           </div>
         </div>
 
         {filterType === 'range' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="start-date">Date de début</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="start-date" className="text-sm">Date de début</Label>
               <Input
                 id="start-date"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                className="h-9"
               />
             </div>
-            <div>
-              <Label htmlFor="end-date">Date de fin</Label>
+            <div className="space-y-2">
+              <Label htmlFor="end-date" className="text-sm">Date de fin</Label>
               <Input
                 id="end-date"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                className="h-9"
               />
             </div>
           </div>
         )}
 
         {filterType === 'month' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Mois</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label className="text-sm">Mois</Label>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue placeholder="Sélectionner un mois" />
                 </SelectTrigger>
                 <SelectContent>
@@ -251,10 +276,10 @@ export default function ClientFilter({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Année</Label>
+            <div className="space-y-2">
+              <Label className="text-sm">Année</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue placeholder="Sélectionner une année" />
                 </SelectTrigger>
                 <SelectContent>
@@ -270,10 +295,10 @@ export default function ClientFilter({
         )}
 
         {filterType === 'year' && (
-          <div>
-            <Label>Année</Label>
+          <div className="w-full md:w-1/2">
+            <Label className="text-sm">Année</Label>
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger>
+              <SelectTrigger className="h-9">
                 <SelectValue placeholder="Sélectionner une année" />
               </SelectTrigger>
               <SelectContent>
@@ -285,17 +310,6 @@ export default function ClientFilter({
               </SelectContent>
             </Select>
           </div>
-        )}
-
-        {(filterType !== 'all' || postalCodeFilter || cityFilter) && (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={resetFilters}
-            className="w-full"
-          >
-            Réinitialiser les filtres
-          </Button>
         )}
       </CardContent>
     </Card>
