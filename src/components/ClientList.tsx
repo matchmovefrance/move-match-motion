@@ -469,11 +469,12 @@ const ClientList = () => {
 
       {/* Dialogue de suppression */}
       <DeleteConfirmDialog
-        isOpen={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
         onConfirm={handleDeleteClient}
         title="Supprimer le client"
-        description={`Êtes-vous sûr de vouloir supprimer le client ${clientToDelete?.name || clientToDelete?.client_reference} ? Cette action est irréversible.`}
+        description={`Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.`}
+        itemName={clientToDelete?.name || clientToDelete?.client_reference || 'Client'}
         isDeleting={isDeleting}
       />
 

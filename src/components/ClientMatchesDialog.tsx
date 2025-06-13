@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle, X, AlertCircle } from 'lucide-react';
@@ -15,14 +14,22 @@ import { useMatchActions } from '@/hooks/useMatchActions';
 interface Client {
   id: number;
   name: string;
+  email: string;
+  phone: string;
   client_reference?: string;
-  departure_postal_code: string;
-  arrival_postal_code: string;
-  desired_date: string;
-  estimated_volume: number;
-  status?: string;
+  created_at: string;
+  created_by: string;
   departure_city?: string;
+  departure_postal_code?: string;
   arrival_city?: string;
+  arrival_postal_code?: string;
+  desired_date?: string;
+  estimated_volume?: number;
+  flexible_dates?: boolean;
+  flexibility_days?: number;
+  status?: string;
+  is_matched?: boolean;
+  match_status?: string;
 }
 
 interface ClientMatchesDialogProps {
