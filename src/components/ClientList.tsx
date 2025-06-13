@@ -135,8 +135,32 @@ const ClientList = () => {
   };
 
   const handleFindMatch = async (client: Client) => {
-    setSelectedClient(client);
-    setShowMatchesDialog(true);
+    console.log('🎯 Ouverture du dialogue de match pour client:', client.id, client.name);
+    
+    try {
+      // Vérifier que le client a les données nécessaires
+      if (!client.departure_postal_code || !client.arrival_postal_code) {
+        toast({
+          title: "Données incomplètes",
+          description: "Le client doit avoir des codes postaux de départ et d'arrivée pour trouver des matchs",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setSelectedClient(client);
+      setShowMatchesDialog(true);
+      
+      console.log('✅ Dialogue de match ouvert pour:', client.client_reference);
+      
+    } catch (error) {
+      console.error('❌ Erreur ouverture dialogue match:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'ouvrir le dialogue de match",
+        variant: "destructive",
+      });
+    }
   };
 
   if (showAddForm) {
@@ -352,6 +376,7 @@ const ClientList = () => {
                     size="sm"
                     onClick={() => handleFindMatch(client)}
                     className="flex-1"
+                    disabled={!client.departure_postal_code || !client.arrival_postal_code}
                   >
                     <Target className="h-4 w-4 mr-1" />
                     Trouver un match
