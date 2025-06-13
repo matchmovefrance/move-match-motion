@@ -102,26 +102,49 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     setSearchAttempted(true);
     
     try {
-      // Recherche dans confirmed_moves avec des critères plus larges
-      const { data: movesData, error: movesError } = await supabase
+      // Exclure les trajets où ce client a déjà un match accepté
+      const { data: existingMatches, error: matchCheckError } = await supabase
+        .from('move_matches')
+        .select('move_id')
+        .eq('client_id', client.id)
+        .eq('match_type', 'accepted_match');
+
+      if (matchCheckError) {
+        console.warn('⚠️ Erreur vérification matches existants:', matchCheckError);
+      }
+
+      const excludedMoveIds = existingMatches?.map(m => m.move_id) || [];
+      console.log('🚫 Trajets exclus (déjà acceptés):', excludedMoveIds);
+
+      // Recherche dans confirmed_moves avec exclusion des trajets déjà acceptés
+      let query = supabase
         .from('confirmed_moves')
         .select('*')
         .eq('status', 'confirmed')
         .gte('available_volume', client.estimated_volume || 1)
         .order('departure_date', { ascending: true });
 
+      // Exclure les trajets déjà acceptés par ce client
+      if (excludedMoveIds.length > 0) {
+        query = query.not('id', 'in', `(${excludedMoveIds.join(',')})`);
+      }
+
+      const { data: movesData, error: movesError } = await query;
+
       if (movesError) {
         console.error('❌ Erreur requête moves:', movesError);
         throw movesError;
       }
 
-      console.log(`✅ ${movesData?.length || 0} trajets trouvés dans confirmed_moves`);
+      console.log(`✅ ${movesData?.length || 0} trajets trouvés dans confirmed_moves (après exclusions)`);
 
       if (!movesData || movesData.length === 0) {
         setMatches([]);
         toast({
           title: "Aucun trajet disponible",
-          description: "Aucun trajet confirmé trouvé avec le volume requis",
+          description: excludedMoveIds.length > 0 
+            ? "Aucun nouveau trajet trouvé (trajets déjà acceptés exclus)"
+            : "Aucun trajet confirmé trouvé avec le volume requis",
         });
         return;
       }
@@ -129,31 +152,35 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
       // Simuler une analyse de compatibilité
       const compatibleMatches: MatchResult[] = movesData
         .filter(move => {
-          // Filtrer les trajets avec des données complètes
+          // Filtrer les trajets avec des données complètes et volume vraiment disponible
+          const realAvailableVolume = move.available_volume || (move.max_volume - (move.used_volume || 0));
           return move.departure_postal_code && 
                  move.arrival_postal_code && 
                  move.company_name &&
-                 (move.available_volume || move.max_volume - (move.used_volume || 0)) >= (client.estimated_volume || 1);
+                 realAvailableVolume >= (client.estimated_volume || 1);
         })
         .slice(0, 5) // Limiter à 5 résultats
-        .map(move => ({
-          id: move.id,
-          company_name: move.company_name,
-          departure_postal_code: move.departure_postal_code,
-          arrival_postal_code: move.arrival_postal_code,
-          departure_city: move.departure_city || 'Ville inconnue',
-          arrival_city: move.arrival_city || 'Ville inconnue',
-          available_volume: move.available_volume || (move.max_volume - (move.used_volume || 0)),
-          departure_date: move.departure_date,
-          distance_km: Math.floor(Math.random() * 500) + 50, // Simulation
-          compatibility_score: Math.floor(Math.random() * 40) + 60 // Score entre 60-100
-        }));
+        .map(move => {
+          const realAvailableVolume = move.available_volume || (move.max_volume - (move.used_volume || 0));
+          return {
+            id: move.id,
+            company_name: move.company_name,
+            departure_postal_code: move.departure_postal_code,
+            arrival_postal_code: move.arrival_postal_code,
+            departure_city: move.departure_city || 'Ville inconnue',
+            arrival_city: move.arrival_city || 'Ville inconnue',
+            available_volume: realAvailableVolume,
+            departure_date: move.departure_date,
+            distance_km: Math.floor(Math.random() * 500) + 50, // Simulation
+            compatibility_score: Math.floor(Math.random() * 40) + 60 // Score entre 60-100
+          };
+        });
 
       setMatches(compatibleMatches);
       
       toast({
         title: "Recherche terminée",
-        description: `${compatibleMatches.length} match(s) potentiel(s) trouvé(s)`,
+        description: `${compatibleMatches.length} match(s) potentiel(s) trouvé(s) (${excludedMoveIds.length} trajets exclus)`,
       });
 
       console.log('✅ Matchs trouvés:', compatibleMatches.length);
