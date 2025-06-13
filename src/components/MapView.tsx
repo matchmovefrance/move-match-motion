@@ -478,10 +478,7 @@ const MapView = () => {
     setLoading(true);
     try {
       const cleanRef = referenceFilter.toUpperCase().trim();
-      let foundItem: FilteredItem | null = null;
-      let foundMatchRoutes: MatchRoutes | null = null;
-
-      console.log('🔍 Recherche de référence:', cleanRef);
+      console.log(`🔍 RECHERCHE SIMPLIFIÉE: ${cleanRef}`);
 
       // Rechercher dans les clients (format CLI-XXXXXX)
       if (cleanRef.startsWith('CLI-')) {
@@ -489,16 +486,14 @@ const MapView = () => {
         const id = parseInt(idStr);
         
         if (!isNaN(id)) {
-          console.log('🔍 Recherche client ID:', id);
-          
           const { data: client, error } = await supabase
             .from('clients')
-            .select('id, name, desired_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city, client_reference')
+            .select('*')
             .eq('id', id)
             .single();
 
-          if (!error && client) {
-            foundItem = {
+          if (!error && client && client.departure_postal_code && client.arrival_postal_code) {
+            const foundItem: FilteredItem = {
               id: client.id,
               type: 'client',
               reference: `CLI-${String(client.id).padStart(6, '0')}`,
@@ -510,27 +505,34 @@ const MapView = () => {
               departure_city: client.departure_city,
               arrival_city: client.arrival_city
             };
-            console.log('✅ Client trouvé:', foundItem);
+
+            setSelectedItem(foundItem);
+            setMatchRoutes(null);
+            console.log(`✅ CLIENT TROUVÉ: ${foundItem.reference}`);
+            toast({
+              title: "Client trouvé",
+              description: `${foundItem.reference} affiché sur la carte`,
+            });
+            setLoading(false);
+            return;
           }
         }
       }
 
       // Rechercher dans les trajets (format TRJ-XXXXXX)
-      if (!foundItem && cleanRef.startsWith('TRJ-')) {
+      if (cleanRef.startsWith('TRJ-')) {
         const idStr = cleanRef.replace('TRJ-', '');
         const id = parseInt(idStr);
         
         if (!isNaN(id)) {
-          console.log('🔍 Recherche trajet ID:', id);
-          
           const { data: move, error } = await supabase
             .from('confirmed_moves')
-            .select('id, company_name, departure_date, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+            .select('*')
             .eq('id', id)
             .single();
 
-          if (!error && move) {
-            foundItem = {
+          if (!error && move && move.departure_postal_code && move.arrival_postal_code) {
+            const foundItem: FilteredItem = {
               id: move.id,
               type: 'move',
               reference: `TRJ-${String(move.id).padStart(6, '0')}`,
@@ -543,134 +545,139 @@ const MapView = () => {
               arrival_city: move.arrival_city,
               company_name: move.company_name
             };
-            console.log('✅ Trajet trouvé:', foundItem);
+
+            setSelectedItem(foundItem);
+            setMatchRoutes(null);
+            console.log(`✅ TRAJET TROUVÉ: ${foundItem.reference}`);
+            toast({
+              title: "Trajet trouvé",
+              description: `${foundItem.reference} affiché sur la carte`,
+            });
+            setLoading(false);
+            return;
           }
         }
       }
 
-      // Rechercher dans les matchs avec les deux trajets (format MTH-XXXXXX)
-      if (!foundItem && cleanRef.startsWith('MTH-')) {
+      // Rechercher dans les matchs (format MTH-XXXXXX)
+      if (cleanRef.startsWith('MTH-')) {
         const idStr = cleanRef.replace('MTH-', '');
         const id = parseInt(idStr);
         
         if (!isNaN(id)) {
-          console.log('🔍 RECHERCHE MATCH ID:', id);
-          
-          // Étape 1: Récupérer le match avec client_id et move_id
-          const { data: matchData, error: matchError } = await supabase
+          console.log(`🔍 RECHERCHE MATCH ID: ${id}`);
+
+          // 1. Récupérer le match
+          const { data: match, error: matchError } = await supabase
             .from('move_matches')
             .select('id, created_at, client_id, move_id')
             .eq('id', id)
             .single();
 
-          console.log('🔍 RÉSULTAT MATCH:', { matchData, matchError });
-
-          if (!matchError && matchData) {
-            console.log('🔍 MATCH TROUVÉ - client_id:', matchData.client_id, 'move_id:', matchData.move_id);
-
-            // Étape 2: Récupérer les données client séparément
-            const { data: clientData, error: clientError } = await supabase
-              .from('clients')
-              .select('id, name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-              .eq('id', matchData.client_id)
-              .single();
-
-            console.log('🔍 RÉSULTAT CLIENT:', { clientData, clientError });
-
-            // Étape 3: Récupérer les données trajet séparément
-            const { data: moveData, error: moveError } = await supabase
-              .from('confirmed_moves')
-              .select('id, company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-              .eq('id', matchData.move_id)
-              .single();
-
-            console.log('🔍 RÉSULTAT TRAJET:', { moveData, moveError });
-
-            // Étape 4: Vérifier qu'on a les deux jeux de données
-            if (!clientError && !moveError && clientData && moveData) {
-              console.log('✅ DONNÉES COMPLÈTES TROUVÉES');
-              
-              foundItem = {
-                id: matchData.id,
-                type: 'match',
-                reference: `MTH-${String(matchData.id).padStart(6, '0')}`,
-                name: `${clientData.name || 'Client'} ↔ ${moveData.company_name || 'Déménageur'}`,
-                date: matchData.created_at ? new Date(matchData.created_at).toLocaleDateString('fr-FR') : '',
-                details: `Client: ${clientData.departure_postal_code || ''} → ${clientData.arrival_postal_code || ''} | Déménageur: ${moveData.departure_postal_code || ''} → ${moveData.arrival_postal_code || ''}`,
-                departure_postal_code: clientData.departure_postal_code,
-                arrival_postal_code: clientData.arrival_postal_code,
-                departure_city: clientData.departure_city,
-                arrival_city: clientData.arrival_city,
-                company_name: moveData.company_name
-              };
-
-              // Créer les données pour les deux trajets
-              foundMatchRoutes = {
-                client: {
-                  departure_postal_code: clientData.departure_postal_code || '',
-                  arrival_postal_code: clientData.arrival_postal_code || '',
-                  departure_city: clientData.departure_city || '',
-                  arrival_city: clientData.arrival_city || '',
-                  name: clientData.name || 'Client'
-                },
-                move: {
-                  departure_postal_code: moveData.departure_postal_code || '',
-                  arrival_postal_code: moveData.arrival_postal_code || '',
-                  departure_city: moveData.departure_city || '',
-                  arrival_city: moveData.arrival_city || '',
-                  company_name: moveData.company_name || 'Déménageur'
-                }
-              };
-
-              console.log('✅ MATCH CRÉÉ:', foundItem);
-              console.log('🗺️ ROUTES MATCH:', foundMatchRoutes);
-            } else {
-              console.error('❌ ERREUR RÉCUPÉRATION DONNÉES:', { 
-                clientError, 
-                moveError,
-                clientFound: !!clientData,
-                moveFound: !!moveData
-              });
-            }
-          } else {
-            console.error('❌ MATCH NON TROUVÉ:', { matchError, searchId: id });
+          if (matchError || !match) {
+            console.error(`❌ MATCH ${id} NON TROUVÉ:`, matchError);
+            throw new Error('Match non trouvé');
           }
-        }
-      }
 
-      if (foundItem) {
-        setSelectedItem(foundItem);
-        setMatchRoutes(foundMatchRoutes);
-        console.log('✅ Référence trouvée et affichée:', foundItem.reference);
-        
-        if (foundMatchRoutes) {
+          console.log(`✅ MATCH TROUVÉ:`, match);
+
+          // 2. Récupérer les données client
+          const { data: client, error: clientError } = await supabase
+            .from('clients')
+            .select('name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+            .eq('id', match.client_id)
+            .single();
+
+          if (clientError || !client) {
+            console.error(`❌ CLIENT ${match.client_id} NON TROUVÉ:`, clientError);
+            throw new Error('Données client manquantes');
+          }
+
+          // 3. Récupérer les données trajet
+          const { data: move, error: moveError } = await supabase
+            .from('confirmed_moves')
+            .select('company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+            .eq('id', match.move_id)
+            .single();
+
+          if (moveError || !move) {
+            console.error(`❌ MOVE ${match.move_id} NON TROUVÉ:`, moveError);
+            throw new Error('Données trajet manquantes');
+          }
+
+          // 4. Vérifier que toutes les données nécessaires sont présentes
+          if (!client.departure_postal_code || !client.arrival_postal_code || 
+              !move.departure_postal_code || !move.arrival_postal_code) {
+            console.error(`❌ DONNÉES INCOMPLÈTES:`, { client, move });
+            throw new Error('Codes postaux manquants');
+          }
+
+          // 5. Créer l'objet match avec les deux trajets
+          const foundItem: FilteredItem = {
+            id: match.id,
+            type: 'match',
+            reference: `MTH-${String(match.id).padStart(6, '0')}`,
+            name: `${client.name} ↔ ${move.company_name}`,
+            date: match.created_at ? new Date(match.created_at).toLocaleDateString('fr-FR') : '',
+            details: `Client: ${client.departure_postal_code} → ${client.arrival_postal_code} | Déménageur: ${move.departure_postal_code} → ${move.arrival_postal_code}`,
+            departure_postal_code: client.departure_postal_code,
+            arrival_postal_code: client.arrival_postal_code,
+            departure_city: client.departure_city,
+            arrival_city: client.arrival_city,
+            company_name: move.company_name
+          };
+
+          const foundMatchRoutes: MatchRoutes = {
+            client: {
+              departure_postal_code: client.departure_postal_code,
+              arrival_postal_code: client.arrival_postal_code,
+              departure_city: client.departure_city || '',
+              arrival_city: client.arrival_city || '',
+              name: client.name
+            },
+            move: {
+              departure_postal_code: move.departure_postal_code,
+              arrival_postal_code: move.arrival_postal_code,
+              departure_city: move.departure_city || '',
+              arrival_city: move.arrival_city || '',
+              company_name: move.company_name
+            }
+          };
+
+          setSelectedItem(foundItem);
+          setMatchRoutes(foundMatchRoutes);
+          
+          console.log(`✅ MATCH COMPLET CRÉÉ:`, foundItem);
+          console.log(`🗺️ ROUTES MATCH:`, foundMatchRoutes);
+          
           toast({
             title: "Match trouvé",
             description: `${foundItem.reference} affiché avec les trajets client (bleu) et déménageur (rouge)`,
           });
-        } else {
-          toast({
-            title: "Référence trouvée",
-            description: `${foundItem.reference} affiché sur la carte`,
-          });
+          setLoading(false);
+          return;
         }
-      } else {
-        console.log('❌ Référence non trouvée:', cleanRef);
-        toast({
-          title: "Référence non trouvée",
-          description: `Aucun élément trouvé pour la référence ${cleanRef}`,
-          variant: "destructive",
-        });
-        setSelectedItem(null);
-        setMatchRoutes(null);
       }
-    } catch (error) {
-      console.error('❌ Error searching by reference:', error);
+
+      // Aucune référence trouvée
+      console.log(`❌ RÉFÉRENCE NON TROUVÉE: ${cleanRef}`);
       toast({
-        title: "Erreur",
-        description: "Impossible de rechercher la référence",
+        title: "Référence non trouvée",
+        description: `Aucun élément trouvé pour la référence ${cleanRef}`,
         variant: "destructive",
       });
+      setSelectedItem(null);
+      setMatchRoutes(null);
+
+    } catch (error) {
+      console.error('❌ ERREUR RECHERCHE:', error);
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Impossible de rechercher la référence",
+        variant: "destructive",
+      });
+      setSelectedItem(null);
+      setMatchRoutes(null);
     } finally {
       setLoading(false);
     }
