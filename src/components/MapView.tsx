@@ -548,13 +548,16 @@ const MapView = () => {
         }
       }
 
-      // Rechercher dans les matchs avec les deux trajets
+      // Rechercher dans les matchs avec les deux trajets (format MTH-XXXXXX)
       if (!foundItem && cleanRef.startsWith('MTH-')) {
-        const id = parseInt(cleanRef.replace('MTH-', ''));
-        console.log('🔍 Recherche match ID:', id);
+        const idStr = cleanRef.replace('MTH-', '');
+        const id = parseInt(idStr);
         
         if (!isNaN(id)) {
-          const { data: match, error } = await supabase
+          console.log('🔍 Recherche match ID:', id);
+          
+          // Rechercher le match avec une requête plus permissive
+          const { data: matches, error: matchError } = await supabase
             .from('move_matches')
             .select(`
               id,
@@ -562,27 +565,39 @@ const MapView = () => {
               client_id,
               move_id
             `)
-            .eq('id', id)
-            .single();
+            .eq('id', id);
 
-          console.log('🔍 Résultat recherche match:', { match, error });
+          console.log('🔍 Résultat recherche match brute:', { matches, matchError, searchId: id });
 
-          if (!error && match) {
-            // Charger les données du client
-            const { data: clientData, error: clientError } = await supabase
-              .from('clients')
-              .select('name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-              .eq('id', match.client_id)
-              .single();
+          if (!matchError && matches && matches.length > 0) {
+            const match = matches[0];
+            console.log('🔍 Match trouvé:', match);
 
-            // Charger les données du trajet
-            const { data: moveData, error: moveError } = await supabase
-              .from('confirmed_moves')
-              .select('company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
-              .eq('id', match.move_id)
-              .single();
+            // Charger les données du client et du trajet en parallèle
+            const [clientResult, moveResult] = await Promise.all([
+              supabase
+                .from('clients')
+                .select('name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+                .eq('id', match.client_id)
+                .single(),
+              supabase
+                .from('confirmed_moves')
+                .select('company_name, departure_postal_code, arrival_postal_code, departure_city, arrival_city')
+                .eq('id', match.move_id)
+                .single()
+            ]);
 
-            console.log('🔍 Données chargées:', { clientData, clientError, moveData, moveError });
+            const { data: clientData, error: clientError } = clientResult;
+            const { data: moveData, error: moveError } = moveResult;
+
+            console.log('🔍 Données chargées:', { 
+              clientData, 
+              clientError, 
+              moveData, 
+              moveError,
+              clientId: match.client_id,
+              moveId: match.move_id 
+            });
 
             if (!clientError && !moveError && clientData && moveData) {
               foundItem = {
@@ -620,10 +635,30 @@ const MapView = () => {
               console.log('✅ Match trouvé avec 2 trajets:', foundItem);
               console.log('🗺️ Routes du match:', foundMatchRoutes);
             } else {
-              console.error('❌ Erreur lors du chargement des données du match:', { clientError, moveError });
+              console.error('❌ Erreur lors du chargement des données du match:', { 
+                clientError, 
+                moveError,
+                clientId: match.client_id,
+                moveId: match.move_id
+              });
+              
+              // Si il y a une erreur, on essaie de donner plus d'infos
+              toast({
+                title: "Données incomplètes",
+                description: `Match ${cleanRef} trouvé mais données manquantes (client: ${clientError ? 'erreur' : 'ok'}, trajet: ${moveError ? 'erreur' : 'ok'})`,
+                variant: "destructive",
+              });
             }
           } else {
-            console.error('❌ Match non trouvé ou erreur:', error);
+            console.error('❌ Match non trouvé:', { matchError, searchId: id, matches });
+            
+            // Vérifier si le match existe vraiment en listant tous les matchs
+            const { data: allMatches, error: listError } = await supabase
+              .from('move_matches')
+              .select('id')
+              .order('id');
+            
+            console.log('🔍 Tous les matchs disponibles:', allMatches?.map(m => `MTH-${String(m.id).padStart(6, '0')}`));
           }
         }
       }
