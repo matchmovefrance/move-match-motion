@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle, X, AlertCircle } from 'lucide-react';
@@ -53,6 +54,7 @@ interface MatchResult {
 
 export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDialogProps) => {
   const { toast } = useToast();
+  const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchAttempted, setSearchAttempted] = useState(false);
@@ -198,6 +200,84 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     onClose();
   };
 
+  const handleAcceptMatch = async (match: MatchResult) => {
+    if (!client) {
+      console.log('❌ Pas de client pour accepter le match');
+      return;
+    }
+
+    console.log('✅ Tentative d\'acceptation du match:', match.id);
+    
+    // Préparer les données pour useMatchActions
+    const matchData = {
+      match_reference: `MATCH-${client.id}-${match.id}`,
+      client: client,
+      move: {
+        id: match.id,
+        company_name: match.company_name,
+        departure_postal_code: match.departure_postal_code,
+        arrival_postal_code: match.arrival_postal_code,
+        departure_city: match.departure_city,
+        arrival_city: match.arrival_city,
+        departure_date: match.departure_date,
+        available_volume: match.available_volume,
+        used_volume: 0
+      },
+      distance_km: match.distance_km,
+      date_diff_days: 0, // Calculé approximativement
+      volume_compatible: true,
+      available_volume_after: match.available_volume - (client.estimated_volume || 0),
+      is_valid: true
+    };
+
+    const success = await acceptMatch(matchData);
+    if (success) {
+      // Retirer le match de la liste après acceptation
+      setMatches(prev => prev.filter(m => m.id !== match.id));
+      
+      // Fermer le dialogue après un délai court
+      setTimeout(() => {
+        handleClose();
+      }, 1500);
+    }
+  };
+
+  const handleRejectMatch = async (match: MatchResult) => {
+    if (!client) {
+      console.log('❌ Pas de client pour rejeter le match');
+      return;
+    }
+
+    console.log('❌ Tentative de rejet du match:', match.id);
+    
+    // Préparer les données pour useMatchActions
+    const matchData = {
+      match_reference: `MATCH-${client.id}-${match.id}`,
+      client: client,
+      move: {
+        id: match.id,
+        company_name: match.company_name,
+        departure_postal_code: match.departure_postal_code,
+        arrival_postal_code: match.arrival_postal_code,
+        departure_city: match.departure_city,
+        arrival_city: match.arrival_city,
+        departure_date: match.departure_date,
+        available_volume: match.available_volume,
+        used_volume: 0
+      },
+      distance_km: match.distance_km,
+      date_diff_days: 0,
+      volume_compatible: true,
+      is_valid: true
+    };
+
+    const success = await rejectMatch(matchData);
+    if (success) {
+      // Retirer le match de la liste après rejet
+      setMatches(prev => prev.filter(m => m.id !== match.id));
+    }
+  };
+
   if (!client) {
     console.log('❌ ClientMatchesDialog: Pas de client');
     return null;
@@ -302,11 +382,22 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
                             </div>
                             
                             <div className="flex flex-col space-y-2 ml-4">
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                              <Button 
+                                size="sm" 
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => handleAcceptMatch(match)}
+                                disabled={actionLoading}
+                              >
                                 <CheckCircle className="h-4 w-4 mr-1" />
-                                Accepter
+                                {actionLoading ? 'Traitement...' : 'Accepter'}
                               </Button>
-                              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleRejectMatch(match)}
+                                disabled={actionLoading}
+                              >
                                 <XCircle className="h-4 w-4 mr-1" />
                                 Rejeter
                               </Button>
