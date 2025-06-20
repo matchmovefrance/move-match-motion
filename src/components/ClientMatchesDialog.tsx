@@ -127,27 +127,6 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     }
   }, [client, validateClientData, toast]);
 
-  // Effet pour déclencher la recherche quand le dialogue s'ouvre
-  useEffect(() => {
-    if (isOpen && client && !searchAttempted) {
-      console.log('✅ Dialogue ouvert - déclenchement recherche automatique');
-      const timer = setTimeout(() => {
-        findMatches();
-      }, 500); // Petit délai pour laisser le dialogue s'ouvrir
-
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, client, searchAttempted, findMatches]);
-
-  // Reset quand le dialogue se ferme
-  useEffect(() => {
-    if (!isOpen) {
-      setMatches([]);
-      setSearchAttempted(false);
-      setLoading(false);
-    }
-  }, [isOpen]);
-
   const handleClose = () => {
     console.log('🔒 Fermeture ClientMatchesDialog');
     setMatches([]);
@@ -251,14 +230,6 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
       setLoading(false);
     }
   }, [isOpen]);
-
-  const handleClose = () => {
-    console.log('🔒 Fermeture ClientMatchesDialog');
-    setMatches([]);
-    setSearchAttempted(false);
-    setLoading(false);
-    onClose();
-  };
 
   if (!client) {
     console.log('❌ ClientMatchesDialog: Pas de client');
