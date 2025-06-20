@@ -30,7 +30,7 @@ export interface MovingRoute {
 export interface MatchResult {
   client: MovingClient;
   move: MovingRoute;
-  match_type: 'grouped_outbound' | 'return_trip' | 'loop_trip' | 'simple_match';
+  match_type: 'grouped_outbound' | 'return_trip' | 'simple_match';
   distance_km: number;
   date_diff_days: number;
   volume_compatible: boolean;
@@ -39,7 +39,7 @@ export interface MatchResult {
   is_valid: boolean;
   match_reference: string;
   explanation: string;
-  scenario: 1 | 2 | 3;
+  scenario: 1 | 2;
 }
 
 export class MovingMatchingService {
@@ -47,10 +47,10 @@ export class MovingMatchingService {
   private static readonly MAX_DATE_DIFF_DAYS = 15;
 
   /**
-   * Trouve tous les matchs possibles pour un client donné avec la logique professionnelle
+   * Trouve tous les matchs possibles pour un client donné - VERSION OPTIMISÉE
    */
   public static async findMatchesForClient(client: MovingClient): Promise<MatchResult[]> {
-    console.log(`🎯 Recherche matchs professionnels pour client ${client.name}`);
+    console.log(`🎯 Recherche matchs optimisés pour client ${client.name}`);
     
     if (!this.validateClientData(client)) {
       console.log('❌ Données client invalides');
@@ -60,17 +60,40 @@ export class MovingMatchingService {
     const matches: MatchResult[] = [];
     
     try {
-      // Scénario 1: Trajet Aller Groupé (A → B)
-      const scenario1Matches = await this.findGroupedOutboundMatches(client);
-      matches.push(...scenario1Matches);
+      // Récupérer tous les trajets confirmés avec volume disponible
+      const { data: moves, error } = await supabase
+        .from('confirmed_moves')
+        .select('*')
+        .eq('status', 'confirmed')
+        .gte('available_volume', client.estimated_volume || 1)
+        .limit(50); // Limiter pour la performance
 
-      // Scénario 2: Trajet Retour Occupé (B → A)
-      const scenario2Matches = await this.findReturnTripMatches(client);
-      matches.push(...scenario2Matches);
+      if (error || !moves || moves.length === 0) {
+        console.log('❌ Aucun trajet disponible:', error);
+        return [];
+      }
 
-      // Scénario 3: Boucle A → B → C → A
-      const scenario3Matches = await this.findLoopTripMatches(client);
-      matches.push(...scenario3Matches);
+      console.log(`📋 ${moves.length} trajets à analyser`);
+
+      // Traitement optimisé en batch
+      const batchSize = 10;
+      for (let i = 0; i < moves.length; i += batchSize) {
+        const batch = moves.slice(i, i + batchSize);
+        const batchPromises = batch.map(move => this.analyzeMove(client, move));
+        
+        try {
+          const batchResults = await Promise.allSettled(batchPromises);
+          batchResults.forEach((result, index) => {
+            if (result.status === 'fulfilled' && result.value) {
+              matches.push(result.value);
+            } else if (result.status === 'rejected') {
+              console.warn(`⚠️ Erreur analyse trajet ${batch[index].id}:`, result.reason);
+            }
+          });
+        } catch (error) {
+          console.error(`❌ Erreur batch ${i}:`, error);
+        }
+      }
 
     } catch (error) {
       console.error('❌ Erreur recherche matchs:', error);
@@ -79,215 +102,154 @@ export class MovingMatchingService {
     // Trier par score (meilleur = plus faible)
     matches.sort((a, b) => a.match_score - b.match_score);
     
-    console.log(`✅ ${matches.length} matchs trouvés (${matches.filter(m => m.is_valid).length} valides)`);
+    console.log(`✅ ${matches.length} matchs trouvés`);
     return matches;
   }
 
   /**
-   * Scénario 1: Trajet Aller Groupé (A → B)
-   * 2 clients partent du même point A (rayon 100km) vers destinations proches (rayon 100km)
+   * Analyse un trajet pour voir s'il matche avec le client
    */
-  private static async findGroupedOutboundMatches(client: MovingClient): Promise<MatchResult[]> {
-    console.log('🚛 Scénario 1: Recherche trajets groupés aller');
-    
-    const { data: moves, error } = await supabase
-      .from('confirmed_moves')
-      .select('*')
-      .eq('status', 'confirmed')
-      .gte('available_volume', client.estimated_volume || 1);
+  private static async analyzeMove(client: MovingClient, move: MovingRoute): Promise<MatchResult | null> {
+    // Vérifier d'abord les critères simples (volume et date)
+    const volumeCompatible = (client.estimated_volume || 0) <= move.available_volume;
+    const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
+    const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
 
-    if (error || !moves) {
-      console.error('❌ Erreur récupération trajets:', error);
-      return [];
+    if (!volumeCompatible || !isValidDate) {
+      return null;
     }
 
-    const matches: MatchResult[] = [];
+    try {
+      // Scénario 1: Trajet Aller Groupé (même direction)
+      const outboundMatch = await this.checkOutboundMatch(client, move);
+      if (outboundMatch) return outboundMatch;
 
-    for (const move of moves) {
-      // Vérifier si les points de départ sont proches (≤100km)
-      const departureDistance = await this.calculateDistance(
-        client.departure_postal_code!,
-        move.departure_postal_code,
-        client.departure_city,
-        move.departure_city
-      );
+      // Scénario 2: Trajet Retour (direction inverse)
+      const returnMatch = await this.checkReturnMatch(client, move);
+      if (returnMatch) return returnMatch;
 
-      // Vérifier si les points d'arrivée sont proches (≤100km)
-      const arrivalDistance = await this.calculateDistance(
-        client.arrival_postal_code!,
-        move.arrival_postal_code,
-        client.arrival_city,
-        move.arrival_city
-      );
+    } catch (error) {
+      console.warn(`⚠️ Erreur analyse trajet ${move.id}:`, error);
+    }
 
-      // Vérifier la compatibilité des dates (≤15 jours)
+    return null;
+  }
+
+  /**
+   * Vérifie si le client peut être groupé sur le trajet aller
+   */
+  private static async checkOutboundMatch(client: MovingClient, move: MovingRoute): Promise<MatchResult | null> {
+    try {
+      // Calculer distances en parallèle avec timeout
+      const [departureDistance, arrivalDistance] = await Promise.all([
+        this.calculateDistanceWithTimeout(
+          client.departure_postal_code!,
+          move.departure_postal_code,
+          client.departure_city,
+          move.departure_city
+        ),
+        this.calculateDistanceWithTimeout(
+          client.arrival_postal_code!,
+          move.arrival_postal_code,
+          client.arrival_city,
+          move.arrival_city
+        )
+      ]);
+
+      const maxDistance = Math.max(departureDistance, arrivalDistance);
       const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
 
-      const isValidDistance = departureDistance <= this.MAX_DISTANCE_KM && arrivalDistance <= this.MAX_DISTANCE_KM;
-      const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
-      const volumeCompatible = (client.estimated_volume || 0) <= move.available_volume;
-
-      if (isValidDistance && isValidDate && volumeCompatible) {
-        matches.push({
+      if (maxDistance <= this.MAX_DISTANCE_KM) {
+        return {
           client,
           move,
           match_type: 'grouped_outbound',
-          distance_km: Math.max(departureDistance, arrivalDistance),
-          date_diff_days: dateDiff,
-          volume_compatible: volumeCompatible,
+          distance_km: Math.round(maxDistance),
+          date_diff_days: Math.round(dateDiff),
+          volume_compatible: true,
           available_volume_after: move.available_volume - (client.estimated_volume || 0),
-          match_score: departureDistance + arrivalDistance + (dateDiff * 2),
+          match_score: maxDistance + (dateDiff * 2),
           is_valid: true,
           match_reference: `GROUP-${client.id}-${move.id}`,
           explanation: `Trajet groupé: Départ à ${Math.round(departureDistance)}km, Arrivée à ${Math.round(arrivalDistance)}km`,
           scenario: 1
-        });
+        };
       }
+    } catch (error) {
+      console.warn('⚠️ Erreur check outbound:', error);
     }
 
-    console.log(`📦 Scénario 1: ${matches.length} matchs groupés trouvés`);
-    return matches;
+    return null;
   }
 
   /**
-   * Scénario 2: Trajet Retour Occupé (B → A)
-   * Le camion revient à vide, on trouve un client pour le retour
+   * Vérifie si le client peut occuper le trajet retour
    */
-  private static async findReturnTripMatches(client: MovingClient): Promise<MatchResult[]> {
-    console.log('🔄 Scénario 2: Recherche trajets retour');
-    
-    const { data: moves, error } = await supabase
-      .from('confirmed_moves')
-      .select('*')
-      .eq('status', 'confirmed')
-      .gte('available_volume', client.estimated_volume || 1);
+  private static async checkReturnMatch(client: MovingClient, move: MovingRoute): Promise<MatchResult | null> {
+    try {
+      // Pour le retour: client part de B (arrivée camion) vers A (départ camion)
+      const [departureDistance, arrivalDistance] = await Promise.all([
+        this.calculateDistanceWithTimeout(
+          client.departure_postal_code!,
+          move.arrival_postal_code, // Client part de l'arrivée du camion
+          client.departure_city,
+          move.arrival_city
+        ),
+        this.calculateDistanceWithTimeout(
+          client.arrival_postal_code!,
+          move.departure_postal_code, // Client arrive au départ du camion
+          client.arrival_city,
+          move.departure_city
+        )
+      ]);
 
-    if (error || !moves) return [];
-
-    const matches: MatchResult[] = [];
-
-    for (const move of moves) {
-      // Pour le retour: le client part de B (arrivée du camion) vers A (départ du camion)
-      const departureDistance = await this.calculateDistance(
-        client.departure_postal_code!,
-        move.arrival_postal_code, // Client part de l'arrivée du camion
-        client.departure_city,
-        move.arrival_city
-      );
-
-      const arrivalDistance = await this.calculateDistance(
-        client.arrival_postal_code!,
-        move.departure_postal_code, // Client arrive au départ du camion
-        client.arrival_city,
-        move.departure_city
-      );
-
+      const maxDistance = Math.max(departureDistance, arrivalDistance);
       const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
 
-      const isValidDistance = departureDistance <= this.MAX_DISTANCE_KM && arrivalDistance <= this.MAX_DISTANCE_KM;
-      const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
-      const volumeCompatible = (client.estimated_volume || 0) <= move.available_volume;
-
-      if (isValidDistance && isValidDate && volumeCompatible) {
-        matches.push({
+      if (maxDistance <= this.MAX_DISTANCE_KM) {
+        return {
           client,
           move,
           match_type: 'return_trip',
-          distance_km: Math.max(departureDistance, arrivalDistance),
-          date_diff_days: dateDiff,
-          volume_compatible: volumeCompatible,
+          distance_km: Math.round(maxDistance),
+          date_diff_days: Math.round(dateDiff),
+          volume_compatible: true,
           available_volume_after: move.available_volume - (client.estimated_volume || 0),
-          match_score: departureDistance + arrivalDistance + (dateDiff * 2) + 10, // Légère pénalité pour retour
+          match_score: maxDistance + (dateDiff * 2) + 10, // Légère pénalité pour retour
           is_valid: true,
           match_reference: `RETURN-${client.id}-${move.id}`,
-          explanation: `Trajet retour: Évite retour à vide du camion`,
+          explanation: `Trajet retour: Évite retour à vide, économie de ${Math.round(maxDistance)}km`,
           scenario: 2
-        });
+        };
       }
+    } catch (error) {
+      console.warn('⚠️ Erreur check return:', error);
     }
 
-    console.log(`🔄 Scénario 2: ${matches.length} matchs retour trouvés`);
-    return matches;
+    return null;
   }
 
   /**
-   * Scénario 3: Boucle A → B → C → A
-   * Combinaison de plusieurs clients pour faire une boucle complète
+   * Calcul de distance avec timeout pour éviter les blocages
    */
-  private static async findLoopTripMatches(client: MovingClient): Promise<MatchResult[]> {
-    console.log('🔁 Scénario 3: Recherche boucles complètes');
-    
-    // Pour ce scénario, on cherche des combinaisons plus complexes
-    // Ici on simplifie en cherchant des trajets qui peuvent s'enchaîner
-    const { data: moves, error } = await supabase
-      .from('confirmed_moves')
-      .select('*')
-      .eq('status', 'confirmed');
+  private static async calculateDistanceWithTimeout(
+    postal1: string, 
+    postal2: string, 
+    city1?: string, 
+    city2?: string,
+    timeoutMs: number = 3000
+  ): Promise<number> {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout calcul distance')), timeoutMs);
+    });
 
-    if (error || !moves) return [];
-
-    const matches: MatchResult[] = [];
-
-    // Logique simplifiée pour la boucle: trouver un trajet où le client peut s'insérer
-    for (const move of moves) {
-      const canInsertInLoop = await this.canClientFitInLoop(client, move);
-      
-      if (canInsertInLoop.possible) {
-        matches.push({
-          client,
-          move,
-          match_type: 'loop_trip',
-          distance_km: canInsertInLoop.totalDistance,
-          date_diff_days: canInsertInLoop.dateDiff,
-          volume_compatible: canInsertInLoop.volumeOk,
-          available_volume_after: move.available_volume - (client.estimated_volume || 0),
-          match_score: canInsertInLoop.totalDistance + (canInsertInLoop.dateDiff * 3) + 20, // Pénalité pour complexité
-          is_valid: canInsertInLoop.possible,
-          match_reference: `LOOP-${client.id}-${move.id}`,
-          explanation: `Boucle optimisée: Client intégré dans circuit existant`,
-          scenario: 3
-        });
-      }
+    try {
+      const distancePromise = this.calculateDistance(postal1, postal2, city1, city2);
+      return await Promise.race([distancePromise, timeoutPromise]);
+    } catch (error) {
+      console.warn(`⚠️ Timeout distance ${postal1}-${postal2}, utilisation fallback`);
+      return this.getFallbackDistance(postal1, postal2);
     }
-
-    console.log(`🔁 Scénario 3: ${matches.length} matchs en boucle trouvés`);
-    return matches;
-  }
-
-  /**
-   * Vérifie si un client peut s'insérer dans une boucle
-   */
-  private static async canClientFitInLoop(client: MovingClient, move: MovingRoute): Promise<{
-    possible: boolean;
-    totalDistance: number;
-    dateDiff: number;
-    volumeOk: boolean;
-  }> {
-    // Calculer si le client peut s'insérer entre le point A et B du trajet existant
-    const distanceAtoClient = await this.calculateDistance(
-      move.departure_postal_code,
-      client.departure_postal_code!,
-      move.departure_city,
-      client.departure_city
-    );
-
-    const distanceClientToB = await this.calculateDistance(
-      client.arrival_postal_code!,
-      move.arrival_postal_code,
-      client.arrival_city,
-      move.arrival_city
-    );
-
-    const totalDistance = distanceAtoClient + distanceClientToB;
-    const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
-    const volumeOk = (client.estimated_volume || 0) <= move.available_volume;
-
-    return {
-      possible: totalDistance <= (this.MAX_DISTANCE_KM * 1.5) && dateDiff <= this.MAX_DATE_DIFF_DAYS && volumeOk,
-      totalDistance: Math.round(totalDistance),
-      dateDiff: Math.round(dateDiff),
-      volumeOk
-    };
   }
 
   /**
@@ -316,7 +278,6 @@ export class MovingMatchingService {
       const result = await calculateDistanceByPostalCode(postal1, postal2, city1, city2);
       return result?.distance || this.getFallbackDistance(postal1, postal2);
     } catch (error) {
-      console.warn(`⚠️ Erreur calcul distance ${postal1}-${postal2}, utilisation fallback`);
       return this.getFallbackDistance(postal1, postal2);
     }
   }
@@ -327,7 +288,8 @@ export class MovingMatchingService {
   private static getFallbackDistance(postal1: string, postal2: string): number {
     const dept1 = parseInt(postal1.substring(0, 2));
     const dept2 = parseInt(postal2.substring(0, 2));
-    return Math.abs(dept1 - dept2) * 50; // Approximation
+    const distance = Math.abs(dept1 - dept2) * 50; // Approximation 50km par département
+    return Math.min(distance, 150); // Plafonner à 150km pour éviter les aberrations
   }
 
   /**
@@ -340,10 +302,10 @@ export class MovingMatchingService {
   }
 
   /**
-   * Trouve tous les matchs pour l'onglet matching
+   * Trouve tous les matchs pour l'onglet matching - VERSION OPTIMISÉE
    */
   public static async findAllMatches(): Promise<MatchResult[]> {
-    console.log('🎯 Recherche tous les matchs avec logique professionnelle');
+    console.log('🎯 Recherche tous les matchs optimisés');
 
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
@@ -352,7 +314,7 @@ export class MovingMatchingService {
       .not('departure_postal_code', 'is', null)
       .not('arrival_postal_code', 'is', null)
       .not('is_matched', 'eq', true)
-      .limit(20); // Limite pour éviter la lenteur
+      .limit(10); // Réduire encore pour la performance
 
     if (clientsError || !clients) {
       console.error('❌ Erreur récupération clients:', clientsError);
@@ -363,25 +325,20 @@ export class MovingMatchingService {
 
     const allMatches: MatchResult[] = [];
     
-    // Traitement en parallèle mais limité pour éviter les timeouts
-    const batchSize = 5;
-    for (let i = 0; i < clients.length; i += batchSize) {
-      const batch = clients.slice(i, i + batchSize);
-      const batchPromises = batch.map(client => this.findMatchesForClient(client));
-      
+    // Traitement séquentiel pour éviter la surcharge API
+    for (const client of clients) {
       try {
-        const batchResults = await Promise.all(batchPromises);
-        batchResults.forEach(clientMatches => {
-          allMatches.push(...clientMatches);
-        });
+        const clientMatches = await this.findMatchesForClient(client);
+        // Garder seulement les 3 meilleurs matchs par client
+        allMatches.push(...clientMatches.slice(0, 3));
       } catch (error) {
-        console.error(`❌ Erreur traitement batch ${i}-${i + batchSize}:`, error);
+        console.error(`❌ Erreur client ${client.id}:`, error);
       }
     }
 
     const validMatches = allMatches.filter(match => match.is_valid);
     
-    console.log(`✅ ${validMatches.length} matchs valides trouvés sur ${allMatches.length} analysés`);
+    console.log(`✅ ${validMatches.length} matchs valides trouvés`);
     
     return validMatches;
   }

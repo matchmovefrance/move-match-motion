@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Target, Radar, CheckCircle, XCircle, MapPin, Calendar, Package, Users, Truck, RotateCcw } from 'lucide-react';
@@ -21,7 +22,8 @@ const MatchFinder = () => {
     setIsScanning(true);
     setShowResults(false);
     setScanProgress(0);
-    console.log('🎯 Début du matching professionnel intelligent...');
+    setLoading(true);
+    console.log('🎯 Début du matching optimisé...');
 
     try {
       setScanProgress(20);
@@ -32,30 +34,32 @@ const MatchFinder = () => {
 
       setScanProgress(80);
       
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500)); // Réduire le délai
       setScanProgress(100);
 
-      console.log(`✅ Matching intelligent terminé en ${processingTime}ms`);
+      console.log(`✅ Matching optimisé terminé en ${processingTime}ms`);
 
       setMatches(allMatches);
 
       setTimeout(() => {
         setIsScanning(false);
         setShowResults(true);
+        setLoading(false);
         toast({
           title: "Analyse terminée",
-          description: `${allMatches.length} correspondances trouvées (logique professionnelle)`,
+          description: `${allMatches.length} correspondances trouvées en ${Math.round(processingTime/1000)}s`,
         });
-      }, 1500);
+      }, 800);
 
     } catch (error) {
-      console.error('❌ Erreur matching intelligent:', error);
+      console.error('❌ Erreur matching:', error);
       toast({
         title: "Erreur",
-        description: "Erreur lors de l'analyse intelligente",
+        description: "Erreur lors de l'analyse",
         variant: "destructive",
       });
       setIsScanning(false);
+      setLoading(false);
     }
   };
 
@@ -115,7 +119,7 @@ const MatchFinder = () => {
       case 1:
         return {
           title: 'Trajet Aller Groupé',
-          description: 'Même point de départ (±100km)',
+          description: 'Même direction (±100km)',
           color: 'bg-green-100 text-green-800',
           icon: Users
         };
@@ -125,13 +129,6 @@ const MatchFinder = () => {
           description: 'Évite retour à vide',
           color: 'bg-blue-100 text-blue-800',
           icon: RotateCcw
-        };
-      case 3:
-        return {
-          title: 'Boucle Complète',
-          description: 'Circuit optimisé',
-          color: 'bg-purple-100 text-purple-800',
-          icon: Target
         };
       default:
         return {
@@ -188,6 +185,9 @@ const MatchFinder = () => {
               </h4>
               <p className="font-medium">{match.move.company_name}</p>
               <p className="text-sm">{match.move.departure_postal_code} → {match.move.arrival_postal_code}</p>
+              <p className="text-sm text-gray-500">
+                Vol. dispo: {match.move.available_volume}m³
+              </p>
             </div>
           </div>
 
@@ -235,7 +235,6 @@ const MatchFinder = () => {
 
   const scenario1Count = matches.filter(m => m.scenario === 1).length;
   const scenario2Count = matches.filter(m => m.scenario === 2).length;
-  const scenario3Count = matches.filter(m => m.scenario === 3).length;
 
   return (
     <motion.div
@@ -250,13 +249,13 @@ const MatchFinder = () => {
             initial={{ scale: 0.9 }}
             animate={{ scale: 1 }}
           >
-            Matching Intelligent
+            Matching Optimisé
           </motion.h1>
-          <p className="text-gray-600">Logique professionnelle anti-trajets à vide</p>
+          <p className="text-gray-600">Logique simplifiée et rapide - Périmètre 100km, 15 jours</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card className="bg-white/60 backdrop-blur border-green-200">
             <CardContent className="p-4 text-center">
               <Users className="h-8 w-8 text-green-600 mx-auto mb-2" />
@@ -270,14 +269,6 @@ const MatchFinder = () => {
               <RotateCcw className="h-8 w-8 text-blue-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-blue-600">{scenario2Count}</div>
               <p className="text-xs text-gray-600">Retours</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/60 backdrop-blur border-purple-200">
-            <CardContent className="p-4 text-center">
-              <Target className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-purple-600">{scenario3Count}</div>
-              <p className="text-xs text-gray-600">Boucles</p>
             </CardContent>
           </Card>
 
@@ -319,15 +310,15 @@ const MatchFinder = () => {
                     className="bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white px-8 py-4 text-lg rounded-full shadow-lg"
                   >
                     <Target className="h-6 w-6 mr-2" />
-                    Lancer l'analyse intelligente
+                    Lancer l'analyse rapide
                   </Button>
                   
                   <div className="text-sm text-gray-600 max-w-md mx-auto">
-                    <p className="mb-2">🎯 <strong>3 Scénarios intelligents:</strong></p>
+                    <p className="mb-2">🚀 <strong>Matching optimisé:</strong></p>
                     <ul className="text-left space-y-1">
-                      <li>• Scénario 1: Trajets groupés (±100km)</li>
-                      <li>• Scénario 2: Retours occupés (anti-vide)</li>
-                      <li>• Scénario 3: Boucles optimisées</li>
+                      <li>• ✅ Trajets groupés (même direction ±100km)</li>
+                      <li>• 🔄 Retours occupés (anti-trajets vides)</li>
+                      <li>• ⚡ Analyse rapide et efficace</li>
                     </ul>
                   </div>
                 </motion.div>
@@ -344,7 +335,7 @@ const MatchFinder = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-gray-800">Analyse intelligente en cours...</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">Analyse rapide en cours...</h2>
                     <div className="w-64 bg-gray-200 rounded-full h-2 mx-auto">
                       <motion.div 
                         className="bg-gradient-to-r from-green-500 to-blue-600 h-2 rounded-full"
@@ -353,7 +344,7 @@ const MatchFinder = () => {
                         transition={{ duration: 0.3 }}
                       />
                     </div>
-                    <p className="text-gray-600">{scanProgress}% - Application logique professionnelle...</p>
+                    <p className="text-gray-600">{scanProgress}% - Logique optimisée...</p>
                   </div>
                 </motion.div>
               )}
@@ -369,7 +360,7 @@ const MatchFinder = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-lg">
-                      {matches.length} correspondances intelligentes trouvées
+                      {matches.length} correspondances trouvées
                     </h3>
                     <Button variant="outline" onClick={findMatches} disabled={loading}>
                       <Search className="h-4 w-4 mr-2" />
@@ -394,13 +385,15 @@ const MatchFinder = () => {
                 <motion.div className="text-center py-16">
                   <div className="text-6xl mb-4">🎯</div>
                   <h2 className="text-2xl font-bold text-gray-800 mb-2">Aucune correspondance trouvée</h2>
-                  <p className="text-gray-600">Aucun client ne correspond aux 3 scénarios intelligents</p>
+                  <p className="text-gray-600 mb-4">
+                    Aucun client ne correspond aux critères (100km, 15 jours)
+                  </p>
                   <Button
                     onClick={() => {
                       setShowResults(false);
                       setMatches([]);
                     }}
-                    className="mt-4 bg-gradient-to-r from-green-500 to-blue-600"
+                    className="bg-gradient-to-r from-green-500 to-blue-600"
                   >
                     <Radar className="h-4 w-4 mr-2" />
                     Nouvelle analyse
