@@ -240,20 +240,20 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
 
   const getMatchTypeLabel = (matchType: MatchResult['match_type']) => {
     switch (matchType) {
-      case 'direct_outbound': return 'Trajet direct';
-      case 'direct_return': return 'Trajet retour';
-      case 'pickup_on_route': return 'Prise en route';
-      case 'delivery_on_route': return 'Livraison en route';
+      case 'grouped_outbound': return 'Trajet Aller Groupé';
+      case 'return_trip': return 'Trajet Retour Occupé';
+      case 'loop_trip': return 'Boucle Complète';
+      case 'simple_match': return 'Match Simple';
       default: return 'Autre';
     }
   };
 
   const getMatchTypeColor = (matchType: MatchResult['match_type']) => {
     switch (matchType) {
-      case 'direct_outbound': return 'bg-green-100 text-green-800';
-      case 'direct_return': return 'bg-blue-100 text-blue-800';
-      case 'pickup_on_route': return 'bg-orange-100 text-orange-800';
-      case 'delivery_on_route': return 'bg-purple-100 text-purple-800';
+      case 'grouped_outbound': return 'bg-green-100 text-green-800';
+      case 'return_trip': return 'bg-blue-100 text-blue-800';
+      case 'loop_trip': return 'bg-purple-100 text-purple-800';
+      case 'simple_match': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -299,7 +299,7 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
                   <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-700 mb-2">Aucun match trouvé</h3>
                   <p className="text-gray-500 mb-4">
-                    Aucun trajet compatible trouvé dans un rayon de 100km et 7 jours.
+                    Aucun trajet compatible trouvé dans un rayon de 100km et 15 jours.
                   </p>
                   <Button onClick={findMatches} disabled={loading}>
                     <Search className="h-4 w-4 mr-2" />
