@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle, X, AlertCircle } from 'lucide-react';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useMatchActions } from '@/hooks/useMatchActions';
-import { MovingMatchingService, type MatchResult } from '@/services/MovingMatchingService';
+import { MovingMatchingService, type MatchResult, type MovingClient } from '@/services/MovingMatchingService';
 
 interface Client {
   id: number;
@@ -20,10 +21,10 @@ interface Client {
   created_at: string;
   created_by: string;
   departure_city?: string;
-  departure_postal_code: string;
+  departure_postal_code?: string;
   arrival_city?: string;
-  arrival_postal_code: string;
-  desired_date: string;
+  arrival_postal_code?: string;
+  desired_date?: string;
   estimated_volume?: number;
   flexible_dates?: boolean;
   flexibility_days?: number;
@@ -58,6 +59,7 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     if (!client.arrival_postal_code?.trim()) return "Code postal d'arrivée manquant";
     if (!client.departure_city?.trim()) return "Ville de départ manquante";
     if (!client.arrival_city?.trim()) return "Ville d'arrivée manquante";
+    if (!client.desired_date?.trim()) return "Date souhaitée manquante";
     return null;
   }, []);
 
@@ -88,7 +90,8 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     setSearchAttempted(true);
     
     try {
-      const foundMatches = await MovingMatchingService.findMatchesForClient({
+      // Convertir le client vers le format MovingClient
+      const movingClient: MovingClient = {
         id: client.id,
         name: client.name,
         departure_postal_code: client.departure_postal_code,
@@ -98,7 +101,9 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
         desired_date: client.desired_date,
         estimated_volume: client.estimated_volume,
         client_reference: client.client_reference
-      });
+      };
+
+      const foundMatches = await MovingMatchingService.findMatchesForClient(movingClient);
 
       setMatches(foundMatches);
       
@@ -224,6 +229,35 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     if (success) {
       setMatches(prev => prev.filter(m => m.match_reference !== match.match_reference));
     }
+  };
+
+  // Effet pour déclencher la recherche quand le dialogue s'ouvre
+  useEffect(() => {
+    if (isOpen && client && !searchAttempted) {
+      console.log('✅ Dialogue ouvert - déclenchement recherche automatique');
+      const timer = setTimeout(() => {
+        findMatches();
+      }, 500); // Petit délai pour laisser le dialogue s'ouvrir
+
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, client, searchAttempted, findMatches]);
+
+  // Reset quand le dialogue se ferme
+  useEffect(() => {
+    if (!isOpen) {
+      setMatches([]);
+      setSearchAttempted(false);
+      setLoading(false);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    console.log('🔒 Fermeture ClientMatchesDialog');
+    setMatches([]);
+    setSearchAttempted(false);
+    setLoading(false);
+    onClose();
   };
 
   if (!client) {

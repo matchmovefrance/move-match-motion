@@ -5,11 +5,11 @@ import { calculateDistanceByPostalCode } from '@/lib/google-maps-config';
 export interface MovingClient {
   id: number;
   name: string;
-  departure_postal_code: string;
-  arrival_postal_code: string;
+  departure_postal_code?: string;
+  arrival_postal_code?: string;
   departure_city?: string;
   arrival_city?: string;
-  desired_date: string;
+  desired_date?: string;
   estimated_volume?: number;
   client_reference?: string;
 }
@@ -52,7 +52,23 @@ export class MovingMatchingService {
   public static async findMatchesForClient(client: MovingClient): Promise<MatchResult[]> {
     console.log(`🔍 Recherche matchs professionnels pour client ${client.name}`);
     
-    // Récupérer tous les trajets confirmés disponibles
+    // Validation des données obligatoires
+    if (!client.departure_postal_code?.trim() || !client.arrival_postal_code?.trim()) {
+      console.log('❌ Codes postaux manquants pour le client');
+      return [];
+    }
+
+    if (!client.departure_city?.trim() || !client.arrival_city?.trim()) {
+      console.log('❌ Villes manquantes pour le client');
+      return [];
+    }
+
+    if (!client.desired_date?.trim()) {
+      console.log('❌ Date souhaitée manquante pour le client');
+      return [];
+    }
+    
+    // Récupérer tous les trajets confirmés disponibles  
     const { data: moves, error } = await supabase
       .from('confirmed_moves')
       .select('*')
@@ -133,16 +149,16 @@ export class MovingMatchingService {
 
     if (direction === 'outbound') {
       // Match direct aller
-      clientDeparture = client.departure_postal_code;
-      clientArrival = client.arrival_postal_code;
+      clientDeparture = client.departure_postal_code!;
+      clientArrival = client.arrival_postal_code!;
       moveDeparture = move.departure_postal_code;
       moveArrival = move.arrival_postal_code;
       matchType = 'direct_outbound';
       explanation = 'Trajet identique au déménageur';
     } else {
       // Match direct retour
-      clientDeparture = client.departure_postal_code;
-      clientArrival = client.arrival_postal_code;
+      clientDeparture = client.departure_postal_code!;
+      clientArrival = client.arrival_postal_code!;
       moveDeparture = move.arrival_postal_code; // Inversé
       moveArrival = move.departure_postal_code; // Inversé
       matchType = 'direct_return';
@@ -159,7 +175,7 @@ export class MovingMatchingService {
 
     // Vérifier si c'est un match valide
     const isValidDistance = totalDistance <= this.MAX_DISTANCE_KM;
-    const dateDiff = this.calculateDateDifference(client.desired_date, move.departure_date);
+    const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
     const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
     const volumeCompatible = (client.estimated_volume || 0) <= move.available_volume;
 
@@ -197,9 +213,9 @@ export class MovingMatchingService {
       clientEndToMoveEnd,
       directMoveDistance
     ] = await Promise.all([
-      this.calculateDistance(move.departure_postal_code, client.departure_postal_code, move.departure_city, client.departure_city),
-      this.calculateDistance(client.departure_postal_code, client.arrival_postal_code, client.departure_city, client.arrival_city),
-      this.calculateDistance(client.arrival_postal_code, move.arrival_postal_code, client.arrival_city, move.arrival_city),
+      this.calculateDistance(move.departure_postal_code, client.departure_postal_code!, move.departure_city, client.departure_city),
+      this.calculateDistance(client.departure_postal_code!, client.arrival_postal_code!, client.departure_city, client.arrival_city),
+      this.calculateDistance(client.arrival_postal_code!, move.arrival_postal_code, client.arrival_city, move.arrival_city),
       this.calculateDistance(move.departure_postal_code, move.arrival_postal_code, move.departure_city, move.arrival_city)
     ]);
 
@@ -208,7 +224,7 @@ export class MovingMatchingService {
 
     // Le détour ne doit pas dépasser la tolérance
     const isValidDetour = detourExtra <= this.ROUTE_TOLERANCE_KM;
-    const dateDiff = this.calculateDateDifference(client.desired_date, move.departure_date);
+    const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
     const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
     const volumeCompatible = (client.estimated_volume || 0) <= move.available_volume;
 
