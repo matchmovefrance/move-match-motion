@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Target, Play, Users, Truck, Filter, Calendar, MapPin, Package, CheckCircle, XCircle, X, AlertCircle } from 'lucide-react';
@@ -242,7 +241,6 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     switch (matchType) {
       case 'grouped_outbound': return 'Trajet Aller Groupé';
       case 'return_trip': return 'Trajet Retour Occupé';
-      case 'loop_trip': return 'Boucle Complète';
       case 'simple_match': return 'Match Simple';
       default: return 'Autre';
     }
@@ -252,7 +250,6 @@ export const ClientMatchesDialog = ({ isOpen, onClose, client }: ClientMatchesDi
     switch (matchType) {
       case 'grouped_outbound': return 'bg-green-100 text-green-800';
       case 'return_trip': return 'bg-blue-100 text-blue-800';
-      case 'loop_trip': return 'bg-purple-100 text-purple-800';
       case 'simple_match': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
