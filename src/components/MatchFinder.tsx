@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Target, Radar, CheckCircle, XCircle, MapPin, Calendar, Package, Users, Truck, RotateCcw } from 'lucide-react';
@@ -23,21 +22,23 @@ const MatchFinder = () => {
     setShowResults(false);
     setScanProgress(0);
     setLoading(true);
-    console.log('🎯 Début du matching optimisé...');
+    console.log('🎯 Début du matching optimisé - nouvelle version...');
 
     try {
       setScanProgress(20);
       
       const startTime = Date.now();
+      console.log('📡 Appel MovingMatchingService.findAllMatches()...');
+      
       const allMatches = await MovingMatchingService.findAllMatches();
       const processingTime = Date.now() - startTime;
 
+      console.log(`📊 Résultats bruts: ${allMatches.length} matchs en ${processingTime}ms`);
+      
       setScanProgress(80);
       
-      await new Promise(resolve => setTimeout(resolve, 500)); // Réduire le délai
+      await new Promise(resolve => setTimeout(resolve, 300));
       setScanProgress(100);
-
-      console.log(`✅ Matching optimisé terminé en ${processingTime}ms`);
 
       setMatches(allMatches);
 
@@ -45,21 +46,26 @@ const MatchFinder = () => {
         setIsScanning(false);
         setShowResults(true);
         setLoading(false);
+        
         toast({
           title: "Analyse terminée",
           description: `${allMatches.length} correspondances trouvées en ${Math.round(processingTime/1000)}s`,
         });
-      }, 800);
+        
+        console.log('✅ Matching terminé avec succès');
+      }, 500);
 
     } catch (error) {
       console.error('❌ Erreur matching:', error);
       toast({
         title: "Erreur",
-        description: "Erreur lors de l'analyse",
+        description: "Erreur lors de l'analyse des correspondances",
         variant: "destructive",
       });
       setIsScanning(false);
       setLoading(false);
+      setShowResults(true);
+      setMatches([]);
     }
   };
 
@@ -157,7 +163,7 @@ const MatchFinder = () => {
                 Scénario {match.scenario}
               </Badge>
               <Badge className="bg-green-100 text-green-800">
-                Compatible
+                ✓ Compatible
               </Badge>
             </div>
           </div>
@@ -186,7 +192,7 @@ const MatchFinder = () => {
               <p className="font-medium">{match.move.company_name}</p>
               <p className="text-sm">{match.move.departure_postal_code} → {match.move.arrival_postal_code}</p>
               <p className="text-sm text-gray-500">
-                Vol. dispo: {match.move.available_volume}m³
+                Vol. dispo: {Math.max(0, match.move.max_volume - match.move.used_volume)}m³
               </p>
             </div>
           </div>
@@ -249,9 +255,9 @@ const MatchFinder = () => {
             initial={{ scale: 0.9 }}
             animate={{ scale: 1 }}
           >
-            Matching Optimisé
+            Matching Professionnel
           </motion.h1>
-          <p className="text-gray-600">Logique simplifiée et rapide - Périmètre 100km, 15 jours</p>
+          <p className="text-gray-600">Logique optimisée - Périmètre 100km, 15 jours - Version corrigée</p>
         </div>
 
         {/* Stats Cards */}
@@ -260,7 +266,7 @@ const MatchFinder = () => {
             <CardContent className="p-4 text-center">
               <Users className="h-8 w-8 text-green-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-green-600">{scenario1Count}</div>
-              <p className="text-xs text-gray-600">Groupés</p>
+              <p className="text-xs text-gray-600">Trajets Groupés</p>
             </CardContent>
           </Card>
 
@@ -268,7 +274,7 @@ const MatchFinder = () => {
             <CardContent className="p-4 text-center">
               <RotateCcw className="h-8 w-8 text-blue-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-blue-600">{scenario2Count}</div>
-              <p className="text-xs text-gray-600">Retours</p>
+              <p className="text-xs text-gray-600">Trajets Retour</p>
             </CardContent>
           </Card>
 
@@ -276,7 +282,7 @@ const MatchFinder = () => {
             <CardContent className="p-4 text-center">
               <CheckCircle className="h-8 w-8 text-orange-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-orange-600">{matches.length}</div>
-              <p className="text-xs text-gray-600">Total</p>
+              <p className="text-xs text-gray-600">Total Compatible</p>
             </CardContent>
           </Card>
         </div>
@@ -310,15 +316,16 @@ const MatchFinder = () => {
                     className="bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white px-8 py-4 text-lg rounded-full shadow-lg"
                   >
                     <Target className="h-6 w-6 mr-2" />
-                    Lancer l'analyse rapide
+                    Lancer l'analyse complète
                   </Button>
                   
                   <div className="text-sm text-gray-600 max-w-md mx-auto">
-                    <p className="mb-2">🚀 <strong>Matching optimisé:</strong></p>
+                    <p className="mb-2">🚀 <strong>Matching corrigé:</strong></p>
                     <ul className="text-left space-y-1">
                       <li>• ✅ Trajets groupés (même direction ±100km)</li>
-                      <li>• 🔄 Retours occupés (anti-trajets vides)</li>
-                      <li>• ⚡ Analyse rapide et efficace</li>
+                      <li>• 🔄 Retours optimisés (éviter trajets vides)</li>
+                      <li>• ⚡ Analyse rapide avec fallback intelligent</li>
+                      <li>• 🎯 Logique permissive mais précise</li>
                     </ul>
                   </div>
                 </motion.div>
@@ -335,7 +342,7 @@ const MatchFinder = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-gray-800">Analyse rapide en cours...</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">Analyse en cours...</h2>
                     <div className="w-64 bg-gray-200 rounded-full h-2 mx-auto">
                       <motion.div 
                         className="bg-gradient-to-r from-green-500 to-blue-600 h-2 rounded-full"
@@ -344,7 +351,7 @@ const MatchFinder = () => {
                         transition={{ duration: 0.3 }}
                       />
                     </div>
-                    <p className="text-gray-600">{scanProgress}% - Logique optimisée...</p>
+                    <p className="text-gray-600">{scanProgress}% - Recherche des correspondances...</p>
                   </div>
                 </motion.div>
               )}
@@ -360,7 +367,7 @@ const MatchFinder = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-lg">
-                      {matches.length} correspondances trouvées
+                      🎉 {matches.length} correspondances trouvées !
                     </h3>
                     <Button variant="outline" onClick={findMatches} disabled={loading}>
                       <Search className="h-4 w-4 mr-2" />
@@ -383,11 +390,20 @@ const MatchFinder = () => {
                 </div>
               ) : (
                 <motion.div className="text-center py-16">
-                  <div className="text-6xl mb-4">🎯</div>
+                  <div className="text-6xl mb-4">🔍</div>
                   <h2 className="text-2xl font-bold text-gray-800 mb-2">Aucune correspondance trouvée</h2>
                   <p className="text-gray-600 mb-4">
-                    Aucun client ne correspond aux critères (100km, 15 jours)
+                    Aucun client ne correspond aux critères actuels.
                   </p>
+                  <div className="text-sm text-gray-500 mb-4">
+                    <p>Vérifiez que :</p>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>Des clients ont des trajets définis</li>
+                      <li>Des trajets confirmés sont disponibles</li>
+                      <li>Les dates sont dans une fourchette de 15 jours</li>
+                      <li>Les distances sont dans un rayon de 100km</li>
+                    </ul>
+                  </div>
                   <Button
                     onClick={() => {
                       setShowResults(false);
