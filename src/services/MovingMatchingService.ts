@@ -43,14 +43,20 @@ export interface MatchResult {
 }
 
 export class MovingMatchingService {
-  private static readonly MAX_DISTANCE_KM = 100;
-  private static readonly MAX_DATE_DIFF_DAYS = 15;
+  private static readonly MAX_DISTANCE_KM = 200; // Plus permissif
+  private static readonly MAX_DATE_DIFF_DAYS = 30; // Plus permissif
 
   /**
-   * Trouve tous les matchs possibles pour un client donné - VERSION SIMPLIFIÉE ET RAPIDE
+   * Trouve tous les matchs possibles pour un client donné - VERSION CORRIGÉE
    */
   public static async findMatchesForClient(client: MovingClient): Promise<MatchResult[]> {
-    console.log(`🎯 Recherche matchs pour client ${client.name} (${client.client_reference})`);
+    console.log(`🎯 RECHERCHE MATCHS pour client ${client.name} (${client.client_reference})`);
+    console.log('📍 Données client:', {
+      departure: `${client.departure_postal_code} ${client.departure_city}`,
+      arrival: `${client.arrival_postal_code} ${client.arrival_city}`,
+      date: client.desired_date,
+      volume: client.estimated_volume
+    });
     
     if (!this.validateClientData(client)) {
       console.log('❌ Données client invalides');
@@ -60,41 +66,43 @@ export class MovingMatchingService {
     const matches: MatchResult[] = [];
     
     try {
-      // Récupérer TOUS les trajets confirmés sans filtre strict
+      // Récupérer TOUS les trajets confirmés
       const { data: moves, error } = await supabase
         .from('confirmed_moves')
         .select('*')
-        .eq('status', 'confirmed')
-        .gt('max_volume', 0) // Au moins du volume total
-        .limit(200); // Plus de trajets à analyser
+        .eq('status', 'confirmed');
 
       if (error || !moves || moves.length === 0) {
         console.log('❌ Aucun trajet disponible:', error);
         return [];
       }
 
-      console.log(`📋 ${moves.length} trajets confirmés trouvés pour analyse`);
+      console.log(`📋 ${moves.length} trajets confirmés analysés:`);
+      moves.forEach(move => {
+        console.log(`- ${move.company_name}: ${move.departure_postal_code} → ${move.arrival_postal_code} (${move.departure_date})`);
+      });
 
-      // Analyse TOUS les trajets sans préfiltre
+      // Analyse TOUS les trajets
       for (const move of moves) {
         try {
+          console.log(`🔍 Analyse trajet: ${move.company_name} (${move.departure_postal_code} → ${move.arrival_postal_code})`);
+
           // Scénario 1: Trajet Aller Groupé (même direction)
           const outboundMatch = await this.checkOutboundMatch(client, move);
           if (outboundMatch) {
             matches.push(outboundMatch);
-            console.log(`✅ Match aller trouvé: ${outboundMatch.distance_km}km`);
+            console.log(`✅ MATCH ALLER trouvé: ${outboundMatch.distance_km}km, score: ${outboundMatch.match_score}`);
           }
 
           // Scénario 2: Trajet Retour (direction inverse)  
           const returnMatch = await this.checkReturnMatch(client, move);
           if (returnMatch) {
             matches.push(returnMatch);
-            console.log(`✅ Match retour trouvé: ${returnMatch.distance_km}km`);
+            console.log(`✅ MATCH RETOUR trouvé: ${returnMatch.distance_km}km, score: ${returnMatch.match_score}`);
           }
 
         } catch (error) {
           console.warn(`⚠️ Erreur analyse trajet ${move.id}:`, error);
-          // Continue avec les autres trajets
         }
       }
 
@@ -105,34 +113,39 @@ export class MovingMatchingService {
     // Trier par score (meilleur = plus faible)
     matches.sort((a, b) => a.match_score - b.match_score);
     
-    console.log(`✅ ${matches.length} matchs trouvés pour ${client.name}`);
+    console.log(`🎉 RÉSULTAT FINAL: ${matches.length} matchs trouvés pour ${client.name}`);
+    matches.forEach((match, i) => {
+      console.log(`${i+1}. ${match.move.company_name} - ${match.match_type} - ${match.distance_km}km - Score: ${match.match_score}`);
+    });
+    
     return matches;
   }
 
   /**
-   * Vérifie trajet aller - même direction
+   * Vérifie trajet aller - même direction - VERSION SIMPLIFIÉE
    */
   private static async checkOutboundMatch(client: MovingClient, move: MovingRoute): Promise<MatchResult | null> {
     try {
-      // Calculer les distances entre points de départ et d'arrivée
-      const departureDistance = await this.calculateDistanceQuick(
+      console.log(`  🔍 Check ALLER: Client ${client.departure_postal_code}→${client.arrival_postal_code} vs Trajet ${move.departure_postal_code}→${move.arrival_postal_code}`);
+
+      // Calculer les distances
+      const departureDistance = await this.calculateDistanceSimple(
         client.departure_postal_code!,
-        move.departure_postal_code,
-        client.departure_city,
-        move.departure_city
+        move.departure_postal_code
       );
 
-      const arrivalDistance = await this.calculateDistanceQuick(
+      const arrivalDistance = await this.calculateDistanceSimple(
         client.arrival_postal_code!,
-        move.arrival_postal_code,
-        client.arrival_city,
-        move.arrival_city
+        move.arrival_postal_code
       );
 
       const maxDistance = Math.max(departureDistance, arrivalDistance);
       const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
       
-      // Critères plus permissifs
+      console.log(`    📏 Distances: départ=${departureDistance}km, arrivée=${arrivalDistance}km, max=${maxDistance}km`);
+      console.log(`    📅 Différence date: ${dateDiff} jours`);
+
+      // Critères TRÈS permissifs
       const isValidDistance = maxDistance <= this.MAX_DISTANCE_KM;
       const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
       
@@ -140,12 +153,14 @@ export class MovingMatchingService {
       const availableVolume = Math.max(0, move.max_volume - move.used_volume);
       const volumeCompatible = clientVolume <= availableVolume;
 
-      // Accepter le match même si volume légèrement dépassé (jusqu'à 20%)
-      const volumeFlexible = clientVolume <= (availableVolume * 1.2);
-      const finalVolumeCheck = volumeCompatible || volumeFlexible;
+      console.log(`    ✅ Critères: distance=${isValidDistance} (${maxDistance}≤${this.MAX_DISTANCE_KM}), date=${isValidDate} (${dateDiff}≤${this.MAX_DATE_DIFF_DAYS}), volume=${volumeCompatible} (${clientVolume}≤${availableVolume})`);
 
-      if (isValidDistance && isValidDate && finalVolumeCheck) {
-        return {
+      // Accepter si au moins 2 critères sur 3 sont OK
+      const validCriteria = [isValidDistance, isValidDate, volumeCompatible].filter(Boolean).length;
+      const isValid = validCriteria >= 2;
+
+      if (isValid) {
+        const match: MatchResult = {
           client,
           move,
           match_type: 'grouped_outbound',
@@ -153,12 +168,17 @@ export class MovingMatchingService {
           date_diff_days: Math.round(dateDiff),
           volume_compatible: volumeCompatible,
           available_volume_after: Math.max(0, availableVolume - clientVolume),
-          match_score: maxDistance + (dateDiff * 2) + (volumeCompatible ? 0 : 20),
+          match_score: maxDistance + (dateDiff * 2) + (volumeCompatible ? 0 : 50),
           is_valid: true,
           match_reference: `ALLER-${client.id}-${move.id}`,
-          explanation: `Trajet groupé même direction: ${Math.round(departureDistance)}km départ, ${Math.round(arrivalDistance)}km arrivée. Volume: ${clientVolume}/${availableVolume}m³`,
+          explanation: `Trajet groupé: ${Math.round(departureDistance)}km départ, ${Math.round(arrivalDistance)}km arrivée. Volume: ${clientVolume}/${availableVolume}m³`,
           scenario: 1
         };
+
+        console.log(`    🎉 MATCH ALLER VALIDÉ!`);
+        return match;
+      } else {
+        console.log(`    ❌ Match aller rejeté: seulement ${validCriteria}/3 critères OK`);
       }
 
     } catch (error) {
@@ -169,28 +189,29 @@ export class MovingMatchingService {
   }
 
   /**
-   * Vérifie trajet retour - direction inverse
+   * Vérifie trajet retour - direction inverse - VERSION SIMPLIFIÉE
    */
   private static async checkReturnMatch(client: MovingClient, move: MovingRoute): Promise<MatchResult | null> {
     try {
+      console.log(`  🔍 Check RETOUR: Client ${client.departure_postal_code}→${client.arrival_postal_code} vs Trajet ${move.arrival_postal_code}→${move.departure_postal_code}`);
+
       // Pour le retour: client départ = arrivée camion, client arrivée = départ camion
-      const departureDistance = await this.calculateDistanceQuick(
+      const departureDistance = await this.calculateDistanceSimple(
         client.departure_postal_code!,
-        move.arrival_postal_code,
-        client.departure_city,
-        move.arrival_city
+        move.arrival_postal_code
       );
 
-      const arrivalDistance = await this.calculateDistanceQuick(
+      const arrivalDistance = await this.calculateDistanceSimple(
         client.arrival_postal_code!,
-        move.departure_postal_code,
-        client.arrival_city,
-        move.departure_city
+        move.departure_postal_code
       );
 
       const maxDistance = Math.max(departureDistance, arrivalDistance);
       const dateDiff = this.calculateDateDifference(client.desired_date!, move.departure_date);
       
+      console.log(`    📏 Distances retour: départ=${departureDistance}km, arrivée=${arrivalDistance}km, max=${maxDistance}km`);
+      console.log(`    📅 Différence date: ${dateDiff} jours`);
+
       // Critères identiques pour le retour
       const isValidDistance = maxDistance <= this.MAX_DISTANCE_KM;
       const isValidDate = dateDiff <= this.MAX_DATE_DIFF_DAYS;
@@ -198,11 +219,14 @@ export class MovingMatchingService {
       const clientVolume = client.estimated_volume || 1;
       const availableVolume = Math.max(0, move.max_volume - move.used_volume);
       const volumeCompatible = clientVolume <= availableVolume;
-      const volumeFlexible = clientVolume <= (availableVolume * 1.2);
-      const finalVolumeCheck = volumeCompatible || volumeFlexible;
 
-      if (isValidDistance && isValidDate && finalVolumeCheck) {
-        return {
+      console.log(`    ✅ Critères retour: distance=${isValidDistance}, date=${isValidDate}, volume=${volumeCompatible}`);
+
+      const validCriteria = [isValidDistance, isValidDate, volumeCompatible].filter(Boolean).length;
+      const isValid = validCriteria >= 2;
+
+      if (isValid) {
+        const match: MatchResult = {
           client,
           move,
           match_type: 'return_trip',
@@ -210,12 +234,17 @@ export class MovingMatchingService {
           date_diff_days: Math.round(dateDiff),
           volume_compatible: volumeCompatible,
           available_volume_after: Math.max(0, availableVolume - clientVolume),
-          match_score: maxDistance + (dateDiff * 2) + 10, // Léger bonus pour trajet retour
+          match_score: maxDistance + (dateDiff * 2) + 10, // Bonus pour trajet retour
           is_valid: true,
           match_reference: `RETOUR-${client.id}-${move.id}`,
           explanation: `Trajet retour optimisé: évite retour à vide. Distance max: ${Math.round(maxDistance)}km. Volume: ${clientVolume}/${availableVolume}m³`,
           scenario: 2
         };
+
+        console.log(`    🎉 MATCH RETOUR VALIDÉ!`);
+        return match;
+      } else {
+        console.log(`    ❌ Match retour rejeté: seulement ${validCriteria}/3 critères OK`);
       }
 
     } catch (error) {
@@ -226,49 +255,56 @@ export class MovingMatchingService {
   }
 
   /**
-   * Calcul de distance rapide avec fallback immédiat
+   * Calcul de distance SIMPLE et RAPIDE
    */
-  private static async calculateDistanceQuick(
-    postal1: string, 
-    postal2: string, 
-    city1?: string, 
-    city2?: string
-  ): Promise<number> {
-    try {
-      // Timeout très court pour Google Maps
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 seconde max
+  private static async calculateDistanceSimple(postal1: string, postal2: string): Promise<number> {
+    // Si même code postal, distance = 0
+    if (postal1 === postal2) {
+      return 0;
+    }
 
-      const result = await calculateDistanceByPostalCode(postal1, postal2, city1, city2);
-      clearTimeout(timeoutId);
+    try {
+      // Essai Google Maps avec timeout court
+      const result = await Promise.race([
+        calculateDistanceByPostalCode(postal1, postal2),
+        new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 2000)
+        )
+      ]);
       
       if (result?.distance && result.distance > 0) {
+        console.log(`  📍 Google Maps: ${postal1} → ${postal2} = ${result.distance}km`);
         return result.distance;
       }
     } catch (error) {
-      console.log(`⚠️ Google Maps échoué pour ${postal1}-${postal2}, utilisation fallback`);
+      console.log(`  ⚠️ Google Maps failed for ${postal1} → ${postal2}, using fallback`);
     }
 
-    // Fallback basé sur départements - plus permissif
-    return this.getFallbackDistanceGenerous(postal1, postal2);
+    // Fallback basé sur départements
+    return this.getFallbackDistance(postal1, postal2);
   }
 
   /**
-   * Distance de fallback généreuse basée sur les départements
+   * Distance de fallback TRÈS généreuse
    */
-  private static getFallbackDistanceGenerous(postal1: string, postal2: string): number {
+  private static getFallbackDistance(postal1: string, postal2: string): number {
     try {
       const dept1 = parseInt(postal1.substring(0, 2));
       const dept2 = parseInt(postal2.substring(0, 2));
       
       if (isNaN(dept1) || isNaN(dept2)) {
-        return 80; // Distance par défaut raisonnable
+        console.log(`  📍 Fallback: ${postal1} → ${postal2} = 50km (départements invalides)`);
+        return 50;
       }
       
-      const distance = Math.abs(dept1 - dept2) * 30; // 30km par département de différence
-      return Math.max(distance, 10); // Minimum 10km
+      const distance = Math.abs(dept1 - dept2) * 25; // 25km par département de différence
+      const finalDistance = Math.max(distance, 5); // Minimum 5km
+      
+      console.log(`  📍 Fallback: dept ${dept1} → dept ${dept2} = ${finalDistance}km`);
+      return finalDistance;
     } catch (error) {
-      return 80; // Distance par défaut
+      console.log(`  📍 Fallback error: ${postal1} → ${postal2} = 50km (par défaut)`);
+      return 50;
     }
   }
 
@@ -300,9 +336,12 @@ export class MovingMatchingService {
     try {
       const d1 = new Date(date1);
       const d2 = new Date(date2);
-      return Math.abs(d1.getTime() - d2.getTime()) / (1000 * 3600 * 24);
+      const diffTime = Math.abs(d1.getTime() - d2.getTime());
+      const diffDays = diffTime / (1000 * 3600 * 24);
+      return diffDays;
     } catch (error) {
-      return 999; // Valeur élevée pour échouer le test de date
+      console.error('❌ Erreur calcul date:', error);
+      return 999;
     }
   }
 
@@ -310,7 +349,7 @@ export class MovingMatchingService {
    * Trouve tous les matchs pour l'onglet matching - VERSION OPTIMISÉE
    */
   public static async findAllMatches(): Promise<MatchResult[]> {
-    console.log('🎯 Recherche tous les matchs - version optimisée');
+    console.log('🎯 === RECHERCHE GLOBALE DE TOUS LES MATCHS ===');
 
     try {
       const { data: clients, error: clientsError } = await supabase
@@ -320,36 +359,34 @@ export class MovingMatchingService {
         .not('departure_postal_code', 'is', null)
         .not('arrival_postal_code', 'is', null)
         .not('desired_date', 'is', null)
-        .limit(50); // Plus de clients
+        .limit(100);
 
       if (clientsError || !clients || clients.length === 0) {
         console.error('❌ Aucun client trouvé:', clientsError);
         return [];
       }
 
-      console.log(`👥 ${clients.length} clients éligibles trouvés`);
+      console.log(`👥 ${clients.length} clients éligibles pour le matching:`);
+      clients.forEach(client => {
+        console.log(`- ${client.name} (${client.client_reference}): ${client.departure_postal_code} → ${client.arrival_postal_code}`);
+      });
 
       const allMatches: MatchResult[] = [];
       
-      // Traitement en parallèle pour plus de rapidité
-      const matchPromises = clients.map(async (client) => {
+      // Traitement séquentiel pour debug
+      for (const client of clients) {
         try {
+          console.log(`\n🔍 === ANALYSE CLIENT: ${client.name} ===`);
           const clientMatches = await this.findMatchesForClient(client);
-          return clientMatches.slice(0, 3); // Top 3 matchs par client
+          allMatches.push(...clientMatches);
+          console.log(`✅ ${clientMatches.length} matchs trouvés pour ${client.name}`);
         } catch (error) {
           console.error(`❌ Erreur client ${client.id}:`, error);
-          return [];
         }
-      });
-
-      const allClientMatches = await Promise.all(matchPromises);
-      
-      // Flatten results
-      for (const clientMatches of allClientMatches) {
-        allMatches.push(...clientMatches);
       }
 
-      console.log(`✅ ${allMatches.length} matchs totaux trouvés`);
+      console.log(`\n🎉 === RÉSULTATS GLOBAUX ===`);
+      console.log(`📊 ${allMatches.length} matchs totaux trouvés`);
       console.log(`📊 Répartition: ${allMatches.filter(m => m.scenario === 1).length} aller, ${allMatches.filter(m => m.scenario === 2).length} retour`);
       
       return allMatches.filter(match => match.is_valid);
