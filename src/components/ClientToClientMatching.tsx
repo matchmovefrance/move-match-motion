@@ -169,7 +169,7 @@ const ClientToClientMatching = () => {
               
               {!match.is_feasible && (
                 <div className="mt-2 p-2 bg-orange-100 rounded text-xs text-orange-800">
-                  ⚠️ Volume total ({match.combined_volume}m³) > capacité standard. Contacter un prestataire pour organiser un trajet dédié.
+                  ⚠️ Volume total ({match.combined_volume}m³) &gt; capacité standard. Contacter un prestataire pour organiser un trajet dédié.
                 </div>
               )}
             </div>

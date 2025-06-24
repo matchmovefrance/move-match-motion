@@ -48,6 +48,9 @@ const Index = () => {
       case 'optimized-matching': return React.createElement(
         React.lazy(() => import('@/components/OptimizedMatchingDashboard'))
       );
+      case 'client-matching': return React.createElement(
+        React.lazy(() => import('@/components/ClientToClientMatching'))
+      );
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
       case 'calendar': return <MoverCalendarTab />;
@@ -94,6 +97,7 @@ const Index = () => {
       { id: 'moves', label: 'Déménagements', icon: Truck },
       { id: 'optimized-matching', label: 'Matching Avancé', icon: Zap },
       { id: 'matching', label: 'Matching Simple', icon: Target },
+      { id: 'client-matching', label: 'Matching CLIENT', icon: Users2 },
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
