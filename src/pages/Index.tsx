@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Zap } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
@@ -44,6 +44,9 @@ const Index = () => {
       case 'moves': return <MoveManagement />;
       case 'matching': return <MatchFinder />;
       case 'match-analytics': return <MatchAnalytics />;
+      case 'optimized-matching': return React.createElement(
+        React.lazy(() => import('@/components/OptimizedMatchingDashboard'))
+      );
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
       case 'calendar': return <MoverCalendarTab />;
@@ -88,11 +91,12 @@ const Index = () => {
       { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
       { id: 'clients', label: 'Clients', icon: Users },
       { id: 'moves', label: 'Déménagements', icon: Truck },
-      { id: 'matching', label: 'Matching', icon: Target },
+      { id: 'optimized-matching', label: 'Matching Avancé', icon: Zap },
+      { id: 'matching', label: 'Matching Simple', icon: Target },
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
-      { id: 'diagnostic', label: 'Diagnostic', icon: Shield }, // Nouvel onglet pour diagnostic
+      { id: 'diagnostic', label: 'Diagnostic', icon: Shield },
     ];
 
     // Les agents et admins voient la gestion (mais contenu différent)
@@ -135,7 +139,9 @@ const Index = () => {
 
         {/* Contenu de l'onglet actif */}
         <div className="bg-white rounded-xl shadow-sm p-8">
-          {renderTabComponent(activeTab)}
+          <React.Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+            {renderTabComponent(activeTab)}
+          </React.Suspense>
         </div>
       </div>
     </div>
