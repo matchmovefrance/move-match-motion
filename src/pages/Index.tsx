@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Zap } from 'lucide-react';
 import Analytics from '@/components/Analytics';
@@ -146,6 +147,43 @@ const Index = () => {
       </div>
     </div>
   );
+
+  function getTabs() {
+    // Admins complets (emails hardcodés uniquement)
+    const isFullAdmin = user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr';
+    
+    if (profile?.role === 'demenageur') {
+      // Déménageur users only see the calendar
+      return [
+        { id: 'calendar', label: 'Mon Planning', icon: Calendar }
+      ];
+    }
+
+    // Tabs de base pour admin et agent
+    const baseTabs = [
+      { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
+      { id: 'clients', label: 'Clients', icon: Users },
+      { id: 'moves', label: 'Déménagements', icon: Truck },
+      { id: 'optimized-matching', label: 'Matching Avancé', icon: Zap },
+      { id: 'matching', label: 'Matching Simple', icon: Target },
+      { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
+      { id: 'providers', label: 'Prestataires', icon: Settings },
+      { id: 'map', label: 'Carte', icon: Map },
+      { id: 'diagnostic', label: 'Diagnostic', icon: Shield },
+    ];
+
+    // Les agents et admins voient la gestion (mais contenu différent)
+    if (profile?.role === 'admin' || profile?.role === 'agent') {
+      baseTabs.push({ id: 'management', label: 'Gestion', icon: Settings });
+    }
+
+    // Seuls les admins complets voient les actions admin
+    if (isFullAdmin) {
+      baseTabs.push({ id: 'admin-actions', label: 'Admin', icon: Shield });
+    }
+
+    return baseTabs;
+  }
 };
 
 export default Index;
