@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Zap } from 'lucide-react';
+import { BarChart3, Users, Users2, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Zap } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
