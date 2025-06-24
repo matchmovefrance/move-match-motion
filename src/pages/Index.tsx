@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Users2, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Zap } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
-import MatchFinder from '@/components/MatchFinder';
+import UnifiedMatchingDashboard from '@/components/UnifiedMatchingDashboard';
 import MatchAnalytics from '@/components/MatchAnalytics';
 import ServiceProviders from '@/components/ServiceProviders';
 import GoogleMap from '@/components/GoogleMap';
@@ -42,14 +43,8 @@ const Index = () => {
       case 'analytics': return <Analytics />;
       case 'clients': return <ClientList />;
       case 'moves': return <MoveManagement />;
-      case 'matching': return <MatchFinder />;
+      case 'matching': return <UnifiedMatchingDashboard />;
       case 'match-analytics': return <MatchAnalytics />;
-      case 'optimized-matching': return React.createElement(
-        React.lazy(() => import('@/components/OptimizedMatchingDashboard'))
-      );
-      case 'client-matching': return React.createElement(
-        React.lazy(() => import('@/components/ClientToClientMatching'))
-      );
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
       case 'calendar': return <MoverCalendarTab />;
@@ -94,9 +89,7 @@ const Index = () => {
       { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
       { id: 'clients', label: 'Clients', icon: Users },
       { id: 'moves', label: 'Déménagements', icon: Truck },
-      { id: 'optimized-matching', label: 'Matching Avancé', icon: Zap },
-      { id: 'matching', label: 'Matching Simple', icon: Target },
-      { id: 'client-matching', label: 'Matching CLIENT', icon: Users2 },
+      { id: 'matching', label: 'Matching', icon: Target },
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },

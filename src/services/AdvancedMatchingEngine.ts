@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { loadGoogleMapsScript } from '@/lib/google-maps-config';
 
@@ -486,5 +485,114 @@ export class AdvancedMatchingEngine {
       is_feasible: totalVolume <= (move.max_volume - move.used_volume) && clientCluster.length <= 3,
       match_score: 150 - (estimatedTotalKm / clientCluster.length) + (savingsPercentage * 4) // Bonus fort pour les boucles
     };
+  }
+
+  /**
+   * Recherche de matchs optimisés
+   */
+  public static async findOptimizedMatches(): Promise<AdvancedMatchResult[]> {
+    console.log('🔥 MATCHING OPTIMISÉ - Recherche avancée');
+    
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Récupérer les données avec filtre de dates futures
+      const { data: clients, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .not('departure_postal_code', 'is', null)
+        .not('arrival_postal_code', 'is', null)
+        .not('desired_date', 'is', null)
+        .gte('desired_date', today.toISOString().split('T')[0]); // Dates futures uniquement
+
+      const { data: moves, error: movesError } = await supabase
+        .from('confirmed_moves')
+        .select('*')
+        .eq('status', 'confirmed')
+        .gt('available_volume', 0)
+        .gte('departure_date', today.toISOString().split('T')[0]); // Dates futures uniquement
+
+      if (clientsError || movesError || !clients || !moves) {
+        console.error('❌ Erreur récupération données:', { clientsError, movesError });
+        return [];
+      }
+
+      console.log(`📊 Données optimisées: ${clients.length} clients, ${moves.length} trajets (dates futures)`);
+
+      const matches: AdvancedMatchResult[] = [];
+
+      // Algorithme d'optimisation multi-critères
+      for (const client of clients) {
+        for (const move of moves) {
+          const optimizedMatch = await this.analyzeOptimizedMatch(client, move);
+          if (optimizedMatch && optimizedMatch.is_valid) {
+            matches.push(optimizedMatch);
+          }
+        }
+      }
+
+      // Tri par score d'optimisation
+      matches.sort((a, b) => b.optimization_score - a.optimization_score);
+
+      console.log(`🎯 ${matches.length} matchs optimisés trouvés (dates futures uniquement)`);
+      return matches;
+
+    } catch (error) {
+      console.error('❌ Erreur matching optimisé:', error);
+      return [];
+    }
+  }
+
+  private static async analyzeOptimizedMatch(client: any, move: any): Promise<AdvancedMatchResult> {
+    const { data: optimizedMatch, error: optimizedMatchError } = await supabase
+      .from('optimized_matches')
+      .select('*')
+      .eq('client_id', client.id)
+      .eq('move_id', move.id)
+      .eq('status', 'confirmed')
+      .limit(1);
+
+    if (optimizedMatchError || !optimizedMatch) {
+      console.error('❌ Erreur analyse match optimisé:', { optimizedMatchError });
+      return {
+        is_valid: false,
+        match_score: 0,
+        optimization_score: 0,
+        match_reference: null
+      };
+    }
+
+    return {
+      is_valid: true,
+      match_score: optimizedMatch[0].match_score,
+      optimization_score: optimizedMatch[0].optimization_score,
+      match_reference: optimizedMatch[0].match_reference
+    };
+  }
+
+  private static async calculateDistance(from: string, to: string): Promise<number> {
+    const { data: distance, error: distanceError } = await supabase
+      .from('distance_matrix')
+      .select('*')
+      .eq('from_postal_code', from)
+      .eq('to_postal_code', to);
+
+    if (distanceError || !distance || distance.length === 0) {
+      console.error('❌ Erreur calcul distance:', { distanceError });
+      return 999;
+    }
+
+    return distance[0].distance;
+  }
+
+  private static async calculateDateDiff(date1: string, date2: string): Promise<number> {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return Math.abs((d1.getTime() - d2.getTime()) / (1000 * 3600 * 24));
+  }
+
+  private static generateMatchReference(client: any, move: any): string {
+    return `${client.name} - ${move.company_name} - ${move.departure_date}`;
   }
 }
