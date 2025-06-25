@@ -1,5 +1,6 @@
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { GoogleMap, useJSApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,7 @@ interface MapViewProps {
 }
 
 const MapView: React.FC<MapViewProps> = ({ clients, moves }) => {
-  const { isLoaded, loadError } = useJSApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
     libraries: libraries,
   });
@@ -187,7 +188,7 @@ const MapView: React.FC<MapViewProps> = ({ clients, moves }) => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Users className="h-4 w-4 text-blue-600" />
-                      <span><strong>Clients:</strong> {selectedMove.number_of_clients || 0}</span>
+                      <span><strong>Clients:</strong> 0</span>
                     </div>
                   </div>
                 </CardContent>
