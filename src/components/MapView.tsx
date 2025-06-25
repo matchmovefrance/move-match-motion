@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,7 +46,7 @@ const mapContainerStyle = {
   height: '400px',
 };
 
-const libraries = ['places'];
+const libraries: ("places")[] = ['places'];
 
 interface MapViewProps {
   clients: Client[];
