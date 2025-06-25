@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
-import OptimizedTrajetsDashboard from '@/components/OptimizedTrajetsDashboard';
+import MatchFinder from '@/components/MatchFinder';
 import MatchAnalytics from '@/components/MatchAnalytics';
 import ServiceProviders from '@/components/ServiceProviders';
 import GoogleMap from '@/components/GoogleMap';
@@ -42,7 +42,7 @@ const Index = () => {
       case 'analytics': return <Analytics />;
       case 'clients': return <ClientList />;
       case 'moves': return <MoveManagement />;
-      case 'trajets-optimises': return <OptimizedTrajetsDashboard />;
+      case 'matching': return <MatchFinder />;
       case 'match-analytics': return <MatchAnalytics />;
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
@@ -83,16 +83,16 @@ const Index = () => {
       ];
     }
 
-    // Tabs de base pour admin et agent - SUPPRESSION de l'onglet matching professionnel
+    // Tabs de base pour admin et agent
     const baseTabs = [
       { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
       { id: 'clients', label: 'Clients', icon: Users },
       { id: 'moves', label: 'Déménagements', icon: Truck },
-      { id: 'trajets-optimises', label: 'Trajets Optimisés', icon: Target }, // NOUVEAU
+      { id: 'matching', label: 'Matching', icon: Target },
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
-      { id: 'diagnostic', label: 'Diagnostic', icon: Shield },
+      { id: 'diagnostic', label: 'Diagnostic', icon: Shield }, // Nouvel onglet pour diagnostic
     ];
 
     // Les agents et admins voient la gestion (mais contenu différent)
@@ -135,9 +135,7 @@ const Index = () => {
 
         {/* Contenu de l'onglet actif */}
         <div className="bg-white rounded-xl shadow-sm p-8">
-          <React.Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
-            {renderTabComponent(activeTab)}
-          </React.Suspense>
+          {renderTabComponent(activeTab)}
         </div>
       </div>
     </div>

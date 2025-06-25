@@ -12,22 +12,9 @@ export const useMatchActions = () => {
       setLoading(true);
       console.log('✅ Acceptation du match:', matchData.match_reference);
 
-      // Vérifier si ce match existe déjà dans analytics pour éviter les doublons
-      const { data: existingMatch, error: checkError } = await supabase
-        .from('move_matches')
-        .select('id')
-        .eq('client_id', matchData.client.id)
-        .eq('move_id', matchData.move.id)
-        .eq('match_type', 'accepted_match')
-        .maybeSingle();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        throw checkError;
-      }
-
-      // N'enregistrer dans analytics que si le match n'existe pas déjà
-      if (!existingMatch) {
-        console.log('📊 Enregistrement match analytics:', matchData.match_reference);
+      // Auto-enregistrer TOUS les matchs valides dans analytics avant l'acceptation
+      if (matchData.is_valid) {
+        console.log('📊 Auto-enregistrement match analytics:', matchData.match_reference);
         
         const { error: analyticsError } = await supabase
           .from('move_matches')
@@ -45,10 +32,8 @@ export const useMatchActions = () => {
         if (analyticsError) {
           console.warn('⚠️ Erreur enregistrement analytics (non bloquant):', analyticsError);
         } else {
-          console.log('✅ Match enregistré dans analytics');
+          console.log('✅ Match auto-enregistré dans analytics');
         }
-      } else {
-        console.log('⚠️ Match déjà existant dans analytics, passage');
       }
 
       // Créer une opportunité dans pricing_opportunities
@@ -152,15 +137,12 @@ export const useMatchActions = () => {
 
       if (clientError) throw clientError;
 
-      // IMPORTANT: Mettre à jour le volume utilisé du trajet correctement
+      // Mettre à jour le volume utilisé du trajet
       const newUsedVolume = (matchData.move.used_volume || 0) + (matchData.client.estimated_volume || 0);
-      const newAvailableVolume = Math.max(0, (matchData.move.available_volume || 0) - (matchData.client.estimated_volume || 0));
-      
       const { error: moveError } = await supabase
         .from('confirmed_moves')
         .update({ 
           used_volume: newUsedVolume,
-          available_volume: newAvailableVolume, // Mise à jour du volume disponible
           status: 'confirmed',
           number_of_clients: (matchData.move.number_of_clients || 0) + 1
         })
@@ -192,41 +174,24 @@ export const useMatchActions = () => {
       setLoading(true);
       console.log('❌ Rejet du match:', matchData.match_reference);
 
-      // Vérifier si ce match existe déjà dans analytics pour éviter les doublons
-      const { data: existingMatch, error: checkError } = await supabase
+      // Auto-enregistrer le match rejeté dans analytics
+      console.log('📊 Auto-enregistrement match rejeté analytics:', matchData.match_reference);
+      
+      const { error: analyticsError } = await supabase
         .from('move_matches')
-        .select('id')
-        .eq('client_id', matchData.client.id)
-        .eq('move_id', matchData.move.id)
-        .eq('match_type', 'rejected_manual')
-        .maybeSingle();
+        .insert({
+          client_id: matchData.client.id,
+          move_id: matchData.move.id,
+          match_type: 'rejected_manual',
+          volume_ok: matchData.volume_compatible,
+          combined_volume: 0,
+          distance_km: matchData.distance_km,
+          date_diff_days: matchData.date_diff_days,
+          is_valid: matchData.is_valid
+        });
 
-      if (checkError && checkError.code !== 'PGRST116') {
-        throw checkError;
-      }
-
-      // N'enregistrer dans analytics que si le match n'existe pas déjà
-      if (!existingMatch) {
-        console.log('📊 Enregistrement match rejeté analytics:', matchData.match_reference);
-        
-        const { error: analyticsError } = await supabase
-          .from('move_matches')
-          .insert({
-            client_id: matchData.client.id,
-            move_id: matchData.move.id,
-            match_type: 'rejected_manual',
-            volume_ok: matchData.volume_compatible,
-            combined_volume: 0,
-            distance_km: matchData.distance_km,
-            date_diff_days: matchData.date_diff_days,
-            is_valid: matchData.is_valid
-          });
-
-        if (analyticsError) {
-          console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
-        }
-      } else {
-        console.log('⚠️ Match rejeté déjà existant dans analytics, passage');
+      if (analyticsError) {
+        console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
       }
 
       // Mettre à jour le statut du client

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
@@ -12,7 +13,6 @@ import SimpleClientFormReplacement from './SimpleClientFormReplacement';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { ClientMatchesDialog } from './ClientMatchesDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import ClientFilter from './ClientFilter';
 
 interface Client {
   id: number;
@@ -39,7 +39,6 @@ const ClientList = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
-  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -48,11 +47,8 @@ const ClientList = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
-  // États séparés et protégés pour le dialogue de match
   const [showMatchesDialog, setShowMatchesDialog] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [isProcessingMatch, setIsProcessingMatch] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -63,6 +59,7 @@ const ClientList = () => {
       setLoading(true);
       console.log('📋 Chargement des clients depuis la table unifiée...');
       
+      // Charger uniquement depuis la table clients unifiée
       const { data: clientsData, error } = await supabase
         .from('clients')
         .select('*')
@@ -91,11 +88,7 @@ const ClientList = () => {
     }
   };
 
-  const handleFilteredData = (filtered: Client[]) => {
-    setFilteredClients(filtered);
-  };
-
-  const finalFilteredClients = filteredClients.filter(client =>
+  const filteredClients = clients.filter(client =>
     client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.client_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,93 +129,9 @@ const ClientList = () => {
     }
   };
 
-  const handleFindMatch = async (client: Client, event?: React.MouseEvent) => {
-    // Empêcher la propagation et les clics multiples
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-
-    // Protection contre les clics multiples
-    if (isProcessingMatch) {
-      console.log('⚠️ Traitement en cours, ignorer le clic');
-      return;
-    }
-
-    setIsProcessingMatch(true);
-    
-    try {
-      console.log('🎯 Début recherche match pour client:', {
-        id: client.id,
-        name: client.name,
-        reference: client.client_reference,
-        departure: client.departure_postal_code,
-        arrival: client.arrival_postal_code
-      });
-
-      // Validation stricte des données requises
-      if (!client.departure_postal_code?.trim() || !client.arrival_postal_code?.trim()) {
-        toast({
-          title: "Données incomplètes",
-          description: "Le client doit avoir des codes postaux de départ et d'arrivée pour rechercher des matchs",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!client.departure_city?.trim() || !client.arrival_city?.trim()) {
-        toast({
-          title: "Données incomplètes", 
-          description: "Le client doit avoir des villes de départ et d'arrivée complètes",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Fermer d'abord tout dialogue ouvert
-      if (showMatchesDialog) {
-        setShowMatchesDialog(false);
-        setSelectedClient(null);
-        // Attendre que le dialogue se ferme
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-
-      // Ouvrir le nouveau dialogue
-      setSelectedClient(client);
-      setShowMatchesDialog(true);
-      
-      console.log('✅ Dialogue de match configuré pour:', client.client_reference);
-      
-    } catch (error) {
-      console.error('❌ Erreur ouverture dialogue match:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible d'ouvrir le dialogue de recherche de match",
-        variant: "destructive",
-      });
-    } finally {
-      // Délai pour éviter les clics rapides successifs
-      setTimeout(() => {
-        setIsProcessingMatch(false);
-      }, 1000);
-    }
-  };
-
-  const handleCloseMatchesDialog = () => {
-    console.log('🔒 Fermeture dialogue matches');
-    setShowMatchesDialog(false);
-    setSelectedClient(null);
-    setIsProcessingMatch(false);
-  };
-
-  // Fonction pour vérifier si un client peut rechercher des matchs
-  const canSearchMatches = (client: Client): boolean => {
-    return !!(
-      client.departure_postal_code?.trim() && 
-      client.arrival_postal_code?.trim() &&
-      client.departure_city?.trim() &&
-      client.arrival_city?.trim()
-    );
+  const handleFindMatch = async (client: Client) => {
+    setSelectedClient(client);
+    setShowMatchesDialog(true);
   };
 
   if (showAddForm) {
@@ -302,19 +211,13 @@ const ClientList = () => {
         <div className="flex items-center space-x-3">
           <Users className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-800">Clients</h2>
-          <Badge variant="secondary">{finalFilteredClients.length}</Badge>
+          <Badge variant="secondary">{filteredClients.length}</Badge>
         </div>
         <Button onClick={() => setShowAddForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Nouveau Client
         </Button>
       </div>
-
-      <ClientFilter
-        data={clients}
-        onFilter={handleFilteredData}
-        label="Filtrer les clients"
-      />
 
       <div className="flex items-center space-x-4">
         <div className="relative flex-1">
@@ -334,131 +237,119 @@ const ClientList = () => {
           <p>Chargement...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {finalFilteredClients.map((client) => {
-            const canSearch = canSearchMatches(client);
-            
-            return (
-              <Card key={client.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredClients.map((client) => (
+            <Card key={client.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">{client.name}</CardTitle>
+                  <div className="flex items-center space-x-1">
+                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                      Client
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <span className="sr-only">Ouvrir menu</span>
+                          <div className="h-4 w-4">⋮</div>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditingClient(client)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setClientToDelete(client);
+                            setShowDeleteDialog(true);
+                          }}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600">
+                  <strong>Réf:</strong> {client.client_reference}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{client.name}</CardTitle>
-                    <div className="flex items-center space-x-1">
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                        Client
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <span className="sr-only">Ouvrir menu</span>
-                            <div className="h-4 w-4">⋮</div>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditingClient(client)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Modifier
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              setClientToDelete(client);
-                              setShowDeleteDialog(true);
-                            }}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Supprimer
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    <span className="text-gray-600">Départ:</span>
+                    <span className="font-medium">
+                      {client.departure_postal_code} {client.departure_city}
+                    </span>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    <strong>Réf:</strong> {client.client_reference}
+                </div>
+                
+                <div className="text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Arrivée:</span>
+                    <span className="font-medium">
+                      {client.arrival_postal_code} {client.arrival_city}
+                    </span>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
+                </div>
+
+                {client.desired_date && (
                   <div className="text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Départ:</span>
+                      <span className="text-gray-600">Date souhaitée:</span>
                       <span className="font-medium">
-                        {client.departure_postal_code} {client.departure_city}
+                        {new Date(client.desired_date).toLocaleDateString('fr-FR')}
                       </span>
                     </div>
                   </div>
-                  
+                )}
+
+                {client.estimated_volume && (
                   <div className="text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Arrivée:</span>
-                      <span className="font-medium">
-                        {client.arrival_postal_code} {client.arrival_city}
-                      </span>
+                      <span className="text-gray-600">Volume estimé:</span>
+                      <span className="font-medium">{client.estimated_volume} m³</span>
                     </div>
                   </div>
+                )}
 
-                  {client.desired_date && (
-                    <div className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Date souhaitée:</span>
-                        <span className="font-medium">
-                          {new Date(client.desired_date).toLocaleDateString('fr-FR')}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {client.estimated_volume && (
-                    <div className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Volume estimé:</span>
-                        <span className="font-medium">{client.estimated_volume} m³</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Statut:</span>
-                      <Badge variant={client.status === 'pending' ? 'secondary' : 'default'}>
-                        {client.status === 'pending' ? 'En attente' : client.status}
-                      </Badge>
-                    </div>
+                <div className="text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Statut:</span>
+                    <Badge variant={client.status === 'pending' ? 'secondary' : 'default'}>
+                      {client.status === 'pending' ? 'En attente' : client.status}
+                    </Badge>
                   </div>
+                </div>
 
-                  <div className="flex space-x-2 pt-3">
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => setEditingClient(client)}
-                      className="flex-1"
-                    >
-                      Modifier
-                    </Button>
-                    <Button 
-                      size="sm"
-                      onClick={(e) => handleFindMatch(client, e)}
-                      className="flex-1"
-                      disabled={!canSearch || isProcessingMatch}
-                      title={!canSearch ? "Données de départ et d'arrivée requises" : "Rechercher des matchs pour ce client"}
-                    >
-                      <Target className="h-4 w-4 mr-1" />
-                      {isProcessingMatch ? 'Recherche...' : 'Trouver un match'}
-                    </Button>
-                  </div>
-
-                  {!canSearch && (
-                    <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded mt-2">
-                      ⚠️ Codes postaux et villes requis pour rechercher des matchs
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                <div className="flex space-x-2 pt-3">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setEditingClient(client)}
+                    className="flex-1"
+                  >
+                    Modifier
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => handleFindMatch(client)}
+                    className="flex-1"
+                  >
+                    <Target className="h-4 w-4 mr-1" />
+                    Trouver un match
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      {finalFilteredClients.length === 0 && !loading && (
+      {filteredClients.length === 0 && !loading && (
         <div className="text-center py-12">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600">
@@ -467,22 +358,21 @@ const ClientList = () => {
         </div>
       )}
 
-      {/* Dialogue de suppression */}
       <DeleteConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
-        onConfirm={handleDeleteClient}
         title="Supprimer le client"
-        description={`Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.`}
+        description="Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible."
         itemName={clientToDelete?.name || clientToDelete?.client_reference || 'Client'}
+        onConfirm={handleDeleteClient}
         isDeleting={isDeleting}
       />
 
-      {/* Dialogue de recherche de matchs */}
       <ClientMatchesDialog
-        isOpen={showMatchesDialog}
-        onClose={handleCloseMatchesDialog}
-        client={selectedClient}
+        open={showMatchesDialog}
+        onOpenChange={setShowMatchesDialog}
+        clientId={selectedClient?.id || 0}
+        clientName={selectedClient?.name || 'Client'}
       />
     </motion.div>
   );

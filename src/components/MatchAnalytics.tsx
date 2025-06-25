@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Users, Truck, Target, Eye, Filter, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Truck, Target, Eye, Filter, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { MatchDetailsDialog } from './MatchDetailsDialog';
-import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { MarkCompleteDialog } from './MarkCompleteDialog';
-import { useMatchActions } from '@/hooks/useMatchActions';
 
 interface Match {
   id: number;
@@ -36,7 +33,6 @@ interface Match {
 
 const MatchAnalytics = () => {
   const { toast } = useToast();
-  const { markAsCompleted, loading: matchActionsLoading } = useMatchActions();
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
@@ -45,13 +41,6 @@ const MatchAnalytics = () => {
   // États pour le dialogue de détails
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
-  
-  // États pour les dialogues de confirmation
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
-  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
-  const [matchToComplete, setMatchToComplete] = useState<Match | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchMatches();
@@ -110,59 +99,10 @@ const MatchAnalytics = () => {
     }
   };
 
-  const handleDeleteMatch = async () => {
-    if (!matchToDelete) return;
-    
-    try {
-      setIsDeleting(true);
-      console.log('🗑️ Suppression du match:', matchToDelete.id);
-
-      const { error } = await supabase
-        .from('move_matches')
-        .delete()
-        .eq('id', matchToDelete.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Match supprimé",
-        description: `Le match MTH-${String(matchToDelete.id).padStart(6, '0')} a été supprimé définitivement`,
-      });
-
-      // Rafraîchir la liste
-      await fetchMatches();
-      
-    } catch (error) {
-      console.error('❌ Erreur suppression match:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de supprimer le match",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleting(false);
-      setShowDeleteDialog(false);
-      setMatchToDelete(null);
-    }
-  };
-
-  const handleCompleteMatch = async () => {
-    if (!matchToComplete) return;
-    
-    const success = await markAsCompleted(matchToComplete.id);
-    if (success) {
-      await fetchMatches();
-    }
-    
-    setShowCompleteDialog(false);
-    setMatchToComplete(null);
-  };
-
   const stats = {
     total: matches.length,
     valid: matches.filter(match => match.is_valid).length,
     partial: matches.filter(match => !match.is_valid && match.match_type === 'partial').length,
-    completed: matches.filter(match => match.match_type === 'completed').length,
     uniqueClients: [...new Set(matches.map(match => match.client_id))].length,
     uniqueMoves: [...new Set(matches.map(match => match.move_id))].length,
     avgDistance: matches.length > 0 ? Math.round(matches.reduce((acc, match) => acc + match.distance_km, 0) / matches.length) : 0,
@@ -204,16 +144,6 @@ const MatchAnalytics = () => {
     setShowDetailsDialog(true);
   };
 
-  const handleDeleteClick = (match: Match) => {
-    setMatchToDelete(match);
-    setShowDeleteDialog(true);
-  };
-
-  const handleCompleteClick = (match: Match) => {
-    setMatchToComplete(match);
-    setShowCompleteDialog(true);
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -247,7 +177,7 @@ const MatchAnalytics = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.valid} valides • {stats.partial} partiels • {stats.completed} terminés
+              {stats.valid} valides • {stats.partial} partiels
             </p>
           </CardContent>
         </Card>
@@ -346,11 +276,7 @@ const MatchAnalytics = () => {
                 <div
                   key={match.id}
                   className={`flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors ${
-                    match.match_type === 'completed' 
-                      ? 'border-green-200 bg-green-50/30' 
-                      : match.is_valid 
-                        ? 'border-green-200 bg-green-50/30' 
-                        : 'border-orange-200 bg-orange-50/30'
+                    match.is_valid ? 'border-green-200 bg-green-50/30' : 'border-orange-200 bg-orange-50/30'
                   }`}
                 >
                   <div className="flex-1">
@@ -358,19 +284,8 @@ const MatchAnalytics = () => {
                       <Badge variant="outline">
                         MTH-{String(match.id).padStart(6, '0')}
                       </Badge>
-                      <Badge className={
-                        match.match_type === 'completed'
-                          ? 'bg-gray-100 text-gray-800'
-                          : match.is_valid 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-orange-100 text-orange-800'
-                      }>
-                        {match.match_type === 'completed' 
-                          ? 'Terminé' 
-                          : match.is_valid 
-                            ? 'Match Valide' 
-                            : 'Match Partiel'
-                        }
+                      <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
+                        {match.is_valid ? 'Match Valide' : 'Match Partiel'}
                       </Badge>
                       <Badge variant="outline" className="text-xs">
                         {match.match_type}
@@ -392,40 +307,14 @@ const MatchAnalytics = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleViewMatch(match)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Détails
-                    </Button>
-                    
-                    {match.match_type !== 'completed' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCompleteClick(match)}
-                        disabled={matchActionsLoading}
-                        className="text-green-600 hover:text-green-700 hover:border-green-300"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Terminé
-                      </Button>
-                    )}
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDeleteClick(match)}
-                      disabled={isDeleting}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Supprimer
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleViewMatch(match)}
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Détails
+                  </Button>
                 </div>
               ))}
             </div>
@@ -439,28 +328,6 @@ const MatchAnalytics = () => {
         onOpenChange={setShowDetailsDialog}
         match={selectedMatch}
         onMatchUpdated={fetchMatches}
-      />
-
-      {/* Dialogue de confirmation de suppression */}
-      <DeleteConfirmDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Supprimer le match définitivement"
-        description="Cette action supprimera définitivement ce match des analytics. Cette opération ne peut pas être annulée."
-        itemName={matchToDelete ? `MTH-${String(matchToDelete.id).padStart(6, '0')}` : ''}
-        onConfirm={handleDeleteMatch}
-        isDeleting={isDeleting}
-      />
-
-      {/* Dialogue de confirmation de fin de trajet */}
-      <MarkCompleteDialog
-        open={showCompleteDialog}
-        onOpenChange={setShowCompleteDialog}
-        title="Marquer le trajet comme terminé"
-        description="Cette action marquera le match comme terminé et l'exclura des futurs processus de matching."
-        itemName={matchToComplete ? `MTH-${String(matchToComplete.id).padStart(6, '0')}` : ''}
-        onConfirm={handleCompleteMatch}
-        isProcessing={matchActionsLoading}
       />
     </motion.div>
   );
