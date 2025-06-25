@@ -366,12 +366,17 @@ const UnifiedMatchingDashboard = () => {
                   <Card key={`opt-${match.match_reference}-${index}`} className="border-orange-200 bg-orange-50">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-lg">Match Optimisé #{index + 1}</h4>
-                        <Badge className="bg-orange-100 text-orange-800">Optimisé</Badge>
+                        <h4 className="font-medium text-lg">{match.client.name} → {match.move?.company_name || 'N/A'}</h4>
+                        <div className="flex gap-2">
+                          <Badge className="bg-orange-100 text-orange-800">Optimisé</Badge>
+                          <Badge variant="outline" className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
+                            Score: {match.optimization_score}
+                          </Badge>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{match.explanation}</p>
                       <div className="text-sm text-gray-500">
-                        Score: {match.optimization_score} | Économies: {match.savings_percentage}%
+                        Distance: {match.distance_km}km | Écart: ±{match.date_diff_days}j | Économies: {match.savings_percentage}%
                       </div>
                     </CardContent>
                   </Card>
