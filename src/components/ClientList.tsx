@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Plus, Search, Target, Trash2, Edit } from 'lucide-react';
+import { Users, Plus, Search, Target, Trash2, Edit, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +12,7 @@ import SimpleClientFormReplacement from './SimpleClientFormReplacement';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { ClientMatchesDialog } from './ClientMatchesDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ClientToClientMatches from './ClientToClientMatches';
 
 interface Client {
   id: number;
@@ -337,10 +337,10 @@ const ClientList = () => {
                   <Button 
                     size="sm"
                     onClick={() => handleFindMatch(client)}
-                    className="flex-1"
+                    className="flex-1 bg-purple-600 hover:bg-purple-700"
                   >
                     <Target className="h-4 w-4 mr-1" />
-                    Trouver un match
+                    Match
                   </Button>
                 </div>
               </CardContent>
@@ -374,6 +374,31 @@ const ClientList = () => {
         clientId={selectedClient?.id || 0}
         clientName={selectedClient?.name || 'Client'}
       />
+
+      {showMatchesDialog && selectedClient && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold">
+                Correspondances pour {selectedClient.name}
+              </h2>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowMatchesDialog(false)}
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <ClientToClientMatches 
+                clientId={selectedClient.id}
+                clientName={selectedClient.name}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };
