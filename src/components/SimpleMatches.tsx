@@ -9,6 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import { SimpleMatchingService } from '@/services/SimpleMatchingService';
 import { useMatchActions } from '@/hooks/useMatchActions';
 
+interface SimpleMatchesProps {
+  globalMatches?: any[];
+}
+
 interface ClientToMoverMatch {
   client: any;
   move: any;
@@ -22,15 +26,19 @@ interface ClientToMoverMatch {
   efficiency_score: number;
 }
 
-export const SimpleMatches = () => {
+export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
   const { toast } = useToast();
   const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [matches, setMatches] = useState<ClientToMoverMatch[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    findMatches();
-  }, []);
+    if (globalMatches) {
+      setMatches(globalMatches);
+    } else {
+      findMatches();
+    }
+  }, [globalMatches]);
 
   const findMatches = async () => {
     try {
@@ -59,7 +67,7 @@ export const SimpleMatches = () => {
 
   const handleAcceptMatch = async (match: ClientToMoverMatch) => {
     const success = await acceptMatch(match);
-    if (success) {
+    if (success && !globalMatches) {
       await findMatches();
     }
   };
@@ -119,13 +127,15 @@ export const SimpleMatches = () => {
             </p>
           </div>
         </div>
-        <Button 
-          onClick={findMatches} 
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          {loading ? 'Recherche...' : 'Actualiser'}
-        </Button>
+        {!globalMatches && (
+          <Button 
+            onClick={findMatches} 
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {loading ? 'Recherche...' : 'Actualiser'}
+          </Button>
+        )}
       </div>
 
       {/* Statistiques rapides */}

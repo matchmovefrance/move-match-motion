@@ -1,13 +1,19 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, MapPin, Calendar, Package, TrendingUp, CheckCircle, XCircle, Repeat, Clock, Euro, Route } from 'lucide-react';
+import { Users, MapPin, Calendar, Package, TrendingUp, CheckCircle, XCircle, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ClientToClientMatchingService } from '@/services/ClientToClientMatchingService';
 import { useMatchActions } from '@/hooks/useMatchActions';
+
+interface ClientToClientMatchesProps {
+  clientId?: number;
+  clientName?: string;
+  globalMatches?: any[];
+}
 
 interface ClientToClientMatch {
   primary_client: any;
@@ -26,20 +32,29 @@ interface ClientToClientMatch {
   };
 }
 
-interface ClientToClientMatchesProps {
-  clientId?: number; // Pour afficher les matches d'un client spécifique
-  clientName?: string;
-}
-
-const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesProps) => {
+const ClientToClientMatches = ({ clientId, clientName, globalMatches }: ClientToClientMatchesProps) => {
   const { toast } = useToast();
   const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [matches, setMatches] = useState<ClientToClientMatch[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    findMatches();
-  }, [clientId]);
+    if (globalMatches) {
+      // Utiliser les résultats globaux s'ils sont fournis
+      const filteredMatches = clientId 
+        ? globalMatches.filter((match: any) => 
+            match.primary_client.id === clientId || match.secondary_client.id === clientId
+          )
+        : globalMatches;
+      setMatches(filteredMatches);
+    } else if (!clientId) {
+      // Recherche normale pour tous les clients
+      findMatches();
+    } else {
+      // Recherche spécifique pour un client
+      findClientMatches();
+    }
+  }, [clientId, globalMatches]);
 
   const findMatches = async () => {
     try {
@@ -47,24 +62,14 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
       console.log('🔍 Recherche de correspondances client-à-client...');
       
       const results = await ClientToClientMatchingService.findClientToClientMatches();
+      setMatches(results);
       
-      // Si un clientId est spécifié, filtrer les résultats pour ce client
-      const filteredResults = clientId 
-        ? results.filter(match => 
-            match.primary_client.id === clientId || match.secondary_client.id === clientId
-          )
-        : results;
-      
-      setMatches(filteredResults);
-      
-      const message = clientId 
-        ? `${filteredResults.length} correspondances trouvées pour ${clientName}`
-        : `${filteredResults.length} correspondances client-à-client trouvées`;
-      
-      toast({
-        title: "Recherche terminée",
-        description: message,
-      });
+      if (!clientId) {
+        toast({
+          title: "Recherche terminée",
+          description: `${results.length} correspondances client-à-client trouvées`,
+        });
+      }
       
     } catch (error) {
       console.error('❌ Erreur recherche matches:', error);
@@ -78,31 +83,49 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
     }
   };
 
-  const handleAcceptMatch = async (match: ClientToClientMatch) => {
-    const matchData = {
-      client: match.primary_client,
-      move: {
-        id: `c2c-${match.primary_client.id}-${match.secondary_client.id}`,
-        company_name: 'Transport Groupé Client-à-Client',
-        departure_postal_code: match.primary_client.departure_postal_code,
-        arrival_postal_code: match.primary_client.arrival_postal_code,
-        departure_date: match.primary_client.desired_date,
-        max_volume: 40,
-        used_volume: match.combined_volume,
-        available_volume: 40 - match.combined_volume,
-        number_of_clients: 2
-      },
-      distance_km: match.distance_km,
-      date_diff_days: match.date_diff_days,
-      volume_compatible: match.volume_compatible,
-      available_volume_after: 40 - match.combined_volume,
-      is_valid: match.is_valid,
-      match_reference: match.match_reference
-    };
+  const findClientMatches = async () => {
+    if (!clientId) return;
     
-    const success = await acceptMatch(matchData);
+    try {
+      setLoading(true);
+      console.log(`🔍 Recherche matches pour client ${clientId}...`);
+      
+      const allResults = await ClientToClientMatchingService.findClientToClientMatches();
+      const clientMatches = allResults.filter(match => 
+        match.primary_client.id === clientId || match.secondary_client.id === clientId
+      );
+      
+      setMatches(clientMatches);
+      
+      toast({
+        title: "Recherche terminée",
+        description: `${clientMatches.length} correspondances trouvées pour ${clientName}`,
+      });
+      
+    } catch (error) {
+      console.error('❌ Erreur recherche matches client:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de rechercher les correspondances",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptMatch = async (match: ClientToClientMatch) => {
+    const success = await acceptMatch(match);
     if (success) {
-      await findMatches();
+      if (globalMatches) {
+        // Si on utilise les résultats globaux, ne pas refaire la recherche
+        return;
+      }
+      if (clientId) {
+        await findClientMatches();
+      } else {
+        await findMatches();
+      }
     }
   };
 
@@ -110,16 +133,16 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
     switch (type) {
       case 'same_departure': 
         return {
-          label: 'Départ Groupé',
-          description: 'Clients partant de la même zone géographique',
+          label: 'Même Départ',
+          description: 'Groupage depuis la même zone de départ',
           icon: <Users className="h-4 w-4" />,
           color: 'bg-blue-100 text-blue-800 border-blue-200'
         };
       case 'return_trip': 
         return {
-          label: 'Trajet Retour',
-          description: 'Optimisation via trajets de retour complémentaires',
-          icon: <Repeat className="h-4 w-4" />,
+          label: 'Aller-Retour',
+          description: 'Optimisation via trajet aller-retour',
+          icon: <TrendingUp className="h-4 w-4" />,
           color: 'bg-green-100 text-green-800 border-green-200'
         };
       default: 
@@ -130,17 +153,6 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
           color: 'bg-gray-100 text-gray-800 border-gray-200'
         };
     }
-  };
-
-  const getCompatibilityScore = (match: ClientToClientMatch) => {
-    let score = 100;
-    
-    // Pénalités basées sur les critères
-    score -= match.distance_km * 0.5; // -0.5 point par km
-    score -= match.date_diff_days * 2; // -2 points par jour d'écart
-    if (!match.volume_compatible) score -= 20; // -20 points si volume incompatible
-    
-    return Math.max(0, Math.round(score));
   };
 
   const formatDateDifference = (days: number) => {
@@ -160,20 +172,22 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
           <Users className="h-6 w-6 text-purple-600" />
           <div>
             <h3 className="text-2xl font-bold text-gray-800">
-              {clientId ? `Correspondances pour ${clientName}` : 'Matching Client-à-Client'}
+              {clientId ? `Matches pour ${clientName}` : 'Matching Client-à-Client'}
             </h3>
             <p className="text-sm text-gray-600">
-              Regroupements et trajets retour optimisés dans un rayon de 100km
+              Groupages et optimisations de trajets entre clients
             </p>
           </div>
         </div>
-        <Button 
-          onClick={findMatches} 
-          disabled={loading}
-          className="bg-purple-600 hover:bg-purple-700"
-        >
-          {loading ? 'Recherche...' : 'Actualiser'}
-        </Button>
+        {!globalMatches && (
+          <Button 
+            onClick={clientId ? findClientMatches : findMatches} 
+            disabled={loading}
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            {loading ? 'Recherche...' : 'Actualiser'}
+          </Button>
+        )}
       </div>
 
       {/* Statistiques rapides */}
@@ -190,28 +204,28 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
           </CardContent>
         </Card>
         
-        <Card className="bg-green-50 border-green-200">
+        <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              <Users className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-sm font-medium text-green-800">Compatibles</p>
-                <p className="text-2xl font-bold text-green-900">
-                  {matches.filter(m => m.is_valid).length}
+                <p className="text-sm font-medium text-blue-800">Même Départ</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {matches.filter(m => m.match_type === 'same_departure').length}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-green-50 border-green-200">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <Users className="h-5 w-5 text-blue-600" />
+              <TrendingUp className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-blue-800">Départs Groupés</p>
-                <p className="text-2xl font-bold text-blue-900">
-                  {matches.filter(m => m.match_type === 'same_departure').length}
+                <p className="text-sm font-medium text-green-800">Aller-Retour</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {matches.filter(m => m.match_type === 'return_trip').length}
                 </p>
               </div>
             </div>
@@ -221,7 +235,7 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
         <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <TrendingUp className="h-5 w-5 text-orange-600" />
+              <Package className="h-5 w-5 text-orange-600" />
               <div>
                 <p className="text-sm font-medium text-orange-800">Économies Moy.</p>
                 <p className="text-2xl font-bold text-orange-900">
@@ -235,44 +249,24 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
         </Card>
       </div>
 
-      {/* Guide explicatif */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 text-purple-800 mb-2">
-          <Users className="h-5 w-5" />
-          <span className="font-semibold">Comment ça marche ?</span>
-        </div>
-        <div className="text-sm text-purple-700 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <strong>🚚 Départs groupés :</strong> Clients partant de zones proches (≤100km) avec destinations compatibles
-          </div>
-          <div>
-            <strong>🔄 Trajets retour :</strong> L'arrivée d'un client correspond au départ de l'autre
-          </div>
-          <div>
-            <strong>💰 Économies :</strong> Réduction des coûts de 30-55% par mutualisation des transports
-          </div>
-          <div>
-            <strong>📅 Flexibilité :</strong> Dates compatibles dans une fenêtre de ±15 jours
-          </div>
-        </div>
-      </div>
-
       {loading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Analyse des correspondances optimales...</p>
+          <p className="text-gray-600">
+            {clientId ? `Recherche des correspondances pour ${clientName}...` : 'Analyse des correspondances client-à-client...'}
+          </p>
         </div>
       ) : matches.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-600 mb-2">
-              {clientId ? `Aucune correspondance pour ${clientName}` : 'Aucune correspondance client-à-client trouvée'}
+              {clientId ? `Aucune correspondance trouvée pour ${clientName}` : 'Aucune correspondance client-à-client trouvée'}
             </h3>
             <p className="text-gray-500">
               {clientId 
-                ? 'Aucun autre client compatible dans un rayon de 100km pour les dates spécifiées'
-                : 'Aucun regroupement ou trajet retour possible dans un rayon de 100km'
+                ? 'Ce client ne peut pas être groupé avec d\'autres clients actuellement'
+                : 'Aucun groupage possible entre les clients actuels'
               }
             </p>
           </CardContent>
@@ -281,12 +275,11 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
         <div className="space-y-4">
           {matches.map((match, index) => {
             const typeDetails = getMatchTypeDetails(match.match_type);
-            const compatibilityScore = getCompatibilityScore(match);
             
             return (
               <Card 
                 key={`${match.match_reference}-${index}`}
-                className={`${match.is_valid ? 'border-green-200 bg-green-50/30' : 'border-orange-200 bg-orange-50/30'} hover:shadow-lg transition-shadow`}
+                className="border-purple-200 bg-purple-50/30 hover:shadow-lg transition-shadow"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
@@ -298,19 +291,11 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
                         {typeDetails.icon}
                         <span className="ml-1">{typeDetails.label}</span>
                       </Badge>
-                      <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
-                        {match.is_valid ? '✓ Compatible' : '⚠ Partiel'}
+                      <Badge className="bg-green-100 text-green-800">
+                        {match.savings_estimate.cost_reduction_percent}% d'économie
                       </Badge>
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700">
-                        Score: {compatibilityScore}%
-                      </Badge>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="text-green-600 font-semibold">
-                        -{match.savings_estimate.cost_reduction_percent}% coût
-                      </Badge>
-                      <Badge variant="outline" className="text-blue-600">
-                        ~{match.savings_estimate.shared_transport_cost}€
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700">
+                        Score: {match.match_score}
                       </Badge>
                     </div>
                   </div>
@@ -346,7 +331,7 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
                         <div className="flex items-center justify-between">
                           <span className="font-medium flex items-center">
                             <Calendar className="h-3 w-3 mr-1 text-purple-600" />
-                            Date:
+                            Date souhaitée:
                           </span>
                           <span>{new Date(match.primary_client.desired_date).toLocaleDateString('fr-FR')}</span>
                         </div>
@@ -387,7 +372,7 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
                         <div className="flex items-center justify-between">
                           <span className="font-medium flex items-center">
                             <Calendar className="h-3 w-3 mr-1 text-purple-600" />
-                            Date:
+                            Date souhaitée:
                           </span>
                           <span>{new Date(match.secondary_client.desired_date).toLocaleDateString('fr-FR')}</span>
                         </div>
@@ -402,7 +387,7 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
                     </div>
                   </div>
 
-                  {/* Métriques détaillées du match */}
+                  {/* Métriques de compatibilité */}
                   <div className="mt-6 pt-4 border-t">
                     <h5 className="font-semibold text-gray-800 mb-3 flex items-center">
                       <TrendingUp className="h-4 w-4 mr-2" />
@@ -410,62 +395,40 @@ const ClientToClientMatches = ({ clientId, clientName }: ClientToClientMatchesPr
                     </h5>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div className="flex flex-col items-center p-3 bg-blue-50 rounded-lg">
-                        <Route className="h-5 w-5 text-blue-600 mb-1" />
+                        <MapPin className="h-5 w-5 text-blue-600 mb-1" />
                         <span className="font-medium text-blue-800">{match.distance_km}km</span>
-                        <span className="text-xs text-blue-600">Distance</span>
+                        <span className="text-xs text-blue-600">Distance détour</span>
                       </div>
                       <div className="flex flex-col items-center p-3 bg-purple-50 rounded-lg">
-                        <Clock className="h-5 w-5 text-purple-600 mb-1" />
+                        <Calendar className="h-5 w-5 text-purple-600 mb-1" />
                         <span className="font-medium text-purple-800">{formatDateDifference(match.date_diff_days)}</span>
                         <span className="text-xs text-purple-600">Flexibilité</span>
                       </div>
                       <div className="flex flex-col items-center p-3 bg-orange-50 rounded-lg">
                         <Package className="h-5 w-5 text-orange-600 mb-1" />
                         <span className="font-medium text-orange-800">{match.combined_volume}m³</span>
-                        <span className="text-xs text-orange-600">Volume Total</span>
+                        <span className="text-xs text-orange-600">Volume combiné</span>
                       </div>
                       <div className="flex flex-col items-center p-3 bg-green-50 rounded-lg">
-                        <Euro className="h-5 w-5 text-green-600 mb-1" />
-                        <span className="font-medium text-green-800">{match.savings_estimate.shared_transport_cost}€</span>
-                        <span className="text-xs text-green-600">Coût Estimé</span>
+                        <TrendingUp className="h-5 w-5 text-green-600 mb-1" />
+                        <span className="font-medium text-green-800">{match.savings_estimate.cost_reduction_percent}%</span>
+                        <span className="text-xs text-green-600">Économie estimée</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  {match.is_valid ? (
-                    <div className="mt-4 flex justify-end space-x-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleAcceptMatch(match)}
-                        disabled={actionLoading}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Accepter Groupage
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="mt-4 p-3 bg-orange-100 border border-orange-200 rounded-lg">
-                      <div className="flex items-start space-x-2">
-                        <XCircle className="h-4 w-4 text-orange-600 mt-0.5" />
-                        <div className="text-xs text-orange-800">
-                          <strong>Incompatibilités détectées:</strong>
-                          <ul className="mt-1 space-y-1">
-                            {match.date_diff_days > 15 && (
-                              <li>• Écart de dates trop important ({match.date_diff_days} jours, max 15j)</li>
-                            )}
-                            {!match.volume_compatible && (
-                              <li>• Volume combiné trop important ({match.combined_volume}m³, max 40m³)</li>
-                            )}
-                            {match.distance_km > 100 && (
-                              <li>• Distance excessive ({match.distance_km}km, max 100km)</li>
-                            )}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <div className="mt-4 flex justify-end space-x-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleAcceptMatch(match)}
+                      disabled={actionLoading}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Accepter Groupage
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
