@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
-import UnifiedMatchingDashboard from '@/components/UnifiedMatchingDashboard';
+import OptimizedTrajetsDashboard from '@/components/OptimizedTrajetsDashboard';
 import MatchAnalytics from '@/components/MatchAnalytics';
 import ServiceProviders from '@/components/ServiceProviders';
 import GoogleMap from '@/components/GoogleMap';
@@ -43,7 +42,7 @@ const Index = () => {
       case 'analytics': return <Analytics />;
       case 'clients': return <ClientList />;
       case 'moves': return <MoveManagement />;
-      case 'matching': return <UnifiedMatchingDashboard />;
+      case 'trajets-optimises': return <OptimizedTrajetsDashboard />;
       case 'match-analytics': return <MatchAnalytics />;
       case 'providers': return <ServiceProviders />;
       case 'map': return <GoogleMap />;
@@ -84,12 +83,12 @@ const Index = () => {
       ];
     }
 
-    // Tabs de base pour admin et agent
+    // Tabs de base pour admin et agent - SUPPRESSION de l'onglet matching professionnel
     const baseTabs = [
       { id: 'analytics', label: 'Tableau de bord', icon: BarChart3 },
       { id: 'clients', label: 'Clients', icon: Users },
       { id: 'moves', label: 'Déménagements', icon: Truck },
-      { id: 'matching', label: 'Matching', icon: Target },
+      { id: 'trajets-optimises', label: 'Trajets Optimisés', icon: Target }, // NOUVEAU
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
