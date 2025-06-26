@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import SimpleMoverFormReplacement from './SimpleMoverFormReplacement';
+import MoveForm from './MoveForm';
 import MapPopup from './MapPopup';
 import StatusToggle from './StatusToggle';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
@@ -58,6 +60,11 @@ interface ConfirmedMove {
   arrival_address?: string;
   description?: string;
   number_of_clients?: number;
+  contact_email?: string;
+  departure_time?: string;
+  arrival_time?: string;
+  price_per_m3?: number;
+  route_type?: string;
 }
 
 const MoveManagement = () => {
@@ -114,6 +121,49 @@ const MoveManagement = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEditMove = (move: ConfirmedMove) => {
+    console.log('🔧 Édition du trajet:', move);
+    setEditingMove(move);
+    setShowAddForm(true);
+  };
+
+  const handleUpdateMove = async (formData: any) => {
+    if (!user || !editingMove) return;
+    
+    try {
+      console.log('🔄 Mise à jour du trajet:', editingMove.id, formData);
+      
+      const updateData = {
+        ...formData,
+        available_volume: Math.max(0, formData.max_volume - formData.used_volume),
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('confirmed_moves')
+        .update(updateData)
+        .eq('id', editingMove.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Trajet mis à jour",
+        description: "Le trajet a été modifié avec succès",
+      });
+      
+      setEditingMove(null);
+      setShowAddForm(false);
+      loadMoves();
+    } catch (error) {
+      console.error('Error updating move:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le trajet",
+        variant: "destructive",
+      });
     }
   };
 
@@ -293,20 +343,39 @@ const MoveManagement = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">Nouveau Trajet</h2>
+          <h2 className="text-2xl font-bold text-gray-800">
+            {editingMove ? 'Modifier le Trajet' : 'Nouveau Trajet'}
+          </h2>
           <Button 
             variant="outline" 
-            onClick={() => setShowAddForm(false)}
+            onClick={() => {
+              setShowAddForm(false);
+              setEditingMove(null);
+            }}
           >
             Retour à la liste
           </Button>
         </div>
-        <SimpleMoverFormReplacement 
-          onSuccess={() => {
-            setShowAddForm(false);
-            loadMoves();
-          }}
-        />
+        
+        {editingMove ? (
+          <MoveForm 
+            initialData={editingMove}
+            isEditing={true}
+            onSubmit={handleUpdateMove}
+            onSuccess={() => {
+              setShowAddForm(false);
+              setEditingMove(null);
+              loadMoves();
+            }}
+          />
+        ) : (
+          <SimpleMoverFormReplacement 
+            onSuccess={() => {
+              setShowAddForm(false);
+              loadMoves();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -473,7 +542,7 @@ const MoveManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setEditingMove(move)}
+                            onClick={() => handleEditMove(move)}
                             className="text-gray-600 hover:text-gray-700"
                           >
                             <Edit className="h-4 w-4" />
