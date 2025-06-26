@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Users, Truck, Target, Eye, Filter, AlertCircle } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Truck, Target, Eye, Filter, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ const MatchAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   
   // États pour le dialogue de détails
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -49,9 +50,9 @@ const MatchAnalytics = () => {
   const fetchMatches = async () => {
     try {
       setLoading(true);
-      console.log('📊 Chargement analytics des matches...');
+      console.log('📊 Chargement historique des matches...');
       
-      // Charger les matches
+      // Charger les matches depuis la base de données
       const { data: matchData, error: matchError } = await supabase
         .from('move_matches')
         .select('*')
@@ -70,28 +71,35 @@ const MatchAnalytics = () => {
           .eq('id', match.client_id)
           .single();
 
-        // Charger les données du trajet
-        const { data: moveData, error: moveError } = await supabase
-          .from('confirmed_moves')
-          .select('company_name')
-          .eq('id', match.move_id)
-          .single();
+        // Charger les données du trajet si move_id > 0
+        let moveData = null;
+        if (match.move_id > 0) {
+          const { data: moveResult, error: moveError } = await supabase
+            .from('confirmed_moves')
+            .select('company_name')
+            .eq('id', match.move_id)
+            .single();
+
+          if (!moveError) {
+            moveData = moveResult;
+          }
+        }
 
         enrichedMatches.push({
           ...match,
           client: clientError ? null : clientData,
-          confirmed_move: moveError ? null : moveData
+          confirmed_move: moveData
         });
       }
 
-      console.log('✅ Analytics matches chargées:', enrichedMatches.length);
+      console.log('✅ Historique matches chargé:', enrichedMatches.length);
       setMatches(enrichedMatches);
       
     } catch (error) {
       console.error('❌ Error fetching matches:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger les correspondances",
+        description: "Impossible de charger l'historique des correspondances",
         variant: "destructive",
       });
     } finally {
@@ -101,10 +109,10 @@ const MatchAnalytics = () => {
 
   const stats = {
     total: matches.length,
-    valid: matches.filter(match => match.is_valid).length,
-    partial: matches.filter(match => !match.is_valid && match.match_type === 'partial').length,
+    accepted: matches.filter(match => match.match_type === 'accepted_match').length,
+    rejected: matches.filter(match => match.match_type === 'rejected_manual').length,
     uniqueClients: [...new Set(matches.map(match => match.client_id))].length,
-    uniqueMoves: [...new Set(matches.map(match => match.move_id))].length,
+    uniqueMoves: [...new Set(matches.filter(m => m.move_id > 0).map(match => match.move_id))].length,
     avgDistance: matches.length > 0 ? Math.round(matches.reduce((acc, match) => acc + match.distance_km, 0) / matches.length) : 0,
     avgDateDiff: matches.length > 0 ? Math.round(matches.reduce((acc, match) => acc + match.date_diff_days, 0) / matches.length) : 0,
   };
@@ -136,12 +144,43 @@ const MatchAnalytics = () => {
       }
     }
 
-    return matchesSearch && matchesDate;
+    let matchesStatus = true;
+    if (statusFilter !== 'all') {
+      matchesStatus = match.match_type === statusFilter;
+    }
+
+    return matchesSearch && matchesDate && matchesStatus;
   });
 
   const handleViewMatch = (match: Match) => {
     setSelectedMatch(match);
     setShowDetailsDialog(true);
+  };
+
+  const getMatchTypeInfo = (matchType: string) => {
+    switch (matchType) {
+      case 'accepted_match':
+        return {
+          label: 'Match Accepté',
+          icon: <CheckCircle className="h-4 w-4" />,
+          color: 'bg-green-100 text-green-800',
+          bgColor: 'border-green-200 bg-green-50/30'
+        };
+      case 'rejected_manual':
+        return {
+          label: 'Match Rejeté',
+          icon: <XCircle className="h-4 w-4" />,
+          color: 'bg-red-100 text-red-800',
+          bgColor: 'border-red-200 bg-red-50/30'
+        };
+      default:
+        return {
+          label: matchType,
+          icon: <Target className="h-4 w-4" />,
+          color: 'bg-blue-100 text-blue-800',
+          bgColor: 'border-blue-200 bg-blue-50/30'
+        };
+    }
   };
 
   return (
@@ -152,18 +191,18 @@ const MatchAnalytics = () => {
     >
       <div className="flex items-center space-x-3">
         <BarChart3 className="h-6 w-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Analytics des Matchs - Moteur Unifié</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Historique des Matchs</h2>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center gap-2 text-blue-800 mb-2">
           <Target className="h-5 w-5" />
-          <span className="font-semibold">Analyses Cohérentes avec le Moteur de Devis</span>
+          <span className="font-semibold">Historique Complet des Actions de Matching</span>
         </div>
         <div className="text-sm text-blue-700">
-          • <strong>Distances exactes</strong> calculées via Google Maps API<br/>
-          • <strong>Critères unifiés</strong> : ≤100km distance totale, ≤7 jours d'écart, volume compatible<br/>
-          • <strong>Synchronisation</strong> avec tous les modules de l'application
+          • <strong>Matchs acceptés</strong> : Correspondances validées et intégrées dans le système<br/>
+          • <strong>Matchs refusés</strong> : Correspondances rejetées manuellement<br/>
+          • <strong>Suivi en temps réel</strong> de toutes les décisions de matching
         </div>
       </div>
 
@@ -171,54 +210,54 @@ const MatchAnalytics = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Matchs</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Historique</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.valid} valides • {stats.partial} partiels
+              Actions de matching enregistrées
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taux de Validité</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">Matchs Acceptés</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.total > 0 ? Math.round((stats.valid / stats.total) * 100) : 0}%
+            <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
+            <p className="text-xs text-muted-foreground">
+              Correspondances validées
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Matchs Refusés</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+            <p className="text-xs text-muted-foreground">
+              Correspondances rejetées
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Taux Acceptation</CardTitle>
+            <TrendingUp className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">
+              {stats.total > 0 ? Math.round((stats.accepted / stats.total) * 100) : 0}%
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats.valid} matchs valides sur {stats.total}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Distance Moy.</CardTitle>
-            <Users className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.avgDistance}km</div>
-            <p className="text-xs text-muted-foreground">
-              Écart dates moy: {stats.avgDateDiff}j
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Couverture</CardTitle>
-            <Truck className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{stats.uniqueClients}C / {stats.uniqueMoves}T</div>
-            <p className="text-xs text-muted-foreground">
-              Clients / Trajets uniques
+              {stats.accepted} sur {stats.total} matchs
             </p>
           </CardContent>
         </Card>
@@ -246,77 +285,97 @@ const MatchAnalytics = () => {
             <SelectItem value="month">Ce mois</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            <SelectItem value="accepted_match">Matchs acceptés</SelectItem>
+            <SelectItem value="rejected_manual">Matchs refusés</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Liste des matchs */}
       <Card>
         <CardHeader>
-          <CardTitle>Détail des Correspondances</CardTitle>
+          <CardTitle>Historique Détaillé</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p>Chargement des analytics...</p>
+              <p>Chargement de l'historique...</p>
             </div>
           ) : filteredMatches.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="font-medium">Aucun match trouvé</p>
+              <p className="font-medium">Aucun match trouvé dans l'historique</p>
               <p className="text-sm mt-2">
                 {matches.length === 0 
-                  ? "Lancez le moteur de matching pour générer des correspondances"
+                  ? "Les actions de matching apparaîtront ici une fois que vous aurez accepté ou refusé des correspondances"
                   : "Ajustez vos filtres pour voir plus de résultats"
                 }
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredMatches.map((match) => (
-                <div
-                  key={match.id}
-                  className={`flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors ${
-                    match.is_valid ? 'border-green-200 bg-green-50/30' : 'border-orange-200 bg-orange-50/30'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Badge variant="outline">
-                        MTH-{String(match.id).padStart(6, '0')}
-                      </Badge>
-                      <Badge className={match.is_valid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
-                        {match.is_valid ? 'Match Valide' : 'Match Partiel'}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {match.match_type}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      <span className="font-medium">
-                        {match.client?.name || 'Client inconnu'} ({match.client?.client_reference || `ID-${match.client_id}`})
-                      </span>
-                      {' → '}
-                      <span className="font-medium">
-                        {match.confirmed_move?.company_name || 'Transporteur inconnu'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Distance: {match.distance_km}km • Écart: {match.date_diff_days}j • 
-                      Volume: {match.volume_ok ? '✓' : '✗'} • 
-                      Créé: {new Date(match.created_at).toLocaleDateString('fr-FR')}
-                    </div>
-                  </div>
-                  
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleViewMatch(match)}
+              {filteredMatches.map((match) => {
+                const matchInfo = getMatchTypeInfo(match.match_type);
+                
+                return (
+                  <div
+                    key={match.id}
+                    className={`flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors ${matchInfo.bgColor}`}
                   >
-                    <Eye className="h-4 w-4 mr-1" />
-                    Détails
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Badge variant="outline">
+                          MTH-{String(match.id).padStart(6, '0')}
+                        </Badge>
+                        <Badge className={matchInfo.color}>
+                          {matchInfo.icon}
+                          <span className="ml-1">{matchInfo.label}</span>
+                        </Badge>
+                        {match.is_valid && (
+                          <Badge className="bg-blue-100 text-blue-800">
+                            Match Valide
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">
+                          {match.client?.name || 'Client inconnu'} ({match.client?.client_reference || `ID-${match.client_id}`})
+                        </span>
+                        {match.confirmed_move && (
+                          <>
+                            {' → '}
+                            <span className="font-medium">
+                              {match.confirmed_move.company_name}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Distance: {match.distance_km}km • Écart: {match.date_diff_days}j • 
+                        Volume: {match.volume_ok ? '✓' : '✗'} • 
+                        Créé: {new Date(match.created_at).toLocaleDateString('fr-FR')}
+                      </div>
+                    </div>
+                    
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewMatch(match)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Détails
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

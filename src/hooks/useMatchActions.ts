@@ -12,28 +12,26 @@ export const useMatchActions = () => {
       setLoading(true);
       console.log('✅ Acceptation du match:', matchData.match_reference);
 
-      // Auto-enregistrer TOUS les matchs valides dans analytics avant l'acceptation
-      if (matchData.is_valid) {
-        console.log('📊 Auto-enregistrement match analytics:', matchData.match_reference);
-        
-        const { error: analyticsError } = await supabase
-          .from('move_matches')
-          .insert({
-            client_id: matchData.client.id,
-            move_id: matchData.move.id,
-            match_type: 'accepted_match',
-            volume_ok: matchData.volume_compatible,
-            combined_volume: matchData.available_volume_after,
-            distance_km: matchData.distance_km,
-            date_diff_days: matchData.date_diff_days,
-            is_valid: true
-          });
+      // Enregistrer le match accepté dans analytics AVANT l'acceptation
+      console.log('📊 Enregistrement match accepté analytics:', matchData.match_reference);
+      
+      const { error: analyticsError } = await supabase
+        .from('move_matches')
+        .insert({
+          client_id: matchData.client.id,
+          move_id: matchData.move?.id || 0,
+          match_type: 'accepted_match',
+          volume_ok: matchData.volume_compatible || true,
+          combined_volume: matchData.available_volume_after || 0,
+          distance_km: matchData.distance_km || 0,
+          date_diff_days: matchData.date_diff_days || 0,
+          is_valid: matchData.is_valid || true
+        });
 
-        if (analyticsError) {
-          console.warn('⚠️ Erreur enregistrement analytics (non bloquant):', analyticsError);
-        } else {
-          console.log('✅ Match auto-enregistré dans analytics');
-        }
+      if (analyticsError) {
+        console.warn('⚠️ Erreur enregistrement analytics (non bloquant):', analyticsError);
+      } else {
+        console.log('✅ Match accepté enregistré dans analytics');
       }
 
       // Créer une opportunité dans pricing_opportunities
@@ -71,58 +69,75 @@ export const useMatchActions = () => {
       if (oppError) throw oppError;
 
       // Chercher ou créer un fournisseur pour le transporteur
-      const { data: existingSupplier, error: supplierSearchError } = await supabase
-        .from('suppliers')
-        .select('id')
-        .eq('company_name', matchData.move.company_name)
-        .maybeSingle();
-
-      if (supplierSearchError) throw supplierSearchError;
-
-      let supplierId = existingSupplier?.id;
-
-      // Si le fournisseur n'existe pas, le créer
-      if (!supplierId) {
-        const { data: newSupplier, error: supplierCreateError } = await supabase
+      let supplierId = null;
+      
+      if (matchData.move) {
+        const { data: existingSupplier, error: supplierSearchError } = await supabase
           .from('suppliers')
-          .insert({
-            company_name: matchData.move.company_name,
-            contact_name: matchData.move.mover_name || 'Contact transporteur',
-            email: matchData.move.contact_email || 'contact@example.com',
-            phone: matchData.move.contact_phone || 'À renseigner',
-            address: 'Adresse à renseigner',
-            city: 'Ville à renseigner',
-            postal_code: '00000',
-            country: 'France',
-            created_by: (await supabase.auth.getUser()).data.user?.id
-          })
           .select('id')
-          .single();
+          .eq('company_name', matchData.move.company_name)
+          .maybeSingle();
 
-        if (supplierCreateError) throw supplierCreateError;
-        supplierId = newSupplier.id;
+        if (supplierSearchError) throw supplierSearchError;
+
+        supplierId = existingSupplier?.id;
+
+        // Si le fournisseur n'existe pas, le créer
+        if (!supplierId) {
+          const { data: newSupplier, error: supplierCreateError } = await supabase
+            .from('suppliers')
+            .insert({
+              company_name: matchData.move.company_name,
+              contact_name: matchData.move.mover_name || 'Contact transporteur',
+              email: matchData.move.contact_email || 'contact@example.com',
+              phone: matchData.move.contact_phone || 'À renseigner',
+              address: 'Adresse à renseigner',
+              city: 'Ville à renseigner',
+              postal_code: '00000',
+              country: 'France',
+              created_by: (await supabase.auth.getUser()).data.user?.id
+            })
+            .select('id')
+            .single();
+
+          if (supplierCreateError) throw supplierCreateError;
+          supplierId = newSupplier.id;
+        }
+
+        // Créer le devis accepté dans quotes
+        const { error: quoteError } = await supabase
+          .from('quotes')
+          .insert({
+            opportunity_id: opportunity.id,
+            supplier_id: supplierId,
+            bid_amount: 0, // Sera calculé par le moteur de pricing
+            status: 'accepted',
+            notes: `Devis auto-accepté via match ${matchData.match_reference} - Transporteur: ${matchData.move.company_name}`,
+            cost_breakdown: {
+              match_reference: matchData.match_reference,
+              move_id: matchData.move.id,
+              distance_km: matchData.distance_km,
+              date_diff_days: matchData.date_diff_days,
+              volume_after: matchData.available_volume_after
+            },
+            created_by: (await supabase.auth.getUser()).data.user?.id
+          });
+
+        if (quoteError) throw quoteError;
+
+        // Mettre à jour le volume utilisé du trajet
+        const newUsedVolume = (matchData.move.used_volume || 0) + (matchData.client.estimated_volume || 0);
+        const { error: moveError } = await supabase
+          .from('confirmed_moves')
+          .update({ 
+            used_volume: newUsedVolume,
+            status: 'confirmed',
+            number_of_clients: (matchData.move.number_of_clients || 0) + 1
+          })
+          .eq('id', matchData.move.id);
+
+        if (moveError) throw moveError;
       }
-
-      // Créer le devis accepté dans quotes
-      const { error: quoteError } = await supabase
-        .from('quotes')
-        .insert({
-          opportunity_id: opportunity.id,
-          supplier_id: supplierId,
-          bid_amount: 0, // Sera calculé par le moteur de pricing
-          status: 'accepted',
-          notes: `Devis auto-accepté via match ${matchData.match_reference} - Transporteur: ${matchData.move.company_name}`,
-          cost_breakdown: {
-            match_reference: matchData.match_reference,
-            move_id: matchData.move.id,
-            distance_km: matchData.distance_km,
-            date_diff_days: matchData.date_diff_days,
-            volume_after: matchData.available_volume_after
-          },
-          created_by: (await supabase.auth.getUser()).data.user?.id
-        });
-
-      if (quoteError) throw quoteError;
 
       // Mettre à jour le statut du client
       const { error: clientError } = await supabase
@@ -137,22 +152,9 @@ export const useMatchActions = () => {
 
       if (clientError) throw clientError;
 
-      // Mettre à jour le volume utilisé du trajet
-      const newUsedVolume = (matchData.move.used_volume || 0) + (matchData.client.estimated_volume || 0);
-      const { error: moveError } = await supabase
-        .from('confirmed_moves')
-        .update({ 
-          used_volume: newUsedVolume,
-          status: 'confirmed',
-          number_of_clients: (matchData.move.number_of_clients || 0) + 1
-        })
-        .eq('id', matchData.move.id);
-
-      if (moveError) throw moveError;
-
       toast({
         title: "Match accepté",
-        description: `Le devis ${matchData.match_reference} a été accepté et ajouté à l'historique`,
+        description: `Le match ${matchData.match_reference} a été accepté et ajouté à l'historique`,
       });
 
       return true;
@@ -174,24 +176,26 @@ export const useMatchActions = () => {
       setLoading(true);
       console.log('❌ Rejet du match:', matchData.match_reference);
 
-      // Auto-enregistrer le match rejeté dans analytics
-      console.log('📊 Auto-enregistrement match rejeté analytics:', matchData.match_reference);
+      // Enregistrer le match rejeté dans analytics
+      console.log('📊 Enregistrement match rejeté analytics:', matchData.match_reference);
       
       const { error: analyticsError } = await supabase
         .from('move_matches')
         .insert({
           client_id: matchData.client.id,
-          move_id: matchData.move.id,
+          move_id: matchData.move?.id || 0,
           match_type: 'rejected_manual',
-          volume_ok: matchData.volume_compatible,
+          volume_ok: matchData.volume_compatible || false,
           combined_volume: 0,
-          distance_km: matchData.distance_km,
-          date_diff_days: matchData.date_diff_days,
-          is_valid: matchData.is_valid
+          distance_km: matchData.distance_km || 0,
+          date_diff_days: matchData.date_diff_days || 0,
+          is_valid: matchData.is_valid || false
         });
 
       if (analyticsError) {
         console.warn('⚠️ Erreur enregistrement analytics rejet (non bloquant):', analyticsError);
+      } else {
+        console.log('✅ Match rejeté enregistré dans analytics');
       }
 
       // Mettre à jour le statut du client
@@ -206,7 +210,7 @@ export const useMatchActions = () => {
 
       toast({
         title: "Match rejeté",
-        description: `Le devis ${matchData.match_reference} a été rejeté`,
+        description: `Le match ${matchData.match_reference} a été rejeté`,
       });
 
       return true;

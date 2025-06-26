@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Target, MapPin, Calendar, Package, TrendingUp, CheckCircle, XCircle, Truck, Route, Clock } from 'lucide-react';
@@ -8,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { SimpleMatchingService } from '@/services/SimpleMatchingService';
 import { useMatchActions } from '@/hooks/useMatchActions';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SimpleMatchesProps {
   globalMatches?: any[];
@@ -31,6 +31,7 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
   const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [matches, setMatches] = useState<ClientToMoverMatch[]>([]);
   const [loading, setLoading] = useState(false);
+  const [acceptedMatches, setAcceptedMatches] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (globalMatches) {
@@ -38,7 +39,27 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
     } else {
       findMatches();
     }
+    loadAcceptedMatches();
   }, [globalMatches]);
+
+  const loadAcceptedMatches = async () => {
+    try {
+      // Charger les clients avec match_status = 'accepted'
+      const { data: acceptedClients, error } = await supabase
+        .from('clients')
+        .select('id, client_reference')
+        .eq('match_status', 'accepted');
+
+      if (error) throw error;
+
+      const acceptedSet = new Set(
+        acceptedClients?.map(client => `client-${client.id}`) || []
+      );
+      setAcceptedMatches(acceptedSet);
+    } catch (error) {
+      console.error('❌ Erreur chargement matchs acceptés:', error);
+    }
+  };
 
   const findMatches = async () => {
     try {
@@ -67,9 +88,25 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
 
   const handleAcceptMatch = async (match: ClientToMoverMatch) => {
     const success = await acceptMatch(match);
+    if (success) {
+      // Ajouter à la liste des matchs acceptés
+      setAcceptedMatches(prev => new Set([...prev, `client-${match.client.id}`]));
+      
+      if (!globalMatches) {
+        await findMatches();
+      }
+    }
+  };
+
+  const handleRejectMatch = async (match: ClientToMoverMatch) => {
+    const success = await rejectMatch(match);
     if (success && !globalMatches) {
       await findMatches();
     }
+  };
+
+  const isMatchAccepted = (match: ClientToMoverMatch) => {
+    return acceptedMatches.has(`client-${match.client.id}`);
   };
 
   const getMatchTypeDetails = (type: string) => {
@@ -108,7 +145,7 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
   const formatDateDifference = (days: number) => {
     if (days === 0) return 'Même date';
     if (days === 1) return '1 jour d\'écart';
-    return `${days} jours d'écart`;
+    return `${days} jours d\'écart`;
   };
 
   return (
@@ -237,11 +274,14 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
         <div className="space-y-4">
           {matches.map((match, index) => {
             const typeDetails = getMatchTypeDetails(match.match_type);
+            const isAccepted = isMatchAccepted(match);
             
             return (
               <Card 
                 key={`${match.match_reference}-${index}`}
-                className="border-green-200 bg-green-50/30 hover:shadow-lg transition-shadow"
+                className={`border-green-200 bg-green-50/30 hover:shadow-lg transition-shadow ${
+                  isAccepted ? 'opacity-75' : ''
+                }`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
@@ -253,9 +293,15 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
                         {typeDetails.icon}
                         <span className="ml-1">{typeDetails.label}</span>
                       </Badge>
-                      <Badge className="bg-green-100 text-green-800">
-                        ✓ Compatible
-                      </Badge>
+                      {isAccepted ? (
+                        <Badge className="bg-green-100 text-green-800">
+                          ✓ Match Accepté
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-green-100 text-green-800">
+                          ✓ Compatible
+                        </Badge>
+                      )}
                       <Badge variant="outline" className="bg-blue-50 text-blue-700">
                         Score: {match.efficiency_score}
                       </Badge>
@@ -381,15 +427,34 @@ export const SimpleMatches = ({ globalMatches }: SimpleMatchesProps) => {
 
                   {/* Actions */}
                   <div className="mt-4 flex justify-end space-x-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleAcceptMatch(match)}
-                      disabled={actionLoading}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Accepter Match
-                    </Button>
+                    {isAccepted ? (
+                      <Badge className="bg-green-100 text-green-800 px-4 py-2">
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Match Déjà Accepté
+                      </Badge>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRejectMatch(match)}
+                          disabled={actionLoading}
+                          className="border-red-200 text-red-700 hover:bg-red-50"
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Refuser Match
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAcceptMatch(match)}
+                          disabled={actionLoading}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Accepter Match
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
