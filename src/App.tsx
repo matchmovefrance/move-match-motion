@@ -1,50 +1,62 @@
 
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Index from './pages/Index';
-import Auth from './pages/Auth';
-import NotFound from './pages/NotFound';
-import PublicMoverForm from './pages/PublicMoverForm';
-import PublicClientForm from './pages/PublicClientForm';
-// Import the PricingTool using React.lazy()
-const PricingTool = React.lazy(() => import('./pages/PricingTool/Index'));
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import NotFound from "./pages/NotFound";
+import PricingTool from "./pages/PricingTool/Index";
+import VolumeCalculator from "./pages/VolumeCalculator/Index";
+import PublicClientForm from "./pages/PublicClientForm";
+import PublicMoverForm from "./pages/PublicMoverForm";
 
-// Configure React Query
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+const queryClient = new QueryClient();
 
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <Toaster />
-      <BrowserRouter>
-        <AuthProvider>
-          <React.Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Loading...</div>}>
-            <Routes>
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              {/* Redirect /dashboard to / for compatibility */}
-              <Route path="/dashboard" element={<Navigate to="/" replace />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/public-mover/:token" element={<PublicMoverForm />} />
-              <Route path="/public-client/:token" element={<PublicClientForm />} />
-              <Route path="/pricing-tool" element={<ProtectedRoute><PricingTool /></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </React.Suspense>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
-  );
-}
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/public/client/:token" element={<PublicClientForm />} />
+            <Route path="/public/mover/:token" element={<PublicMoverForm />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Index />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pricing-tool"
+              element={
+                <ProtectedRoute>
+                  <PricingTool />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/volume-calculator"
+              element={
+                <ProtectedRoute>
+                  <VolumeCalculator />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
 
 export default App;

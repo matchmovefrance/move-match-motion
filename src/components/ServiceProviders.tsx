@@ -10,9 +10,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import SyncStatusDialog from './SyncStatusDialog';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import SupplierPricingDialog from '@/pages/PricingTool/components/SupplierPricingDialog';
 import SupplierBankDetailsDialog from '@/pages/PricingTool/components/SupplierBankDetailsDialog';
 
@@ -35,6 +35,7 @@ interface ServiceProvider {
 
 const ServiceProviders = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -45,6 +46,7 @@ const ServiceProviders = () => {
   const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false);
   const [providerToDelete, setProviderToDelete] = useState<ServiceProvider | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   // Form state
@@ -125,7 +127,7 @@ const ServiceProviders = () => {
   }, []);
 
   useEffect(() => {
-    if (editingProvider) {
+    if (editingProvider && editingProvider.source !== 'moves') {
       setFormData({
         name: editingProvider.name,
         company_name: editingProvider.company_name,
@@ -348,16 +350,62 @@ const ServiceProviders = () => {
   };
 
   const handleDeleteClick = (provider: ServiceProvider) => {
+    if (provider.source === 'moves') {
+      toast({
+        title: "Information",
+        description: "Ce prestataire provient des trajets confirmés et ne peut pas être supprimé",
+      });
+      return;
+    }
     setProviderToDelete(provider);
     setShowDeleteDialog(true);
+  };
+
+  const handleEditClick = (provider: ServiceProvider) => {
+    if (provider.source === 'moves') {
+      toast({
+        title: "Information",
+        description: "Ce prestataire provient des trajets confirmés et ne peut pas être modifié",
+      });
+      return;
+    }
+    setEditingProvider(provider);
   };
 
   const deleteProvider = async () => {
     if (!user || !providerToDelete) return;
     
     try {
-      console.log('🗑️ Deleting provider:', providerToDelete.id);
+      setIsDeleting(true);
+      console.log('🗑️ Deleting provider and related moves:', providerToDelete.id);
       
+      // Compter les trajets liés
+      const { data: relatedMoves, error: countError } = await supabase
+        .from('confirmed_moves')
+        .select('id, company_name')
+        .eq('company_name', providerToDelete.company_name);
+
+      if (countError) {
+        console.error('❌ Error counting related moves:', countError);
+        throw countError;
+      }
+
+      // Supprimer d'abord les trajets liés
+      if (relatedMoves && relatedMoves.length > 0) {
+        const { error: movesError } = await supabase
+          .from('confirmed_moves')
+          .delete()
+          .eq('company_name', providerToDelete.company_name);
+
+        if (movesError) {
+          console.error('❌ Error deleting related moves:', movesError);
+          throw movesError;
+        }
+        
+        console.log(`✅ Deleted ${relatedMoves.length} related moves`);
+      }
+
+      // Supprimer le prestataire
       const { error } = await supabase
         .from('service_providers')
         .delete()
@@ -374,9 +422,10 @@ const ServiceProviders = () => {
       // Mettre à jour l'état local immédiatement
       setProviders(prevProviders => prevProviders.filter(p => p.id !== providerToDelete.id));
       
+      const moveCount = relatedMoves?.length || 0;
       toast({
-        title: "Succès",
-        description: "Prestataire supprimé avec succès",
+        title: "Prestataire supprimé",
+        description: `Le prestataire et ${moveCount} trajet(s) associé(s) ont été supprimés avec succès`,
       });
       
       setShowDeleteDialog(false);
@@ -388,6 +437,8 @@ const ServiceProviders = () => {
         description: `Impossible de supprimer le prestataire: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -689,8 +740,9 @@ const ServiceProviders = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setEditingProvider(provider)}
+                  onClick={() => handleEditClick(provider)}
                   disabled={provider.source === 'moves'}
+                  title={provider.source === 'moves' ? 'Prestataire depuis trajets - Non modifiable' : 'Modifier'}
                 >
                   <Edit className="h-4 w-4" />
                 </Button>
@@ -700,6 +752,7 @@ const ServiceProviders = () => {
                   onClick={() => handleDeleteClick(provider)}
                   className="text-red-600 hover:text-red-700"
                   disabled={provider.source === 'moves'}
+                  title={provider.source === 'moves' ? 'Prestataire depuis trajets - Non supprimable' : 'Supprimer'}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -772,7 +825,7 @@ const ServiceProviders = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setEditingProvider(provider)}
+                onClick={() => handleEditClick(provider)}
                 disabled={provider.source === 'moves'}
               >
                 <Edit className="h-3 w-3" />
@@ -801,15 +854,14 @@ const ServiceProviders = () => {
         onSyncComplete={handleSyncComplete}
       />
 
-      <ConfirmDialog
+      <DeleteConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         title="Supprimer le prestataire"
-        description={`Êtes-vous sûr de vouloir supprimer ${providerToDelete?.company_name} ? Cette action ne peut pas être annulée.`}
-        confirmText="Supprimer"
-        cancelText="Annuler"
+        description="Cette action supprimera également tous les trajets associés à ce prestataire."
+        itemName={`${providerToDelete?.company_name} (${providerToDelete?.name})`}
         onConfirm={deleteProvider}
-        variant="destructive"
+        isDeleting={isDeleting}
       />
 
       <SupplierPricingDialog

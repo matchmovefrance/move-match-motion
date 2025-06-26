@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Calculator } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
@@ -15,6 +16,7 @@ import AdminActions from '@/components/AdminActions';
 import DiagnosticTab from '@/components/DiagnosticTab';
 import Header from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const { user, profile } = useAuth();
@@ -36,6 +38,14 @@ const Index = () => {
   if (!user) {
     return null;
   }
+
+  const handlePricingToolClick = () => {
+    window.open('/pricing-tool', '_blank');
+  };
+
+  const handleVolumeCalculatorClick = () => {
+    window.open('/volume-calculator', '_blank');
+  };
 
   const renderTabComponent = (tabId: string) => {
     switch (tabId) {
@@ -115,6 +125,32 @@ const Index = () => {
       <Header />
       
       <div className="container mx-auto py-8">
+        {/* Tools Section - Only for non-demenageur roles */}
+        {profile?.role !== 'demenageur' && (
+          <div className="mb-8">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Outils</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button 
+                  onClick={handlePricingToolClick}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                >
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Outil de Devis
+                </Button>
+                
+                <Button 
+                  onClick={handleVolumeCalculatorClick}
+                  className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+                >
+                  <Calculator className="h-4 w-4 mr-2" />
+                  Calculateur de Volume
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
         <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
           {tabs.map(tab => (
