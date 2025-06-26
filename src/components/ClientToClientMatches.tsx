@@ -10,6 +10,8 @@ import { useMatchActions } from '@/hooks/useMatchActions';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ClientToClientMatchesProps {
+  clientId?: number;
+  clientName?: string;
   globalMatches?: any[];
 }
 
@@ -27,7 +29,7 @@ interface ClientToClientMatch {
   efficiency_score: number;
 }
 
-const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) => {
+const ClientToClientMatches = ({ clientId, clientName, globalMatches }: ClientToClientMatchesProps) => {
   const { toast } = useToast();
   const { acceptMatch, rejectMatch, loading: actionLoading } = useMatchActions();
   const [matches, setMatches] = useState<ClientToClientMatch[]>([]);
@@ -36,12 +38,28 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
 
   useEffect(() => {
     if (globalMatches) {
-      setMatches(globalMatches);
+      // Convert globalMatches to the expected format
+      const convertedMatches = globalMatches.map(match => ({
+        client1: match.primary_client || match.client1,
+        client2: match.secondary_client || match.client2,
+        match_type: match.match_type as 'bidirectional_shared' | 'unidirectional_shared' | 'optimized_route',
+        distance_km: match.distance_km,
+        date_diff_days: match.date_diff_days,
+        volume_compatible: match.volume_compatible,
+        combined_volume: match.combined_volume,
+        cost_savings: match.savings_estimate?.cost_reduction_percent || 0,
+        is_valid: match.is_valid,
+        match_reference: match.match_reference,
+        efficiency_score: match.match_score || 0
+      }));
+      setMatches(convertedMatches);
+    } else if (clientId) {
+      findMatchesForClient();
     } else {
       findMatches();
     }
     loadAcceptedMatches();
-  }, [globalMatches]);
+  }, [globalMatches, clientId]);
 
   const loadAcceptedMatches = async () => {
     try {
@@ -62,17 +80,75 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
     }
   };
 
+  const findMatchesForClient = async () => {
+    if (!clientId) return;
+    
+    try {
+      setLoading(true);
+      console.log(`🔍 Recherche de correspondances pour client ${clientId}...`);
+      
+      const results = await ClientToClientMatchingService.findClientToClientMatches();
+      // Filter matches that involve this specific client
+      const clientMatches = results.filter(match => 
+        match.primary_client?.id === clientId || match.secondary_client?.id === clientId
+      ).map(match => ({
+        client1: match.primary_client,
+        client2: match.secondary_client,
+        match_type: match.match_type as 'bidirectional_shared' | 'unidirectional_shared' | 'optimized_route',
+        distance_km: match.distance_km,
+        date_diff_days: match.date_diff_days,
+        volume_compatible: match.volume_compatible,
+        combined_volume: match.combined_volume,
+        cost_savings: match.savings_estimate?.cost_reduction_percent || 0,
+        is_valid: match.is_valid,
+        match_reference: match.match_reference,
+        efficiency_score: match.match_score || 0
+      }));
+      
+      setMatches(clientMatches);
+      
+      toast({
+        title: "Recherche terminée",
+        description: `${clientMatches.length} correspondances trouvées pour ${clientName}`,
+      });
+      
+    } catch (error) {
+      console.error('❌ Erreur recherche matches:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de rechercher les correspondances",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const findMatches = async () => {
     try {
       setLoading(true);
       console.log('🔍 Recherche de correspondances client-à-client...');
       
       const results = await ClientToClientMatchingService.findClientToClientMatches();
-      setMatches(results);
+      const convertedMatches = results.map(match => ({
+        client1: match.primary_client,
+        client2: match.secondary_client,
+        match_type: match.match_type as 'bidirectional_shared' | 'unidirectional_shared' | 'optimized_route',
+        distance_km: match.distance_km,
+        date_diff_days: match.date_diff_days,
+        volume_compatible: match.volume_compatible,
+        combined_volume: match.combined_volume,
+        cost_savings: match.savings_estimate?.cost_reduction_percent || 0,
+        is_valid: match.is_valid,
+        match_reference: match.match_reference,
+        efficiency_score: match.match_score || 0
+      }));
+      
+      setMatches(convertedMatches);
       
       toast({
         title: "Recherche terminée",
-        description: `${results.length} correspondances client-à-client trouvées`,
+        description: `${convertedMatches.length} correspondances client-à-client trouvées`,
       });
       
     } catch (error) {
@@ -105,7 +181,11 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
       ]));
       
       if (!globalMatches) {
-        await findMatches();
+        if (clientId) {
+          await findMatchesForClient();
+        } else {
+          await findMatches();
+        }
       }
     }
   };
@@ -119,7 +199,11 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
     
     const success = await rejectMatch(matchData);
     if (success && !globalMatches) {
-      await findMatches();
+      if (clientId) {
+        await findMatchesForClient();
+      } else {
+        await findMatches();
+      }
     }
   };
 
@@ -151,6 +235,20 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
           icon: <Route className="h-4 w-4" />,
           color: 'bg-purple-100 text-purple-800 border-purple-200'
         };
+      case 'same_departure':
+        return {
+          label: 'Même Départ',
+          description: 'Les deux clients partagent la même zone de départ',
+          icon: <Users className="h-4 w-4" />,
+          color: 'bg-blue-100 text-blue-800 border-blue-200'
+        };
+      case 'return_trip':
+        return {
+          label: 'Trajet Retour',
+          description: 'Optimisation avec trajet de retour',
+          icon: <Route className="h-4 w-4" />,
+          color: 'bg-green-100 text-green-800 border-green-200'
+        };
       default: 
         return {
           label: type,
@@ -177,15 +275,20 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
         <div className="flex items-center space-x-3">
           <Users className="h-6 w-6 text-purple-600" />
           <div>
-            <h3 className="text-2xl font-bold text-gray-800">Matching Client-à-Client</h3>
+            <h3 className="text-2xl font-bold text-gray-800">
+              {clientId ? `Matching pour ${clientName}` : 'Matching Client-à-Client'}
+            </h3>
             <p className="text-sm text-gray-600">
-              Correspondances partagées et circuits optimisés entre clients
+              {clientId 
+                ? `Correspondances spécifiques pour ce client`
+                : 'Correspondances partagées et circuits optimisés entre clients'
+              }
             </p>
           </div>
         </div>
         {!globalMatches && (
           <Button 
-            onClick={findMatches} 
+            onClick={clientId ? findMatchesForClient : findMatches} 
             disabled={loading}
             className="bg-purple-600 hover:bg-purple-700"
           >
@@ -282,10 +385,16 @@ const ClientToClientMatches = ({ globalMatches }: ClientToClientMatchesProps) =>
           <CardContent className="text-center py-12">
             <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-600 mb-2">
-              Aucune correspondance client-à-client trouvée
+              {clientId 
+                ? `Aucune correspondance trouvée pour ${clientName}`
+                : 'Aucune correspondance client-à-client trouvée'
+              }
             </h3>
             <p className="text-gray-500">
-              Aucun regroupement optimal n'a été identifié entre les clients actuels
+              {clientId 
+                ? 'Ce client n\'a pas de correspondance avec d\'autres clients actuellement'
+                : 'Aucun regroupement optimal n\'a été identifié entre les clients actuels'
+              }
             </p>
           </CardContent>
         </Card>
