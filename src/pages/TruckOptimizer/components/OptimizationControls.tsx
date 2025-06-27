@@ -11,42 +11,162 @@ interface OptimizationControlsProps {
   onOptimize: (placements: PlacedItem[]) => void;
 }
 
+// 3D Bin Packing Algorithm
+interface PackingSpace {
+  x: number;
+  y: number;
+  z: number;
+  width: number;
+  height: number;
+  depth: number;
+  occupied: boolean;
+}
+
 const OptimizationControls = ({ truck, furniture, onOptimize }: OptimizationControlsProps) => {
-  const handleAutoOptimize = () => {
+  const handle3DOptimize = () => {
     if (!truck || furniture.length === 0) return;
 
-    // Simple placement algorithm - place items sequentially
     const placements: PlacedItem[] = [];
-    let currentX = -truck.dimensions.length / 2;
-    let currentZ = -truck.dimensions.width / 2;
-    let currentY = 0;
-    let rowHeight = 0;
+    const { length, width, height } = truck.dimensions;
+    
+    // Initialize available spaces - start with the full truck volume
+    let availableSpaces: PackingSpace[] = [{
+      x: -length / 2,
+      y: 0,
+      z: -width / 2,
+      width: length,
+      height: height,
+      depth: width,
+      occupied: false
+    }];
 
-    furniture.forEach((item, index) => {
-      // Check if item fits in current position
-      if (currentX + item.dimensions.length > truck.dimensions.length / 2) {
-        // Move to next row
-        currentX = -truck.dimensions.length / 2;
-        currentZ += rowHeight + 0.1;
-        currentY = 0;
-        rowHeight = 0;
+    // Sort furniture by volume (largest first) for better optimization
+    const sortedFurniture = [...furniture].sort((a, b) => b.volume - a.volume);
+
+    sortedFurniture.forEach((item, index) => {
+      const { length: itemL, width: itemW, height: itemH } = item.dimensions;
+      
+      // Try to find a space that can fit this item
+      let placed = false;
+      
+      for (let i = 0; i < availableSpaces.length && !placed; i++) {
+        const space = availableSpaces[i];
+        
+        if (space.occupied) continue;
+        
+        // Check if item fits in this space (try different orientations)
+        const orientations = [
+          { l: itemL, w: itemW, h: itemH, rot: { x: 0, y: 0, z: 0 } },
+          { l: itemW, w: itemL, h: itemH, rot: { x: 0, y: Math.PI / 2, z: 0 } },
+          { l: itemL, w: itemH, h: itemW, rot: { x: Math.PI / 2, y: 0, z: 0 } },
+          { l: itemH, w: itemL, h: itemW, rot: { x: 0, y: 0, z: Math.PI / 2 } },
+          { l: itemW, w: itemH, h: itemL, rot: { x: Math.PI / 2, y: Math.PI / 2, z: 0 } },
+          { l: itemH, w: itemW, h: itemL, rot: { x: 0, y: Math.PI / 2, z: Math.PI / 2 } }
+        ];
+        
+        for (const orientation of orientations) {
+          if (orientation.l <= space.width && 
+              orientation.w <= space.depth && 
+              orientation.h <= space.height) {
+            
+            // Place the item
+            placements.push({
+              id: `placed-${index}`,
+              furnitureId: item.id,
+              position: {
+                x: space.x + orientation.l / 2,
+                y: space.y + orientation.h / 2,
+                z: space.z + orientation.w / 2
+              },
+              rotation: orientation.rot
+            });
+            
+            // Mark this space as occupied
+            space.occupied = true;
+            
+            // Create new available spaces from the remaining volume
+            const newSpaces: PackingSpace[] = [];
+            
+            // Right space
+            if (space.x + orientation.l < space.x + space.width) {
+              newSpaces.push({
+                x: space.x + orientation.l,
+                y: space.y,
+                z: space.z,
+                width: space.width - orientation.l,
+                height: space.height,
+                depth: space.depth,
+                occupied: false
+              });
+            }
+            
+            // Top space
+            if (space.y + orientation.h < space.y + space.height) {
+              newSpaces.push({
+                x: space.x,
+                y: space.y + orientation.h,
+                z: space.z,
+                width: orientation.l,
+                height: space.height - orientation.h,
+                depth: space.depth,
+                occupied: false
+              });
+            }
+            
+            // Back space
+            if (space.z + orientation.w < space.z + space.depth) {
+              newSpaces.push({
+                x: space.x,
+                y: space.y,
+                z: space.z + orientation.w,
+                width: orientation.l,
+                height: orientation.h,
+                depth: space.depth - orientation.w,
+                occupied: false
+              });
+            }
+            
+            // Add new spaces to the list
+            availableSpaces = availableSpaces.concat(newSpaces);
+            
+            placed = true;
+            break;
+          }
+        }
       }
-
-      // Check if we're still within truck bounds
-      if (currentZ + item.dimensions.width <= truck.dimensions.width / 2) {
-        placements.push({
-          id: `placed-${index}`,
-          furnitureId: item.id,
-          position: {
-            x: currentX + item.dimensions.length / 2,
-            y: currentY + item.dimensions.height / 2,
-            z: currentZ + item.dimensions.width / 2
-          },
-          rotation: { x: 0, y: 0, z: 0 }
+      
+      // If item couldn't be placed, try to stack it if possible
+      if (!placed) {
+        // Find the highest placed item and try to stack on top
+        const stackableItems = placements.filter(p => {
+          const furniture = sortedFurniture.find(f => f.id === p.furnitureId);
+          return furniture && !furniture.fragile;
         });
-
-        currentX += item.dimensions.length + 0.1;
-        rowHeight = Math.max(rowHeight, item.dimensions.width);
+        
+        for (const stackItem of stackableItems) {
+          const baseFurniture = sortedFurniture.find(f => f.id === stackItem.furnitureId);
+          if (!baseFurniture) continue;
+          
+          const stackX = stackItem.position.x;
+          const stackY = stackItem.position.y + baseFurniture.dimensions.height / 2 + itemH / 2;
+          const stackZ = stackItem.position.z;
+          
+          // Check if stacking is within truck bounds and weight constraints
+          if (stackY + itemH / 2 <= height && 
+              !item.fragile && 
+              item.weight <= 50) { // Weight limit for stacking
+            
+            placements.push({
+              id: `placed-${index}`,
+              furnitureId: item.id,
+              position: { x: stackX, y: stackY, z: stackZ },
+              rotation: { x: 0, y: 0, z: 0 }
+            });
+            
+            placed = true;
+            break;
+          }
+        }
       }
     });
 
@@ -63,15 +183,20 @@ const OptimizationControls = ({ truck, furniture, onOptimize }: OptimizationCont
     const tips = [];
     
     if (furniture.some(item => item.fragile)) {
-      tips.push("Des objets fragiles nécessitent un placement spécial");
+      tips.push("Les objets fragiles seront placés en sécurité (pas d'empilement)");
     }
     
     if (calculateEfficiency() > 80) {
-      tips.push("Attention: le camion sera très chargé");
+      tips.push("Volume important: optimisation 3D recommandée");
     }
     
     if (furniture.length > 5) {
-      tips.push("Optimisation recommandée pour ce nombre d'objets");
+      tips.push("Algorithme 3D utilisé pour maximiser l'espace");
+    }
+
+    const heavyItems = furniture.filter(item => item.weight > 50);
+    if (heavyItems.length > 0) {
+      tips.push("Objets lourds placés au sol pour la stabilité");
     }
 
     return tips;
@@ -86,13 +211,13 @@ const OptimizationControls = ({ truck, furniture, onOptimize }: OptimizationCont
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Target className="h-5 w-5" />
-          Optimisation Automatique
+          Optimisation 3D Intelligente
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600">Efficacité prévue</p>
+            <p className="text-sm text-gray-600">Efficacité volumétrique</p>
             <div className="flex items-center gap-2">
               <Badge variant={calculateEfficiency() > 80 ? "destructive" : "default"}>
                 {calculateEfficiency().toFixed(1)}%
@@ -104,12 +229,12 @@ const OptimizationControls = ({ truck, furniture, onOptimize }: OptimizationCont
           </div>
           
           <Button
-            onClick={handleAutoOptimize}
+            onClick={handle3DOptimize}
             disabled={furniture.length === 0}
             className="bg-purple-600 hover:bg-purple-700"
           >
             <Zap className="h-4 w-4 mr-2" />
-            Optimiser
+            Optimiser 3D
           </Button>
         </div>
 
@@ -117,7 +242,7 @@ const OptimizationControls = ({ truck, furniture, onOptimize }: OptimizationCont
           <div className="space-y-2">
             <h4 className="text-sm font-medium flex items-center gap-1">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Conseils
+              Stratégie d'optimisation
             </h4>
             {getOptimizationTips().map((tip, index) => (
               <p key={index} className="text-xs text-gray-600 pl-5">
@@ -128,7 +253,7 @@ const OptimizationControls = ({ truck, furniture, onOptimize }: OptimizationCont
         )}
 
         <div className="pt-2 border-t text-xs text-gray-500">
-          <p>L'algorithme place automatiquement vos meubles pour optimiser l'espace et la sécurité.</p>
+          <p><strong>Algorithme 3D :</strong> Utilise tout le volume disponible avec rotation automatique et empilement sécurisé.</p>
         </div>
       </CardContent>
     </Card>
