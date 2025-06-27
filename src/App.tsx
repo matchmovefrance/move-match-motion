@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import PricingTool from "./pages/PricingTool/Index";
 import VolumeCalculator from "./pages/VolumeCalculator/Index";
+import TruckOptimizer from "./pages/TruckOptimizer/Index";
 import PublicClientForm from "./pages/PublicClientForm";
 import PublicMoverForm from "./pages/PublicMoverForm";
 
@@ -48,6 +49,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <VolumeCalculator />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/truck-optimizer"
+              element={
+                <ProtectedRoute>
+                  <TruckOptimizer />
                 </ProtectedRoute>
               }
             />

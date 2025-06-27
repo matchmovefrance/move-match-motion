@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Calculator } from 'lucide-react';
+import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Calculator, Package } from 'lucide-react';
 import Analytics from '@/components/Analytics';
 import ClientList from '@/components/ClientList';
 import MoveManagement from '@/components/MoveManagement';
@@ -45,6 +44,10 @@ const Index = () => {
 
   const handleVolumeCalculatorClick = () => {
     window.open('/volume-calculator', '_blank');
+  };
+
+  const handleTruckOptimizerClick = () => {
+    window.open('/truck-optimizer', '_blank');
   };
 
   const renderTabComponent = (tabId: string) => {
@@ -145,6 +148,14 @@ const Index = () => {
                 >
                   <Calculator className="h-4 w-4 mr-2" />
                   Calculateur de Volume
+                </Button>
+
+                <Button 
+                  onClick={handleTruckOptimizerClick}
+                  className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  Optimiseur de Chargement 3D
                 </Button>
               </div>
             </div>
