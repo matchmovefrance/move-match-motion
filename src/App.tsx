@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Routes, Route } from 'react-router-dom';
 import Index from './pages/Index';
 import Auth from './pages/Auth';
+import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import PricingTool from './pages/PricingTool/Index';
 import VolumeCalculator from './pages/VolumeCalculator/Index';
@@ -42,8 +43,33 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/volume-calculator" element={<VolumeCalculator />} />
-          <Route path="/truck-optimizer" element={<TruckOptimizer />} />
+          <Route
+            path="/volume-calculator"
+            element={
+              <ProtectedRoute>
+                <>
+                  <Header />
+                  <main className="pt-16">
+                    <VolumeCalculator />
+                  </main>
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/truck-optimizer"
+            element={
+              <ProtectedRoute>
+                <>
+                  <Header />
+                  <main className="pt-16">
+                    <TruckOptimizer />
+                  </main>
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />
       </div>
