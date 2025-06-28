@@ -1,12 +1,12 @@
+
 import { AuthProvider } from './contexts/AuthContext';
 import Header from './components/Header';
 import { Toaster } from '@/components/ui/toaster';
 import { Routes, Route } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import Index from './pages/Index';
+import Auth from './pages/Auth';
 import ProtectedRoute from './components/ProtectedRoute';
-import PricingTool from './pages/PricingTool';
+import PricingTool from './pages/PricingTool/Index';
 import VolumeCalculator from './pages/VolumeCalculator/Index';
 import TruckOptimizer from './pages/TruckOptimizer/Index';
 
@@ -17,13 +17,12 @@ function App() {
         <Header />
         <main className="pt-16">
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route path="/auth" element={<Auth />} />
             <Route
               path="/"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <Index />
                 </ProtectedRoute>
               }
             />
