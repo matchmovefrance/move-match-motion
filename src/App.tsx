@@ -14,30 +14,37 @@ function App() {
   return (
     <AuthProvider>
       <div className="min-h-screen bg-gray-50">
-        <Header />
-        <main className="pt-16">
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/pricing-tool"
-              element={
-                <ProtectedRoute>
-                  <PricingTool />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/volume-calculator" element={<VolumeCalculator />} />
-            <Route path="/truck-optimizer" element={<TruckOptimizer />} />
-          </Routes>
-        </main>
+        <Routes>
+          <Route path="/auth" element={<Auth />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <>
+                  <Header />
+                  <main className="pt-16">
+                    <Index />
+                  </main>
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pricing-tool"
+            element={
+              <ProtectedRoute>
+                <>
+                  <Header />
+                  <main className="pt-16">
+                    <PricingTool />
+                  </main>
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/volume-calculator" element={<VolumeCalculator />} />
+          <Route path="/truck-optimizer" element={<TruckOptimizer />} />
+        </Routes>
         <Toaster />
       </div>
     </AuthProvider>
