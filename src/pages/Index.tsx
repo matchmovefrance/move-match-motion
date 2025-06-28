@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Truck, Target, Map, Settings, Calendar, TrendingUp, Shield, Calculator, Package } from 'lucide-react';
@@ -13,7 +14,6 @@ import UserManagement from '@/components/UserManagement';
 import PublicLinkManager from '@/components/PublicLinkManager';
 import AdminActions from '@/components/AdminActions';
 import DiagnosticTab from '@/components/DiagnosticTab';
-import Header from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 
@@ -105,7 +105,7 @@ const Index = () => {
       { id: 'match-analytics', label: 'Analytics Matchs', icon: TrendingUp },
       { id: 'providers', label: 'Prestataires', icon: Settings },
       { id: 'map', label: 'Carte', icon: Map },
-      { id: 'diagnostic', label: 'Diagnostic', icon: Shield }, // Nouvel onglet pour diagnostic
+      { id: 'diagnostic', label: 'Diagnostic', icon: Shield },
     ];
 
     // Les agents et admins voient la gestion (mais contenu différent)
@@ -124,66 +124,62 @@ const Index = () => {
   const tabs = getTabs();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      
-      <div className="container mx-auto py-8">
-        {/* Tools Section - Only for non-demenageur roles */}
-        {profile?.role !== 'demenageur' && (
-          <div className="mb-8">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">Outils</h3>
-              <div className="flex flex-wrap gap-3">
-                <Button 
-                  onClick={handlePricingToolClick}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                >
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Outil de Devis
-                </Button>
-                
-                <Button 
-                  onClick={handleVolumeCalculatorClick}
-                  className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
-                >
-                  <Calculator className="h-4 w-4 mr-2" />
-                  Calculateur de Volume
-                </Button>
+    <div className="container mx-auto py-8">
+      {/* Tools Section - Only for non-demenageur roles */}
+      {profile?.role !== 'demenageur' && (
+        <div className="mb-8">
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Outils</h3>
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                onClick={handlePricingToolClick}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Outil de Devis
+              </Button>
+              
+              <Button 
+                onClick={handleVolumeCalculatorClick}
+                className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+              >
+                <Calculator className="h-4 w-4 mr-2" />
+                Calculateur de Volume
+              </Button>
 
-                <Button 
-                  onClick={handleTruckOptimizerClick}
-                  className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
-                >
-                  <Package className="h-4 w-4 mr-2" />
-                  Optimiseur de Chargement 3D
-                </Button>
-              </div>
+              <Button 
+                onClick={handleTruckOptimizerClick}
+                className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Optimiseur de Chargement 3D
+              </Button>
             </div>
           </div>
-        )}
-
-        {/* Navigation */}
-        <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              className={`group flex items-center space-x-2 px-4 py-3 rounded-md text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-nowrap ${
-                activeTab === tab.id 
-                  ? 'bg-blue-50 text-blue-700 shadow-sm' 
-                  : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
-              }`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <tab.icon className="h-5 w-5" />
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        {/* Contenu de l'onglet actif */}
-        <div className="bg-white rounded-xl shadow-sm p-8">
-          {renderTabComponent(activeTab)}
         </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            className={`group flex items-center space-x-2 px-4 py-3 rounded-md text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-nowrap ${
+              activeTab === tab.id 
+                ? 'bg-blue-50 text-blue-700 shadow-sm' 
+                : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
+            }`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <tab.icon className="h-5 w-5" />
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Contenu de l'onglet actif */}
+      <div className="bg-white rounded-xl shadow-sm p-8">
+        {renderTabComponent(activeTab)}
       </div>
     </div>
   );
