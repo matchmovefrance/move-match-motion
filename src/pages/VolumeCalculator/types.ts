@@ -2,19 +2,25 @@
 export interface FurnitureItem {
   id: string;
   name: string;
-  volume: number; // in m³
+  volume: number;
+  description: string;
   icon: string;
   category: string;
-  description?: string;
 }
 
-export interface SelectedItem extends FurnitureItem {
-  quantity: number;
+export interface FurnitureSubcategory {
+  id: string;
+  name: string;
+  items: FurnitureItem[];
 }
 
 export interface FurnitureCategory {
   id: string;
   name: string;
   icon: string;
-  items: FurnitureItem[];
+  subcategories: FurnitureSubcategory[];
+}
+
+export interface SelectedItem extends FurnitureItem {
+  quantity: number;
 }
