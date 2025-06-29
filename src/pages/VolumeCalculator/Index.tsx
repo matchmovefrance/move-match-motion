@@ -236,7 +236,12 @@ Validité de l'estimation : 30 jours
     window.location.href = '/truck-optimizer';
   };
 
-  const totalItems = furnitureCategories.reduce((total, category) => total + category.items.length, 0);
+  // Calculate total items by flattening subcategories
+  const totalItems = furnitureCategories.reduce((total, category) => {
+    return total + category.subcategories.reduce((subTotal, subcategory) => {
+      return subTotal + subcategory.items.length;
+    }, 0);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
