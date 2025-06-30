@@ -1,19 +1,25 @@
-
 import { useState } from 'react';
-import { Calculator, RotateCcw, Download, Package, FileText, Send } from 'lucide-react';
+import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FurnitureSelector from './components/FurnitureSelector';
 import VolumeDisplay from './components/VolumeDisplay';
 import { FurnitureItem, SelectedItem } from './types';
 import { furnitureCategories } from './data/furnitureData';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
 
 const VolumeCalculator = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [clientName, setClientName] = useState('');
   const [clientReference, setClientReference] = useState('');
@@ -21,6 +27,8 @@ const VolumeCalculator = () => {
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [notes, setNotes] = useState('');
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'txt'>('pdf');
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   const calculateTotalVolume = () => {
     return selectedItems.reduce((total, item) => total + (item.volume * item.quantity), 0);
@@ -82,16 +90,67 @@ const VolumeCalculator = () => {
     setSelectedItems([]);
   };
 
-  const generateProfessionalInventory = () => {
+  const loadCompanySettings = async () => {
+    if (!user) return null;
+    
+    try {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('company_name, address, phone, email, siret')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading company settings:', error);
+        return null;
+      }
+
+      return data || {
+        company_name: 'MatchMove',
+        address: 'France',
+        phone: '+33 1 23 45 67 89',
+        email: 'contact@matchmove.fr',
+        siret: ''
+      };
+    } catch (error) {
+      console.error('Error loading company settings:', error);
+      return null;
+    }
+  };
+
+  const generateProfessionalInventoryContent = async () => {
+    const settings = await loadCompanySettings();
     const totalVolume = calculateTotalVolume();
     const totalWeight = calculateTotalWeight();
     const currentDate = new Date().toLocaleDateString('fr-FR');
     const truck = getTruckRecommendation(totalVolume);
     
+    return {
+      settings,
+      totalVolume,
+      totalWeight,
+      currentDate,
+      truck,
+      selectedItems
+    };
+  };
+
+  const generateProfessionalInventoryTXT = async () => {
+    const data = await generateProfessionalInventoryContent();
+    const { settings, totalVolume, totalWeight, currentDate, truck } = data;
+    
     // En-tête professionnel
     const header = `═══════════════════════════════════════════════════════
     INVENTAIRE PROFESSIONNEL DE DÉMÉNAGEMENT
 ═══════════════════════════════════════════════════════
+
+INFORMATIONS ENTREPRISE
+──────────────────────────────────────────────────────
+Entreprise          : ${settings?.company_name || 'MatchMove'}
+Adresse             : ${settings?.address || 'France'}
+Téléphone           : ${settings?.phone || '+33 1 23 45 67 89'}
+Email               : ${settings?.email || 'contact@matchmove.fr'}
+SIRET               : ${settings?.siret || 'Non renseigné'}
 
 INFORMATIONS CLIENT
 ──────────────────────────────────────────────────────
@@ -190,27 +249,190 @@ CONDITIONS PARTICULIÈRES
 • Accès difficile      : À évaluer sur site
 
 ═══════════════════════════════════════════════════════
-Inventaire établi par le système MatchMove Professional
-Version : 2.0 | Contact technique : support@matchmove.fr
+Inventaire établi par ${settings?.company_name || 'MatchMove'}
+Contact : ${settings?.email || 'contact@matchmove.fr'}
 Validité de l'estimation : 30 jours
 ═══════════════════════════════════════════════════════`;
 
     return header + inventoryContent + notesSection + summary;
   };
 
-  const handleExport = () => {
-    const exportData = generateProfessionalInventory();
+  const generateProfessionalInventoryPDF = async () => {
+    const data = await generateProfessionalInventoryContent();
+    const { settings, totalVolume, totalWeight, currentDate, truck } = data;
     
-    const blob = new Blob([exportData], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const fileName = `inventaire-${clientReference || clientName || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.txt`;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.width;
+    const margin = 20;
+    let yPosition = 20;
+
+    // Helper function to add text with line breaks
+    const addText = (text: string, x: number, y: number, maxWidth?: number) => {
+      if (maxWidth) {
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        pdf.text(lines, x, y);
+        return y + (lines.length * 7);
+      } else {
+        pdf.text(text, x, y);
+        return y + 7;
+      }
+    };
+
+    // Header
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    yPosition = addText('INVENTAIRE PROFESSIONNEL DE DÉMÉNAGEMENT', margin, yPosition);
+    yPosition += 10;
+
+    // Company Information
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    yPosition = addText('INFORMATIONS ENTREPRISE', margin, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    yPosition = addText(`Entreprise: ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 5);
+    yPosition = addText(`Adresse: ${settings?.address || 'France'}`, margin, yPosition);
+    yPosition = addText(`Téléphone: ${settings?.phone || '+33 1 23 45 67 89'}`, margin, yPosition);
+    yPosition = addText(`Email: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition);
+    yPosition = addText(`SIRET: ${settings?.siret || 'Non renseigné'}`, margin, yPosition);
+    yPosition += 10;
+
+    // Client Information
+    pdf.setFont('helvetica', 'bold');
+    yPosition = addText('INFORMATIONS CLIENT', margin, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    yPosition = addText(`Nom: ${clientName || 'Non renseigné'}`, margin, yPosition + 5);
+    yPosition = addText(`Référence: ${clientReference || `INV-${Date.now()}`}`, margin, yPosition);
+    yPosition = addText(`Adresse: ${clientAddress || 'Non renseignée'}`, margin, yPosition);
+    yPosition = addText(`Téléphone: ${clientPhone || 'Non renseigné'}`, margin, yPosition);
+    yPosition = addText(`Email: ${clientEmail || 'Non renseigné'}`, margin, yPosition);
+    yPosition = addText(`Date: ${currentDate}`, margin, yPosition);
+    yPosition += 10;
+
+    // Technical Summary
+    pdf.setFont('helvetica', 'bold');
+    yPosition = addText('RÉSUMÉ TECHNIQUE', margin, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    yPosition = addText(`Volume total: ${totalVolume.toFixed(2)} m³`, margin, yPosition + 5);
+    yPosition = addText(`Poids estimé: ${Math.round(totalWeight)} kg`, margin, yPosition);
+    yPosition = addText(`Nombre d'objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, margin, yPosition);
+    yPosition = addText(`Véhicule recommandé: ${truck.type} (${truck.size})`, margin, yPosition);
+    yPosition += 10;
+
+    // Inventory by category
+    pdf.setFont('helvetica', 'bold');
+    yPosition = addText('INVENTAIRE DÉTAILLÉ', margin, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    yPosition += 5;
+
+    const itemsByCategory = selectedItems.reduce((acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    }, {} as Record<string, SelectedItem[]>);
+
+    Object.entries(itemsByCategory).forEach(([category, items]) => {
+      // Check if we need a new page
+      if (yPosition > 250) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+
+      const categoryVolume = items.reduce((sum, item) => sum + (item.quantity * item.volume), 0);
+      
+      pdf.setFont('helvetica', 'bold');
+      yPosition = addText(`${category.toUpperCase()} - ${categoryVolume.toFixed(2)}m³`, margin, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      
+      items.forEach((item) => {
+        if (yPosition > 270) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+        
+        const itemVolume = item.quantity * item.volume;
+        yPosition = addText(`• ${item.name} (x${item.quantity}) - ${itemVolume.toFixed(3)} m³`, margin + 10, yPosition);
+      });
+      yPosition += 5;
+    });
+
+    // Notes section
+    if (notes) {
+      if (yPosition > 230) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      pdf.setFont('helvetica', 'bold');
+      yPosition = addText('NOTES PARTICULIÈRES', margin, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      yPosition = addText(notes, margin, yPosition + 5, pageWidth - 2 * margin);
+    }
+
+    // Footer
+    if (yPosition > 250) {
+      pdf.addPage();
+      yPosition = 20;
+    }
+    
+    yPosition += 10;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'italic');
+    yPosition = addText(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition);
+    yPosition = addText(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition);
+    yPosition = addText('Validité de l\'estimation: 30 jours', margin, yPosition);
+
+    return pdf;
+  };
+
+  const handleExport = async () => {
+    if (selectedItems.length === 0) {
+      toast({
+        title: "Aucun élément sélectionné",
+        description: "Veuillez ajouter des meubles avant d'exporter l'inventaire.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      if (exportFormat === 'pdf') {
+        const pdf = await generateProfessionalInventoryPDF();
+        const fileName = `inventaire-${clientReference || clientName || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+        pdf.save(fileName);
+        
+        toast({
+          title: "PDF généré avec succès",
+          description: "L'inventaire professionnel a été exporté en PDF.",
+        });
+      } else {
+        const exportData = await generateProfessionalInventoryTXT();
+        
+        const blob = new Blob([exportData], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const fileName = `inventaire-${clientReference || clientName || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.txt`;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Fichier TXT généré avec succès",
+          description: "L'inventaire professionnel a été exporté en format texte.",
+        });
+      }
+    } catch (error) {
+      console.error('Error generating export:', error);
+      toast({
+        title: "Erreur lors de l'export",
+        description: "Une erreur est survenue lors de la génération du fichier.",
+        variant: "destructive",
+      });
+    }
   };
 
   const exportToTruckOptimizer = () => {
@@ -409,13 +631,28 @@ Validité de l'estimation : 30 jours
                   Réinitialiser
                 </Button>
                 
+                <div>
+                  <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-2">
+                    Format d'export
+                  </label>
+                  <Select value={exportFormat} onValueChange={(value: 'pdf' | 'txt') => setExportFormat(value)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choisir le format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pdf">PDF Professionnel</SelectItem>
+                      <SelectItem value="txt">Fichier Texte</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <Button
                   onClick={handleExport}
                   disabled={selectedItems.length === 0}
                   className="w-full bg-green-600 hover:bg-green-700"
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  Exporter l'inventaire Pro
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Exporter l'inventaire {exportFormat.toUpperCase()}
                 </Button>
 
                 <Button
@@ -432,7 +669,8 @@ Validité de l'estimation : 30 jours
                 <div className="text-sm text-gray-600 space-y-1">
                   <p><strong>ℹ️ Information :</strong></p>
                   <p>• Volumes basés sur standards professionnels</p>
-                  <p>• Coefficient de foisonnement inclus (+15%)</p>
+                  <p>• Données entreprise depuis paramètres admin</p>
+                  <p>• Export PDF avec mise en forme professionnelle</p>
                   <p>• Export direct vers l'optimiseur 3D</p>
                 </div>
               </CardContent>
