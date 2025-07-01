@@ -49,12 +49,12 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
           .insert({
             name: moverData.mover_name,
             company_name: moverData.company_name,
-            email: '',
-            phone: '',
+            email: 'public@form.com',
+            phone: 'À renseigner',
             address: `CP ${moverData.departure_postal_code}`,
             city: `CP ${moverData.departure_postal_code}`,
             postal_code: moverData.departure_postal_code,
-            created_by: null // Accepter null pour les saisies publiques
+            created_by: null // NULL pour les saisies publiques
           });
 
         if (providerError) {
@@ -92,13 +92,14 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
       // Synchroniser le prestataire dans service_providers
       await syncServiceProvider(formData);
 
-      // Préparer les données du trajet - utiliser un UUID par défaut pour created_by
-      const defaultUserId = '00000000-0000-0000-0000-000000000000'; // UUID par défaut pour les saisies publiques
+      // Préparer les données du trajet - utiliser l'UUID par défaut pour les saisies publiques
+      const defaultUserId = '00000000-0000-0000-0000-000000000000'; 
       
       const moveData = {
         company_name: formData.company_name,
         mover_name: formData.mover_name,
-        contact_phone: '',
+        contact_phone: 'À renseigner',
+        contact_email: 'public@form.com',
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         arrival_city: `CP ${formData.arrival_postal_code}`,
@@ -107,8 +108,8 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
         max_volume: maxVolume,
         used_volume: usedVolume,
         available_volume: availableVolume,
-        departure_address: '',
-        arrival_address: '',
+        departure_address: 'Adresse à préciser',
+        arrival_address: 'Adresse à préciser',
         departure_country: 'France',
         arrival_country: 'France',
         truck_identifier: 'AUTO-GENERATED',
@@ -117,7 +118,7 @@ const SimpleMoverFormReplacement = ({ onSuccess }: SimpleMoverFormReplacementPro
         status: 'confirmed',
         mover_id: 1,
         truck_id: 1,
-        created_by: defaultUserId // Utiliser l'UUID par défaut
+        created_by: defaultUserId
       };
 
       console.log('📝 Données du trajet à insérer:', moveData);

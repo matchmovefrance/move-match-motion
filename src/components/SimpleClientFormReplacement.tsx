@@ -7,17 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { User, MapPin, Calendar, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface SimpleClientFormReplacementProps {
   onSuccess?: () => void;
   initialData?: any;
   isEditing?: boolean;
+  isPublicForm?: boolean; // Nouveau prop pour identifier les formulaires publics
 }
 
-const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: SimpleClientFormReplacementProps) => {
-  const { user } = useAuth();
+const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing, isPublicForm = false }: SimpleClientFormReplacementProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -51,15 +50,6 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) {
-      toast({
-        title: "Erreur",
-        description: "Vous devez être connecté",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (!formData.name || !formData.departure_postal_code || !formData.arrival_postal_code || 
         !formData.desired_date || !formData.estimated_volume) {
       toast({
@@ -85,11 +75,14 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         dateRangeEnd.setDate(dateRangeEnd.getDate() + formData.flexibility_days);
       }
 
+      // Utiliser l'UUID par défaut pour les formulaires publics
+      const defaultUserId = '00000000-0000-0000-0000-000000000000';
+      
       // Créer/mettre à jour uniquement dans la table clients
       const clientData = {
         name: formData.name,
-        email: `temp-${Date.now()}@temp.com`, // Email temporaire
-        phone: 'A renseigner',
+        email: isPublicForm ? 'public@form.com' : `temp-${Date.now()}@temp.com`,
+        phone: isPublicForm ? 'À renseigner' : 'A renseigner',
         departure_city: `CP ${formData.departure_postal_code}`,
         departure_postal_code: formData.departure_postal_code,
         departure_country: 'France',
@@ -105,7 +98,7 @@ const SimpleClientFormReplacement = ({ onSuccess, initialData, isEditing }: Simp
         status: 'pending',
         is_matched: false,
         match_status: 'pending',
-        created_by: user.id
+        created_by: defaultUserId
       };
 
       if (isEditing && initialData?.id) {

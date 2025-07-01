@@ -161,7 +161,7 @@ const PublicClientForm = () => {
           <p className="text-gray-600">Remplissez ce formulaire pour recevoir votre devis personnalisé</p>
         </div>
 
-        <SimpleClientFormReplacement onSuccess={handleSuccess} />
+        <SimpleClientFormReplacement onSuccess={handleSuccess} isPublicForm={true} />
       </div>
     </div>
   );
