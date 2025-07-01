@@ -11,6 +11,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PricingTool from './pages/PricingTool/Index';
 import VolumeCalculator from './pages/VolumeCalculator/Index';
 import TruckOptimizer from './pages/TruckOptimizer/Index';
+import PublicClientForm from './pages/PublicClientForm';
+import PublicMoverForm from './pages/PublicMoverForm';
 
 const queryClient = new QueryClient();
 
@@ -21,6 +23,8 @@ function App() {
         <div className="min-h-screen bg-gray-50">
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/public-client/:token" element={<PublicClientForm />} />
+            <Route path="/public-mover/:token" element={<PublicMoverForm />} />
             <Route
               path="/"
               element={
