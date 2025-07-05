@@ -1,4 +1,3 @@
-
 import { FurnitureCategory } from '../types';
 
 export const furnitureCategories: FurnitureCategory[] = [
@@ -975,6 +974,14 @@ export const furnitureCategories: FurnitureCategory[] = [
             category: 'Salle de bain'
           },
           {
+            id: 'meuble-sous-vasque',
+            name: 'Meuble sous vasque',
+            volume: 0.5,
+            description: 'Meuble de rangement sous lavabo',
+            icon: '🚿',
+            category: 'Salle de bain'
+          },
+          {
             id: 'meuble-vasque-double',
             name: 'Meuble double vasque',
             volume: 1.0,
@@ -1007,11 +1014,67 @@ export const furnitureCategories: FurnitureCategory[] = [
             category: 'Salle de bain'
           },
           {
+            id: 'etageres-murales-sdb',
+            name: 'Étagères murales',
+            volume: 0.15,
+            description: 'Étagères fixées au mur',
+            icon: '📚',
+            category: 'Salle de bain'
+          },
+          {
+            id: 'meuble-angle-sdb',
+            name: "Meuble d'angle",
+            volume: 0.4,
+            description: "Meuble de rangement d'angle",
+            icon: '🗄️',
+            category: 'Salle de bain'
+          },
+          {
             id: 'tabouret-sdb',
             name: 'Tabouret salle de bain',
             volume: 0.1,
             description: 'Petit tabouret ou marchepied',
             icon: '🪑',
+            category: 'Salle de bain'
+          },
+          {
+            id: 'banc-sdb',
+            name: 'Banc ou tabouret',
+            volume: 0.2,
+            description: 'Banc de rangement ou tabouret',
+            icon: '🪑',
+            category: 'Salle de bain'
+          },
+          {
+            id: 'chariot-rangement-sdb',
+            name: 'Chariot de rangement',
+            volume: 0.3,
+            description: 'Chariot mobile avec étagères',
+            icon: '🛒',
+            category: 'Salle de bain'
+          },
+          {
+            id: 'porte-serviettes-rangement',
+            name: 'Porte-serviettes avec rangement',
+            volume: 0.4,
+            description: 'Support serviettes avec compartiments',
+            icon: '🛁',
+            category: 'Salle de bain'
+          },
+          {
+            id: 'panier-linge-meuble',
+            name: 'Panier à linge avec meuble intégré',
+            volume: 0.6,
+            description: 'Meuble avec panier à linge intégré',
+            icon: '🧺',
+            category: 'Salle de bain'
+          },
+          {
+            id: 'meuble-bas-rangement-sdb',
+            name: 'Meuble bas de rangement',
+            volume: 0.5,
+            description: 'Petit meuble bas pour salle de bain',
+            icon: '🗄️',
             category: 'Salle de bain'
           }
         ]
@@ -1285,51 +1348,192 @@ export const furnitureCategories: FurnitureCategory[] = [
     ]
   },
   {
-    id: 'cave-garage',
-    name: 'Cave et garage',
+    id: 'garage',
+    name: 'Garage',
     icon: '🏠',
     subcategories: [
       {
-        id: 'cave-rangement',
-        name: 'Rangement cave/garage',
+        id: 'garage-mobilier',
+        name: 'Mobilier garage',
         items: [
           {
-            id: 'etagere-metallique',
-            name: 'Étagère métallique',
-            volume: 0.8,
-            description: 'Rayonnage métallique',
-            icon: '📚',
-            category: 'Cave et garage'
-          },
-          {
-            id: 'armoire-metallique',
-            name: 'Armoire métallique',
-            volume: 1.5,
-            description: 'Armoire de garage en métal',
-            icon: '🗄️',
-            category: 'Cave et garage'
-          },
-          {
-            id: 'etabli',
+            id: 'etabli-garage',
             name: 'Établi',
             volume: 1.2,
             description: 'Table de travail avec tiroirs',
             icon: '🔨',
-            category: 'Cave et garage'
+            category: 'Garage'
           },
           {
-            id: 'casier-metallique',
-            name: 'Casier métallique',
-            volume: 0.6,
-            description: 'Casier de rangement individuel',
+            id: 'armoire-rangement-garage',
+            name: 'Armoire de rangement',
+            volume: 1.8,
+            description: 'Armoire métallique de garage',
             icon: '🗄️',
-            category: 'Cave et garage'
+            category: 'Garage'
+          },
+          {
+            id: 'etageres-murales-garage',
+            name: 'Étagères murales',
+            volume: 0.6,
+            description: 'Rayonnage mural métallique',
+            icon: '📚',
+            category: 'Garage'
+          },
+          {
+            id: 'ratelier-outils',
+            name: 'Râtelier à outils',
+            volume: 0.3,
+            description: 'Support mural pour outils',
+            icon: '🔧',
+            category: 'Garage'
+          },
+          {
+            id: 'meuble-tiroirs-garage',
+            name: 'Meuble à tiroirs',
+            volume: 1.0,
+            description: 'Meuble de rangement avec tiroirs',
+            icon: '🗄️',
+            category: 'Garage'
+          },
+          {
+            id: 'porte-velos',
+            name: 'Porte-vélos',
+            volume: 0.4,
+            description: 'Support de rangement pour vélos',
+            icon: '🚲',
+            category: 'Garage'
+          },
+          {
+            id: 'meuble-chaussures-garage',
+            name: 'Meuble à chaussures',
+            volume: 0.6,
+            description: 'Rangement chaussures de garage',
+            icon: '👟',
+            category: 'Garage'
+          },
+          {
+            id: 'coffre-rangement-garage',
+            name: 'Coffre de rangement',
+            volume: 0.8,
+            description: 'Grand coffre pour garage',
+            icon: '📦',
+            category: 'Garage'
+          },
+          {
+            id: 'panneau-perfore',
+            name: 'Panneau perforé (pegboard)',
+            volume: 0.2,
+            description: 'Panneau mural perforé pour outils',
+            icon: '🔧',
+            category: 'Garage'
+          },
+          {
+            id: 'banc-travail-garage',
+            name: 'Banc de travail',
+            volume: 1.0,
+            description: 'Banc de travail avec rangements',
+            icon: '🔨',
+            category: 'Garage'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'cave',
+    name: 'Cave',
+    icon: '🏠',
+    subcategories: [
+      {
+        id: 'cave-rangement',
+        name: 'Rangement cave',
+        items: [
+          {
+            id: 'etageres-metalliques-cave',
+            name: 'Étagères métalliques',
+            volume: 0.8,
+            description: 'Rayonnage métallique de cave',
+            icon: '📚',
+            category: 'Cave'
+          },
+          {
+            id: 'armoire-stockage-cave',
+            name: 'Armoire de stockage',
+            volume: 1.5,
+            description: 'Grande armoire pour cave',
+            icon: '🗄️',
+            category: 'Cave'
+          },
+          {
+            id: 'casier-vin-cave',
+            name: 'Casier à vin',
+            volume: 0.4,
+            description: 'Casier de rangement pour bouteilles',
+            icon: '🍷',
+            category: 'Cave'
+          },
+          {
+            id: 'coffre-rangement-cave',
+            name: 'Coffre de rangement',
+            volume: 0.6,
+            description: 'Coffre de stockage étanche',
+            icon: '📦',
+            category: 'Cave'
+          },
+          {
+            id: 'meuble-bas-cave',
+            name: 'Meuble bas',
+            volume: 0.8,
+            description: 'Meuble bas résistant à l\'humidité',
+            icon: '🗄️',
+            category: 'Cave'
+          },
+          {
+            id: 'table-pliante-cave',
+            name: 'Table pliante',
+            volume: 0.3,
+            description: 'Table d\'appoint pliable',
+            icon: '🪑',
+            category: 'Cave'
+          },
+          {
+            id: 'banc-rangement-cave',
+            name: 'Banc de rangement',
+            volume: 0.5,
+            description: 'Banc avec compartiment de rangement',
+            icon: '🪑',
+            category: 'Cave'
+          },
+          {
+            id: 'ratelier-buches',
+            name: 'Râtelier à bûches',
+            volume: 0.6,
+            description: 'Support pour stockage bois',
+            icon: '🪵',
+            category: 'Cave'
+          },
+          {
+            id: 'meuble-bocaux-conserves',
+            name: 'Meuble à bocaux et conserves',
+            volume: 1.0,
+            description: 'Étagère spécialisée pour conserves',
+            icon: '🥫',
+            category: 'Cave'
+          },
+          {
+            id: 'porte-bouteilles-cave',
+            name: 'Porte-bouteilles',
+            volume: 0.3,
+            description: 'Casier spécialisé pour bouteilles',
+            icon: '🍷',
+            category: 'Cave'
           }
         ]
       },
       {
         id: 'cave-equipement',
-        name: 'Équipement cave/garage',
+        name: 'Équipement cave',
         items: [
           {
             id: 'congelateur-cave',
@@ -1337,7 +1541,7 @@ export const furnitureCategories: FurnitureCategory[] = [
             volume: 0.8,
             description: 'Congélateur de cave',
             icon: '❄️',
-            category: 'Cave et garage'
+            category: 'Cave'
           },
           {
             id: 'cave-vin',
@@ -1345,7 +1549,7 @@ export const furnitureCategories: FurnitureCategory[] = [
             volume: 0.6,
             description: 'Réfrigérateur à vin',
             icon: '🍷',
-            category: 'Cave et garage'
+            category: 'Cave'
           },
           {
             id: 'chaudiere',
@@ -1353,7 +1557,7 @@ export const furnitureCategories: FurnitureCategory[] = [
             volume: 0.8,
             description: 'Chaudière murale ou au sol',
             icon: '🔥',
-            category: 'Cave et garage'
+            category: 'Cave'
           },
           {
             id: 'cumulus',
@@ -1361,7 +1565,7 @@ export const furnitureCategories: FurnitureCategory[] = [
             volume: 0.4,
             description: 'Ballon d\'eau chaude',
             icon: '💧',
-            category: 'Cave et garage'
+            category: 'Cave'
           }
         ]
       }
