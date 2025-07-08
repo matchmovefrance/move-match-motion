@@ -11,11 +11,12 @@ import { furnitureCategories } from '../data/furnitureData';
 import ManualFurnitureDialog from './ManualFurnitureDialog';
 
 interface FurnitureSelectorProps {
-  onAddItem: (item: FurnitureItem, quantity: number) => void;
+  onAddItem: (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[] }, quantity: number) => void;
   selectedItems: SelectedItem[];
+  onUpdateItemOptions: (itemId: string, index: number, optionType: 'disassembly' | 'packing', value: boolean) => void;
 }
 
-const FurnitureSelector = ({ onAddItem, selectedItems }: FurnitureSelectorProps) => {
+const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: FurnitureSelectorProps) => {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [manualFurniture, setManualFurniture] = useState<FurnitureItem[]>([]);
@@ -40,7 +41,16 @@ const FurnitureSelector = ({ onAddItem, selectedItems }: FurnitureSelectorProps)
     }
     
     if (item) {
-      onAddItem(item, newQuantity);
+      // Initialize options arrays for new items
+      const existingItem = selectedItems.find(selected => selected.id === itemId);
+      const disassemblyOptions = existingItem?.disassemblyOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
+      const packingOptions = existingItem?.packingOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
+      
+      // Pad arrays if quantity increased
+      while (disassemblyOptions.length < newQuantity) disassemblyOptions.push(false);
+      while (packingOptions.length < newQuantity) packingOptions.push(false);
+      
+      onAddItem({ ...item, disassemblyOptions, packingOptions }, newQuantity);
     }
   };
 
@@ -62,6 +72,8 @@ const FurnitureSelector = ({ onAddItem, selectedItems }: FurnitureSelectorProps)
   const renderFurnitureItem = (item: FurnitureItem) => {
     const quantity = getSelectedQuantity(item.id);
     const isSelected = quantity > 0;
+    const selectedItem = selectedItems.find(selected => selected.id === item.id);
+    const isCarton = item.name.toLowerCase().includes('carton');
 
     return (
       <div
@@ -90,7 +102,7 @@ const FurnitureSelector = ({ onAddItem, selectedItems }: FurnitureSelectorProps)
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-3">
           <Button
             variant="outline"
             size="sm"
@@ -118,6 +130,41 @@ const FurnitureSelector = ({ onAddItem, selectedItems }: FurnitureSelectorProps)
             <Plus className="h-3 w-3" />
           </Button>
         </div>
+
+        {/* Options individuelles pour chaque quantité */}
+        {isSelected && quantity > 0 && (
+          <div className="space-y-2 mt-3 pt-3 border-t">
+            {Array.from({ length: quantity }, (_, index) => (
+              <div key={index} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
+                <span className="font-medium">#{index + 1}</span>
+                <div className="flex gap-3">
+                  {!isCarton && (
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedItem?.disassemblyOptions?.[index] || false}
+                        onChange={(e) => onUpdateItemOptions(item.id, index, 'disassembly', e.target.checked)}
+                        className="w-3 h-3"
+                      />
+                      <span className="text-xs">Démontage/Remontage</span>
+                    </label>
+                  )}
+                  {isCarton && (
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedItem?.packingOptions?.[index] || false}
+                        onChange={(e) => onUpdateItemOptions(item.id, index, 'packing', e.target.checked)}
+                        className="w-3 h-3"
+                      />
+                      <span className="text-xs">Emballage/Déballage</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };

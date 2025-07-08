@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown } from 'lucide-react';
+import matchmoveLogo from '@/assets/matchmove-logo.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import FurnitureSelector from './components/FurnitureSelector';
 import VolumeDisplay from './components/VolumeDisplay';
 import { FurnitureItem, SelectedItem } from './types';
@@ -30,12 +30,20 @@ const VolumeCalculator = () => {
   const [notes, setNotes] = useState('');
   const [exportFormat, setExportFormat] = useState<'pdf' | 'txt'>('pdf');
   const [companySettings, setCompanySettings] = useState<any>(null);
-  const [disassemblyOption, setDisassemblyOption] = useState(false);
-  const [packingUnpackingOption, setPackingUnpackingOption] = useState(false);
 
   const calculateTotalVolume = () => {
-    const baseVolume = selectedItems.reduce((total, item) => total + (item.volume * item.quantity), 0);
-    return disassemblyOption ? baseVolume / 2 : baseVolume;
+    return selectedItems.reduce((total, item) => {
+      let itemTotal = 0;
+      for (let i = 0; i < item.quantity; i++) {
+        let unitVolume = item.volume;
+        // Appliquer la réduction de volume si démontage/remontage est activé pour cet item
+        if (item.disassemblyOptions?.[i]) {
+          unitVolume = unitVolume / 2;
+        }
+        itemTotal += unitVolume;
+      }
+      return total + itemTotal;
+    }, 0);
   };
 
   const calculateTotalWeight = () => {
@@ -60,19 +68,40 @@ const VolumeCalculator = () => {
     return { type: 'Semi-remorque', size: '40m³+', description: 'Déménagement important' };
   };
 
-  const handleAddItem = (item: FurnitureItem, quantity: number) => {
+  const handleAddItem = (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[] }, quantity: number) => {
     const existingIndex = selectedItems.findIndex(selected => selected.id === item.id);
     
     if (existingIndex >= 0) {
       const updated = [...selectedItems];
       updated[existingIndex].quantity = quantity;
+      updated[existingIndex].disassemblyOptions = item.disassemblyOptions || updated[existingIndex].disassemblyOptions;
+      updated[existingIndex].packingOptions = item.packingOptions || updated[existingIndex].packingOptions;
       setSelectedItems(updated);
     } else if (quantity > 0) {
       setSelectedItems([...selectedItems, {
         ...item,
-        quantity
+        quantity,
+        disassemblyOptions: item.disassemblyOptions || Array(quantity).fill(false),
+        packingOptions: item.packingOptions || Array(quantity).fill(false)
       }]);
     }
+  };
+
+  const handleUpdateItemOptions = (itemId: string, index: number, optionType: 'disassembly' | 'packing', value: boolean) => {
+    setSelectedItems(items => items.map(item => {
+      if (item.id === itemId) {
+        const updated = { ...item };
+        if (optionType === 'disassembly') {
+          updated.disassemblyOptions = [...(item.disassemblyOptions || [])];
+          updated.disassemblyOptions[index] = value;
+        } else {
+          updated.packingOptions = [...(item.packingOptions || [])];
+          updated.packingOptions[index] = value;
+        }
+        return updated;
+      }
+      return item;
+    }));
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -167,15 +196,10 @@ Date d'établissement : ${currentDate}
 
 RÉSUMÉ TECHNIQUE
 ──────────────────────────────────────────────────────
-Volume total estimé  : ${totalVolume.toFixed(2)} m³${disassemblyOption ? ' (avec démontage/remontage)' : ''}
-Poids total estimé   : ${Math.round(totalWeight)} kg
+Volume total estimé  : ${totalVolume.toFixed(2)} m³
 Nombre d'objets      : ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
 Types différents     : ${selectedItems.length}
-
-OPTIONS DE SERVICE
-──────────────────────────────────────────────────────
-Démontage/Remontage  : ${disassemblyOption ? 'OUI (volume divisé par 2)' : 'NON'}
-Emballage/Déballage  : ${packingUnpackingOption ? 'OUI - Service requis' : 'NON'}
+Site web            : matchmove.fr
 
 RECOMMANDATION VÉHICULE
 ──────────────────────────────────────────────────────
@@ -198,25 +222,38 @@ Justification       : ${truck.description}
     inventoryContent += '═══════════════════════════════════════════════════════\n';
 
     Object.entries(itemsByCategory).forEach(([category, items]) => {
-      const categoryVolume = items.reduce((sum, item) => sum + (item.quantity * item.volume), 0);
-      const categoryWeight = items.reduce((sum, item) => {
-        let weightPerM3 = 250;
-        if (category === 'Cuisine') weightPerM3 = 400;
-        if (category === 'Chambre' && item.name.includes('Matelas')) weightPerM3 = 80;
-        if (category === 'Divers' && item.name.includes('Carton')) weightPerM3 = 150;
-        return sum + (item.volume * item.quantity * weightPerM3);
+      const categoryVolume = items.reduce((sum, item) => {
+        let itemVolume = 0;
+        for (let i = 0; i < item.quantity; i++) {
+          let unitVolume = item.volume;
+          if (item.disassemblyOptions?.[i]) unitVolume = unitVolume / 2;
+          itemVolume += unitVolume;
+        }
+        return sum + itemVolume;
       }, 0);
 
-      inventoryContent += `\n${category.toUpperCase()} - ${categoryVolume.toFixed(2)}m³ - ${Math.round(categoryWeight)}kg\n`;
+      inventoryContent += `\n${category.toUpperCase()} - ${categoryVolume.toFixed(2)}m³\n`;
       inventoryContent += '─'.repeat(60) + '\n';
       
       items.forEach((item, index) => {
-        const itemVolume = item.quantity * item.volume;
-        inventoryContent += `${(index + 1).toString().padStart(2, '0')}. ${item.name}\n`;
+        inventoryContent += `${(index + 1).toString().padStart(2, '0')}. ${item.icon} ${item.name}\n`;
         inventoryContent += `    Quantité      : ${item.quantity} pièce(s)\n`;
         inventoryContent += `    Volume unit.  : ${item.volume.toFixed(3)} m³\n`;
-        inventoryContent += `    Volume total  : ${itemVolume.toFixed(3)} m³\n`;
-        inventoryContent += `    Description   : ${item.description || 'Standard'}\n`;
+        
+        // Afficher les options pour chaque item
+        for (let i = 0; i < item.quantity; i++) {
+          const isCarton = item.name.toLowerCase().includes('carton');
+          const hasDisassembly = item.disassemblyOptions?.[i];
+          const hasPacking = item.packingOptions?.[i];
+          
+          if (hasDisassembly || hasPacking) {
+            inventoryContent += `    Item #${i + 1}     : `;
+            if (hasDisassembly) inventoryContent += 'Démontage/Remontage ';
+            if (hasPacking) inventoryContent += 'Emballage/Déballage ';
+            inventoryContent += '\n';
+          }
+        }
+        
         inventoryContent += `    ─────────────────────────────────────────\n`;
       });
     });
@@ -234,11 +271,11 @@ ${notes}
 RÉCAPITULATIF ET RECOMMANDATIONS
 ═══════════════════════════════════════════════════════
 
-VOLUMES ET POIDS
+VOLUMES ET RECOMMANDATIONS
 • Volume total mesuré    : ${totalVolume.toFixed(2)} m³
-• Poids total estimé     : ${Math.round(totalWeight)} kg
 • Coefficient de foisonnement appliqué : +15% (sécurité transport)
 • Volume de transport    : ${(totalVolume * 1.15).toFixed(2)} m³
+• Site web              : matchmove.fr
 
 MATÉRIEL RECOMMANDÉ
 • Type de véhicule      : ${truck.type}
@@ -246,15 +283,9 @@ MATÉRIEL RECOMMANDÉ
 • Équipe recommandée    : ${totalVolume > 20 ? '3-4 déménageurs' : '2-3 déménageurs'}
 • Durée estimée         : ${Math.ceil(totalVolume / 5)} heure(s) de chargement
 
-MATÉRIEL DE PROTECTION NÉCESSAIRE
-• Sangles d'arrimage    : ${Math.ceil(totalVolume / 10)} jeux
-• Couvertures           : ${Math.ceil(selectedItems.length / 3)} pièces
-• Film plastique        : ${Math.ceil(totalVolume / 15)} rouleaux
-• Cartons supplémentaires : Prévoir 10-15 cartons de sécurité
-
 CONDITIONS PARTICULIÈRES
 • Objets fragiles détectés : ${selectedItems.filter(item => item.name.toLowerCase().includes('verre') || item.name.toLowerCase().includes('miroir') || item.name.toLowerCase().includes('tv')).length > 0 ? 'OUI - Protection renforcée' : 'NON'}
-• Démontage nécessaire : ${selectedItems.filter(item => item.category === 'Chambre' && (item.name.includes('Armoire') || item.name.includes('Lit'))).length > 0 ? 'OUI - Meubles volumineux' : 'Minimal'}
+• Services spéciaux requis : ${selectedItems.some(item => item.disassemblyOptions?.some(opt => opt) || item.packingOptions?.some(opt => opt)) ? 'OUI - Voir détails par item' : 'NON'}
 • Accès difficile      : À évaluer sur site
 
 ═══════════════════════════════════════════════════════
@@ -274,6 +305,14 @@ Validité de l'estimation : 30 jours
     const pageWidth = pdf.internal.pageSize.width;
     const margin = 20;
     let yPosition = 20;
+
+    // Add logo
+    try {
+      pdf.addImage(matchmoveLogo, 'PNG', margin, yPosition, 40, 20);
+      yPosition += 25;
+    } catch (error) {
+      console.log('Logo not loaded:', error);
+    }
 
     // Helper function to add text with line breaks
     const addText = (text: string, x: number, y: number, maxWidth?: number) => {
@@ -303,6 +342,7 @@ Validité de l'estimation : 30 jours
     yPosition = addText(`Téléphone: ${settings?.phone || '+33 1 23 45 67 89'}`, margin, yPosition);
     yPosition = addText(`Email: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition);
     yPosition = addText(`SIRET: ${settings?.siret || 'Non renseigné'}`, margin, yPosition);
+    yPosition = addText(`Site web: matchmove.fr`, margin, yPosition);
     yPosition += 10;
 
     // Client Information
@@ -321,18 +361,9 @@ Validité de l'estimation : 30 jours
     pdf.setFont('helvetica', 'bold');
     yPosition = addText('RÉSUMÉ TECHNIQUE', margin, yPosition);
     pdf.setFont('helvetica', 'normal');
-    yPosition = addText(`Volume total: ${totalVolume.toFixed(2)} m³${disassemblyOption ? ' (avec démontage/remontage)' : ''}`, margin, yPosition + 5);
-    yPosition = addText(`Poids estimé: ${Math.round(totalWeight)} kg`, margin, yPosition);
+    yPosition = addText(`Volume total: ${totalVolume.toFixed(2)} m³`, margin, yPosition + 5);
     yPosition = addText(`Nombre d'objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, margin, yPosition);
     yPosition = addText(`Véhicule recommandé: ${truck.type} (${truck.size})`, margin, yPosition);
-    yPosition += 5;
-
-    // Service Options
-    pdf.setFont('helvetica', 'bold');
-    yPosition = addText('OPTIONS DE SERVICE', margin, yPosition);
-    pdf.setFont('helvetica', 'normal');
-    yPosition = addText(`Démontage/Remontage: ${disassemblyOption ? 'OUI (volume divisé par 2)' : 'NON'}`, margin, yPosition + 5);
-    yPosition = addText(`Emballage/Déballage: ${packingUnpackingOption ? 'OUI - Service requis' : 'NON'}`, margin, yPosition);
     yPosition += 10;
 
     // Inventory by category
@@ -356,7 +387,15 @@ Validité de l'estimation : 30 jours
         yPosition = 20;
       }
 
-      const categoryVolume = items.reduce((sum, item) => sum + (item.quantity * item.volume), 0);
+      const categoryVolume = items.reduce((sum, item) => {
+        let itemVolume = 0;
+        for (let i = 0; i < item.quantity; i++) {
+          let unitVolume = item.volume;
+          if (item.disassemblyOptions?.[i]) unitVolume = unitVolume / 2;
+          itemVolume += unitVolume;
+        }
+        return sum + itemVolume;
+      }, 0);
       
       pdf.setFont('helvetica', 'bold');
       yPosition = addText(`${category.toUpperCase()} - ${categoryVolume.toFixed(2)}m³`, margin, yPosition);
@@ -368,8 +407,24 @@ Validité de l'estimation : 30 jours
           yPosition = 20;
         }
         
-        const itemVolume = item.quantity * item.volume;
-        yPosition = addText(`• ${item.name} (x${item.quantity}) - ${itemVolume.toFixed(3)} m³`, margin + 10, yPosition);
+        yPosition = addText(`• ${item.icon} ${item.name} (x${item.quantity}) - ${item.volume.toFixed(3)} m³/unité`, margin + 10, yPosition);
+        
+        // Show individual options for each item
+        for (let i = 0; i < item.quantity; i++) {
+          const hasDisassembly = item.disassemblyOptions?.[i];
+          const hasPacking = item.packingOptions?.[i];
+          
+          if (hasDisassembly || hasPacking) {
+            if (yPosition > 270) {
+              pdf.addPage();
+              yPosition = 20;
+            }
+            let optionsText = `  Item #${i + 1}: `;
+            if (hasDisassembly) optionsText += 'Démontage/Remontage ';
+            if (hasPacking) optionsText += 'Emballage/Déballage ';
+            yPosition = addText(optionsText, margin + 20, yPosition);
+          }
+        }
       });
       yPosition += 5;
     });
@@ -528,6 +583,7 @@ Validité de l'estimation : 30 jours
                 <FurnitureSelector
                   onAddItem={handleAddItem}
                   selectedItems={selectedItems}
+                  onUpdateItemOptions={handleUpdateItemOptions}
                 />
               </CardContent>
             </Card>
@@ -542,50 +598,6 @@ Validité de l'estimation : 30 jours
               onRemoveItem={handleRemoveItem}
             />
 
-            {/* Service Options */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Options de Service</CardTitle>
-                <CardDescription>
-                  Sélectionnez les services supplémentaires
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="disassembly"
-                    checked={disassemblyOption}
-                    onCheckedChange={(checked) => setDisassemblyOption(checked === true)}
-                  />
-                  <label
-                    htmlFor="disassembly"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Démontage/Remontage des meubles
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 ml-6">
-                  Divise le volume par 2 (meubles démontés prennent moins de place)
-                </p>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="packing"
-                    checked={packingUnpackingOption}
-                    onCheckedChange={(checked) => setPackingUnpackingOption(checked === true)}
-                  />
-                  <label
-                    htmlFor="packing"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Emballage/Déballage des cartons
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 ml-6">
-                  Service indiqué sur le devis pour le prestataire
-                </p>
-              </CardContent>
-            </Card>
 
             {/* Client Information */}
             <Card>
