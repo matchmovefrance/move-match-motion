@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import FurnitureSelector from './components/FurnitureSelector';
 import VolumeDisplay from './components/VolumeDisplay';
 import { FurnitureItem, SelectedItem } from './types';
@@ -29,9 +30,12 @@ const VolumeCalculator = () => {
   const [notes, setNotes] = useState('');
   const [exportFormat, setExportFormat] = useState<'pdf' | 'txt'>('pdf');
   const [companySettings, setCompanySettings] = useState<any>(null);
+  const [disassemblyOption, setDisassemblyOption] = useState(false);
+  const [packingUnpackingOption, setPackingUnpackingOption] = useState(false);
 
   const calculateTotalVolume = () => {
-    return selectedItems.reduce((total, item) => total + (item.volume * item.quantity), 0);
+    const baseVolume = selectedItems.reduce((total, item) => total + (item.volume * item.quantity), 0);
+    return disassemblyOption ? baseVolume / 2 : baseVolume;
   };
 
   const calculateTotalWeight = () => {
@@ -163,10 +167,15 @@ Date d'établissement : ${currentDate}
 
 RÉSUMÉ TECHNIQUE
 ──────────────────────────────────────────────────────
-Volume total estimé  : ${totalVolume.toFixed(2)} m³
+Volume total estimé  : ${totalVolume.toFixed(2)} m³${disassemblyOption ? ' (avec démontage/remontage)' : ''}
 Poids total estimé   : ${Math.round(totalWeight)} kg
 Nombre d'objets      : ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
 Types différents     : ${selectedItems.length}
+
+OPTIONS DE SERVICE
+──────────────────────────────────────────────────────
+Démontage/Remontage  : ${disassemblyOption ? 'OUI (volume divisé par 2)' : 'NON'}
+Emballage/Déballage  : ${packingUnpackingOption ? 'OUI - Service requis' : 'NON'}
 
 RECOMMANDATION VÉHICULE
 ──────────────────────────────────────────────────────
@@ -312,10 +321,18 @@ Validité de l'estimation : 30 jours
     pdf.setFont('helvetica', 'bold');
     yPosition = addText('RÉSUMÉ TECHNIQUE', margin, yPosition);
     pdf.setFont('helvetica', 'normal');
-    yPosition = addText(`Volume total: ${totalVolume.toFixed(2)} m³`, margin, yPosition + 5);
+    yPosition = addText(`Volume total: ${totalVolume.toFixed(2)} m³${disassemblyOption ? ' (avec démontage/remontage)' : ''}`, margin, yPosition + 5);
     yPosition = addText(`Poids estimé: ${Math.round(totalWeight)} kg`, margin, yPosition);
     yPosition = addText(`Nombre d'objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, margin, yPosition);
     yPosition = addText(`Véhicule recommandé: ${truck.type} (${truck.size})`, margin, yPosition);
+    yPosition += 5;
+
+    // Service Options
+    pdf.setFont('helvetica', 'bold');
+    yPosition = addText('OPTIONS DE SERVICE', margin, yPosition);
+    pdf.setFont('helvetica', 'normal');
+    yPosition = addText(`Démontage/Remontage: ${disassemblyOption ? 'OUI (volume divisé par 2)' : 'NON'}`, margin, yPosition + 5);
+    yPosition = addText(`Emballage/Déballage: ${packingUnpackingOption ? 'OUI - Service requis' : 'NON'}`, margin, yPosition);
     yPosition += 10;
 
     // Inventory by category
@@ -605,6 +622,51 @@ Validité de l'estimation : 30 jours
                     </div>
                   </TabsContent>
                 </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Service Options */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Options de Service</CardTitle>
+                <CardDescription>
+                  Sélectionnez les services supplémentaires
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="disassembly"
+                    checked={disassemblyOption}
+                    onCheckedChange={(checked) => setDisassemblyOption(checked === true)}
+                  />
+                  <label
+                    htmlFor="disassembly"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Démontage/Remontage des meubles
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-6">
+                  Divise le volume par 2 (meubles démontés prennent moins de place)
+                </p>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="packing"
+                    checked={packingUnpackingOption}
+                    onCheckedChange={(checked) => setPackingUnpackingOption(checked === true)}
+                  />
+                  <label
+                    htmlFor="packing"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Emballage/Déballage des cartons
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-6">
+                  Service indiqué sur le devis pour le prestataire
+                </p>
               </CardContent>
             </Card>
 
