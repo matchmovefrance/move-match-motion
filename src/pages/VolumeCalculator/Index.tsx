@@ -535,6 +535,58 @@ Validité de l'estimation : 30 jours
 
           {/* Sidebar */}
           <div className="space-y-6">
+            <VolumeDisplay 
+              totalVolume={calculateTotalVolume()}
+              selectedItems={selectedItems}
+              onUpdateQuantity={handleUpdateQuantity}
+              onRemoveItem={handleRemoveItem}
+            />
+
+            {/* Service Options */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Options de Service</CardTitle>
+                <CardDescription>
+                  Sélectionnez les services supplémentaires
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="disassembly"
+                    checked={disassemblyOption}
+                    onCheckedChange={(checked) => setDisassemblyOption(checked === true)}
+                  />
+                  <label
+                    htmlFor="disassembly"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Démontage/Remontage des meubles
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-6">
+                  Divise le volume par 2 (meubles démontés prennent moins de place)
+                </p>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="packing"
+                    checked={packingUnpackingOption}
+                    onCheckedChange={(checked) => setPackingUnpackingOption(checked === true)}
+                  />
+                  <label
+                    htmlFor="packing"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Emballage/Déballage des cartons
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-6">
+                  Service indiqué sur le devis pour le prestataire
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Client Information */}
             <Card>
               <CardHeader>
@@ -624,58 +676,6 @@ Validité de l'estimation : 30 jours
                 </Tabs>
               </CardContent>
             </Card>
-
-            {/* Service Options */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Options de Service</CardTitle>
-                <CardDescription>
-                  Sélectionnez les services supplémentaires
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="disassembly"
-                    checked={disassemblyOption}
-                    onCheckedChange={(checked) => setDisassemblyOption(checked === true)}
-                  />
-                  <label
-                    htmlFor="disassembly"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Démontage/Remontage des meubles
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 ml-6">
-                  Divise le volume par 2 (meubles démontés prennent moins de place)
-                </p>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="packing"
-                    checked={packingUnpackingOption}
-                    onCheckedChange={(checked) => setPackingUnpackingOption(checked === true)}
-                  />
-                  <label
-                    htmlFor="packing"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Emballage/Déballage des cartons
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 ml-6">
-                  Service indiqué sur le devis pour le prestataire
-                </p>
-              </CardContent>
-            </Card>
-
-            <VolumeDisplay 
-              totalVolume={calculateTotalVolume()}
-              selectedItems={selectedItems}
-              onUpdateQuantity={handleUpdateQuantity}
-              onRemoveItem={handleRemoveItem}
-            />
 
             {/* Actions */}
             <Card>
