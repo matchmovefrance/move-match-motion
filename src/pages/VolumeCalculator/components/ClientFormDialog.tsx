@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from '@/components/ui/button';
 import { User, Maximize2, Save } from 'lucide-react';
 import { ExtendedClientForm } from './ExtendedClientForm';
+import { useState } from 'react';
 
 interface ClientFormDialogProps {
   // Informations de base
@@ -64,8 +65,17 @@ interface ClientFormDialogProps {
 }
 
 export function ClientFormDialog(props: ClientFormDialogProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleSaveInventory = async () => {
+    if (props.onSaveInventory) {
+      await props.onSaveInventory();
+      setIsOpen(false); // Fermer automatiquement le popup après sauvegarde
+    }
+  };
+
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full flex items-center gap-2">
           <User className="h-4 w-4" />
@@ -80,7 +90,7 @@ export function ClientFormDialog(props: ClientFormDialogProps) {
         <ExtendedClientForm {...props} />
         <DialogFooter className="flex gap-2">
           <Button 
-            onClick={props.onSaveInventory}
+            onClick={handleSaveInventory}
             disabled={!props.selectedItemsCount || props.selectedItemsCount === 0}
             className="bg-blue-600 hover:bg-blue-700"
           >

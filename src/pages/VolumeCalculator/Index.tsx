@@ -16,6 +16,9 @@ import { furnitureCategories } from './data/furnitureData';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -37,6 +40,12 @@ const VolumeCalculator = () => {
   const [isExtendedForm, setIsExtendedForm] = useState(false);
   const [extendedFormData, setExtendedFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Ajout des champs de date de déménagement
+  const [movingDate, setMovingDate] = useState('');
+  const [flexibleDates, setFlexibleDates] = useState(false);
+  const [dateRangeStart, setDateRangeStart] = useState('');
+  const [dateRangeEnd, setDateRangeEnd] = useState('');
 
   const calculateTotalVolume = () => {
     return selectedItems.reduce((total, item) => {
@@ -131,6 +140,10 @@ const VolumeCalculator = () => {
     setClientEmail('');
     setNotes('');
     setExtendedFormData({});
+    setMovingDate('');
+    setFlexibleDates(false);
+    setDateRangeStart('');
+    setDateRangeEnd('');
   };
 
   const saveInventory = async () => {
@@ -239,6 +252,7 @@ const VolumeCalculator = () => {
     const totalVolume = calculateTotalVolume();
     const totalWeight = calculateTotalWeight();
     const currentDate = new Date().toLocaleDateString('fr-FR');
+    const documentDate = new Date().toLocaleDateString('fr-FR');
     const truck = getTruckRecommendation(totalVolume);
     
     return {
@@ -246,14 +260,20 @@ const VolumeCalculator = () => {
       totalVolume,
       totalWeight,
       currentDate,
+      documentDate,
       truck,
-      selectedItems
+      selectedItems,
+      movingDate,
+      flexibleDates,
+      dateRangeStart,
+      dateRangeEnd,
+      extendedFormData
     };
   };
 
   const generateProfessionalInventoryTXT = async () => {
     const data = await generateProfessionalInventoryContent();
-    const { settings, totalVolume, totalWeight, currentDate, truck } = data;
+    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData } = data;
     
     // En-tête professionnel avec nouvelles informations
     const header = `═══════════════════════════════════════════════════════
@@ -274,29 +294,31 @@ Nom du client        : ${clientName || 'Non renseigné'}
 Référence dossier    : ${clientReference || `INV-${Date.now()}`}
 Téléphone           : ${clientPhone || 'Non renseigné'}
 Email               : ${clientEmail || 'Non renseigné'}
-Date d'établissement : ${currentDate}
+Date d'établissement : ${documentDate}
+Date déménagement    : ${movingDate ? new Date(movingDate).toLocaleDateString('fr-FR') : 'Non renseignée'}
+${flexibleDates ? `Dates flexibles      : du ${dateRangeStart ? new Date(dateRangeStart).toLocaleDateString('fr-FR') : 'N/A'} au ${dateRangeEnd ? new Date(dateRangeEnd).toLocaleDateString('fr-FR') : 'N/A'}` : ''}
 
 DÉTAILS DU DÉMÉNAGEMENT
 ──────────────────────────────────────────────────────
-Adresse de départ    : ${extendedFormData.departureAddress || 'Non renseignée'}
-Code postal départ   : ${extendedFormData.departurePostalCode || 'Non renseigné'}
-Type lieu départ     : ${extendedFormData.departureLocationType || 'Non renseigné'}
-Étage départ         : ${extendedFormData.departureFloor || 0}
-Ascenseur départ     : ${extendedFormData.departureHasElevator ? 'Oui' : 'Non'}
-${extendedFormData.departureHasElevator ? `Taille ascenseur    : ${extendedFormData.departureElevatorSize || 'Non précisée'}` : ''}
-Monte-charge départ  : ${extendedFormData.departureHasFreightElevator ? 'Oui' : 'Non'}
-Distance portage     : ${extendedFormData.departureCarryingDistance || 0} mètres
-Stationnement        : ${extendedFormData.departureParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
+Adresse de départ    : ${extendedFormData?.departureAddress || 'Non renseignée'}
+Code postal départ   : ${extendedFormData?.departurePostalCode || 'Non renseigné'}
+Type lieu départ     : ${extendedFormData?.departureLocationType || 'Non renseigné'}
+Étage départ         : ${extendedFormData?.departureFloor || '0'}
+Ascenseur départ     : ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}
+${extendedFormData?.departureHasElevator ? `Taille ascenseur    : ${extendedFormData?.departureElevatorSize || 'Non précisée'}` : ''}
+Monte-charge départ  : ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}
+Distance portage     : ${extendedFormData?.departureCarryingDistance || '0'} mètres
+Stationnement        : ${extendedFormData?.departureParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
 
-Adresse d'arrivée    : ${extendedFormData.arrivalAddress || 'Non renseignée'}
-Code postal arrivée  : ${extendedFormData.arrivalPostalCode || 'Non renseigné'}
-Type lieu arrivée    : ${extendedFormData.arrivalLocationType || 'Non renseigné'}
-Étage arrivée        : ${extendedFormData.arrivalFloor || 0}
-Ascenseur arrivée    : ${extendedFormData.arrivalHasElevator ? 'Oui' : 'Non'}
-${extendedFormData.arrivalHasElevator ? `Taille ascenseur    : ${extendedFormData.arrivalElevatorSize || 'Non précisée'}` : ''}
-Monte-charge arrivée : ${extendedFormData.arrivalHasFreightElevator ? 'Oui' : 'Non'}
-Distance portage     : ${extendedFormData.arrivalCarryingDistance || 0} mètres
-Stationnement        : ${extendedFormData.arrivalParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
+Adresse d'arrivée    : ${extendedFormData?.arrivalAddress || 'Non renseignée'}
+Code postal arrivée  : ${extendedFormData?.arrivalPostalCode || 'Non renseigné'}
+Type lieu arrivée    : ${extendedFormData?.arrivalLocationType || 'Non renseigné'}
+Étage arrivée        : ${extendedFormData?.arrivalFloor || '0'}
+Ascenseur arrivée    : ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}
+${extendedFormData?.arrivalHasElevator ? `Taille ascenseur    : ${extendedFormData?.arrivalElevatorSize || 'Non précisée'}` : ''}
+Monte-charge arrivée : ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}
+Distance portage     : ${extendedFormData?.arrivalCarryingDistance || '0'} mètres
+Stationnement        : ${extendedFormData?.arrivalParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
 
 RÉSUMÉ TECHNIQUE
 ──────────────────────────────────────────────────────
@@ -403,7 +425,7 @@ Validité de l'estimation : 30 jours
 
   const generateProfessionalInventoryPDF = async () => {
     const data = await generateProfessionalInventoryContent();
-    const { settings, totalVolume, totalWeight, currentDate, truck } = data;
+    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData } = data;
     
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.width;
@@ -567,7 +589,6 @@ Validité de l'estimation : 30 jours
     pdf.setTextColor(...secondaryColor);
     pdf.setFont('helvetica', 'normal');
     pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 15);
-    pdf.text(`Poids estimé: ${totalWeight.toFixed(0)} kg`, margin + 5, yPosition + 20);
     pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 8);
     pdf.text(`Articles: ${selectedItems.length} types`, pageWidth / 2, yPosition + 15);
     
@@ -880,6 +901,97 @@ Validité de l'estimation : 30 jours
               onRemoveItem={handleRemoveItem}
             />
 
+
+            {/* Dates de déménagement */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Date de déménagement
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="movingDate">Date souhaitée *</Label>
+                    <Input
+                      id="movingDate"
+                      type="date"
+                      value={movingDate}
+                      onChange={(e) => {
+                        setMovingDate(e.target.value);
+                        // Recalculer les dates flexibles si activées
+                        if (flexibleDates && e.target.value) {
+                          const desiredDate = new Date(e.target.value);
+                          const startDate = new Date(desiredDate);
+                          startDate.setDate(desiredDate.getDate() - 15);
+                          const endDate = new Date(desiredDate);
+                          endDate.setDate(desiredDate.getDate() + 15);
+                          
+                          setDateRangeStart(startDate.toISOString().split('T')[0]);
+                          setDateRangeEnd(endDate.toISOString().split('T')[0]);
+                        }
+                      }}
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="flexibleDates"
+                      checked={flexibleDates}
+                      onCheckedChange={(checked) => {
+                        setFlexibleDates(!!checked);
+                        
+                        if (checked && movingDate) {
+                          // Calculer automatiquement ±15 jours autour de la date souhaitée
+                          const desiredDate = new Date(movingDate);
+                          const startDate = new Date(desiredDate);
+                          startDate.setDate(desiredDate.getDate() - 15);
+                          const endDate = new Date(desiredDate);
+                          endDate.setDate(desiredDate.getDate() + 15);
+                          
+                          setDateRangeStart(startDate.toISOString().split('T')[0]);
+                          setDateRangeEnd(endDate.toISOString().split('T')[0]);
+                        } else if (!checked) {
+                          // Effacer les dates de plage si désactivé
+                          setDateRangeStart('');
+                          setDateRangeEnd('');
+                        }
+                      }}
+                    />
+                    <Label htmlFor="flexibleDates" className="text-sm font-medium">
+                      Dates flexibles (±15 jours autour de la date souhaitée)
+                    </Label>
+                  </div>
+
+                  {flexibleDates && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor="dateRangeStart">Date la plus tôt</Label>
+                        <Input
+                          id="dateRangeStart"
+                          type="date"
+                          value={dateRangeStart}
+                          readOnly
+                          className="bg-gray-50"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="dateRangeEnd">Date la plus tard</Label>
+                        <Input
+                          id="dateRangeEnd"
+                          type="date"
+                          value={dateRangeEnd}
+                          readOnly
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Information client - Popup Dialog */}
             <Card>
