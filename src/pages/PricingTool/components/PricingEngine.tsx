@@ -69,6 +69,11 @@ interface GeneratedQuote {
 class PricingEngine {
   private distanceCalculator = new DistanceCalculator();
 
+  // Méthode pour vider le cache des distances
+  public clearDistanceCache(): void {
+    this.distanceCalculator.clearCache();
+  }
+
   private parsePricingModel(pricingModel: any): PricingModel {
     // Handle different types of pricing model data
     if (!pricingModel) return {};

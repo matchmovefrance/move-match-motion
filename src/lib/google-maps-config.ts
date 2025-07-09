@@ -91,7 +91,7 @@ export const calculateDistanceByPostalCode = async (
     const origin = departureCity ? `${departurePostalCode} ${departureCity}, France` : `${departurePostalCode}, France`;
     const destination = arrivalCity ? `${arrivalPostalCode} ${arrivalCity}, France` : `${arrivalPostalCode}, France`;
     
-    console.log(`Calcul distance Google Maps Distance Matrix: ${origin} -> ${destination}`);
+    console.log(`🔍 Calcul distance Google Maps Distance Matrix: ${origin} -> ${destination}`);
     
     service.getDistanceMatrix({
       origins: [origin],
@@ -101,16 +101,26 @@ export const calculateDistanceByPostalCode = async (
       avoidHighways: false,
       avoidTolls: false
     }, (response, status) => {
+      console.log(`📊 Réponse Google Maps API - Status: ${status}`);
+      console.log(`📊 Réponse Google Maps API - Response:`, response);
+      
       if (status === 'OK' && response?.rows[0]?.elements[0]) {
         const element = response.rows[0].elements[0];
+        
+        console.log(`📊 Element status: ${element.status}`);
+        console.log(`📊 Element data:`, element);
         
         if (element.status === 'OK') {
           const distanceKm = Math.round(element.distance!.value / 1000);
           const durationMin = Math.round(element.duration!.value / 60);
           const distanceText = element.distance!.text;
           
-          console.log(`Distance calculée Google Maps Distance Matrix: ${distanceKm}km (${distanceText}), Durée: ${durationMin}min`);
-          console.log(`Trajet: ${origin} -> ${destination}`);
+          console.log(`✅ Distance calculée Google Maps Distance Matrix:`);
+          console.log(`   - Distance: ${distanceKm}km (${distanceText})`);
+          console.log(`   - Durée: ${durationMin}min`);
+          console.log(`   - Trajet: ${origin} -> ${destination}`);
+          console.log(`   - Valeur brute distance: ${element.distance!.value} mètres`);
+          console.log(`   - Valeur brute durée: ${element.duration!.value} secondes`);
           
           resolve({
             distance: distanceKm,
@@ -118,11 +128,13 @@ export const calculateDistanceByPostalCode = async (
             distanceText: distanceText
           });
         } else {
-          console.warn('Erreur élément Distance Matrix:', element.status);
+          console.warn(`❌ Erreur élément Distance Matrix: ${element.status}`);
+          console.warn(`❌ Element complet:`, element);
           resolve(null);
         }
       } else {
-        console.warn('Erreur calcul distance Google Maps Distance Matrix:', status);
+        console.warn(`❌ Erreur calcul distance Google Maps Distance Matrix - Status: ${status}`);
+        console.warn(`❌ Response complète:`, response);
         resolve(null);
       }
     });

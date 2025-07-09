@@ -4,6 +4,12 @@ import { loadGoogleMapsScript, calculateDistanceByPostalCode } from '@/lib/googl
 export class DistanceCalculator {
   private distanceCache = new Map<string, number>();
 
+  // Méthode pour vider le cache si nécessaire
+  public clearCache(): void {
+    this.distanceCache.clear();
+    console.log('🗑️ Cache des distances vidé');
+  }
+
   async getDistanceFromGoogleMaps(
     departurePostalCode: string, 
     departureCity: string,
@@ -18,8 +24,11 @@ export class DistanceCalculator {
       return cachedDistance;
     }
 
+    console.log(`🗺️ Calcul distance Google Maps: ${departurePostalCode} ${departureCity} -> ${arrivalPostalCode} ${arrivalCity}`);
+    
     try {
-      console.log(`🗺️ Calcul distance Google Maps: ${departurePostalCode} ${departureCity} -> ${arrivalPostalCode} ${arrivalCity}`);
+      // Charger le script Google Maps d'abord
+      await loadGoogleMapsScript();
       
       const result = await calculateDistanceByPostalCode(
         departurePostalCode,
@@ -33,23 +42,23 @@ export class DistanceCalculator {
         this.distanceCache.set(cacheKey, result.distance);
         return result.distance;
       } else {
-        console.warn(`⚠️ Impossible de calculer la distance Google Maps pour ${cacheKey}, utilisation d'une estimation`);
-        const fallbackDistance = this.estimateDistanceFallback(departureCity, arrivalCity);
-        this.distanceCache.set(cacheKey, fallbackDistance);
-        return fallbackDistance;
+        console.warn(`⚠️ Impossible de calculer la distance Google Maps pour ${cacheKey}`);
+        // Ne pas utiliser de fallback, retourner 0 pour indiquer l'échec
+        return 0;
       }
     } catch (error) {
       console.error(`❌ Erreur calcul distance Google Maps pour ${cacheKey}:`, error);
-      const fallbackDistance = this.estimateDistanceFallback(departureCity, arrivalCity);
-      this.distanceCache.set(cacheKey, fallbackDistance);
-      return fallbackDistance;
+      // Ne pas utiliser de fallback, retourner 0 pour indiquer l'échec
+      return 0;
     }
   }
 
   private estimateDistanceFallback(departureCity: string, arrivalCity: string): number {
+    // Estimation plus réaliste pour les distances en France
     const hash = this.hashString(departureCity + arrivalCity);
     const random = this.seededRandom(hash);
-    const distance = 15 + Math.floor(random() * 45);
+    // Distance entre 10 et 50 km pour éviter les estimations trop élevées
+    const distance = 10 + Math.floor(random() * 40);
     console.log(`📏 Distance fallback estimée: ${distance}km pour ${departureCity} -> ${arrivalCity}`);
     return distance;
   }

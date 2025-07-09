@@ -41,6 +41,8 @@ export const useGoogleMapsDistance = ({
         return;
       }
 
+      console.log(`🚀 Hook useGoogleMapsDistance: Calcul pour ${departurePostalCode} -> ${arrivalPostalCode}`);
+      
       setIsLoading(true);
       setError(null);
 
@@ -55,18 +57,24 @@ export const useGoogleMapsDistance = ({
         );
 
         if (result) {
+          console.log(`✅ Hook useGoogleMapsDistance: Résultat reçu`);
+          console.log(`   - Distance: ${result.distance}km`);
+          console.log(`   - Distance text: ${result.distanceText}`);
+          console.log(`   - Durée: ${result.duration}min`);
+          
           setDistance(result.distance);
           setDuration(result.duration);
           setDistanceText(result.distanceText);
-          console.log(`Distance calculée: ${result.distance}km (${result.distanceText}) entre ${departurePostalCode} et ${arrivalPostalCode}`);
+          console.log(`🎯 Distance calculée: ${result.distance}km (${result.distanceText}) entre ${departurePostalCode} et ${arrivalPostalCode}`);
         } else {
+          console.warn(`❌ Hook useGoogleMapsDistance: Aucun résultat`);
           setError('Impossible de calculer la distance');
           setDistance(null);
           setDuration(null);
           setDistanceText(null);
         }
       } catch (err) {
-        console.error('Erreur lors du calcul de distance:', err);
+        console.error('❌ Hook useGoogleMapsDistance: Erreur lors du calcul de distance:', err);
         setError('Erreur lors du calcul de distance');
         setDistance(null);
         setDuration(null);
