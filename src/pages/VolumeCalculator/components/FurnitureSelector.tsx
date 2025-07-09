@@ -27,6 +27,7 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   const [searchTerm, setSearchTerm] = useState('');
   const [editingItem, setEditingItem] = useState<FurnitureItem | null>(null);
   const [customVolumes, setCustomVolumes] = useState<Record<string, number>>({});
+  const [cartonOptions, setCartonOptions] = useState<{[key: string]: {packingCount: number, unpackingCount: number}}>({});
   const { toast } = useToast();
 
   // Charger les volumes personnalisés depuis la base de données
@@ -97,26 +98,56 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
     }
     
     if (item) {
-      // Initialize options arrays for new items
-      const existingItem = selectedItems.find(selected => selected.id === itemId);
-      const disassemblyOptions = existingItem?.disassemblyOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
-      const packingOptions = existingItem?.packingOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
-      const unpackingOptions = existingItem?.unpackingOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
+      const isCarton = item.name.toLowerCase().includes('carton');
       
-      // Pad arrays if quantity increased
-      while (disassemblyOptions.length < newQuantity) disassemblyOptions.push(false);
-      while (packingOptions.length < newQuantity) packingOptions.push(false);
-      while (unpackingOptions.length < newQuantity) unpackingOptions.push(false);
-      
-      // Use custom volume if available
-      const currentVolume = customVolumes[itemId] || item.volume;
-      onAddItem({ ...item, volume: currentVolume, disassemblyOptions, packingOptions, unpackingOptions }, newQuantity);
+      if (isCarton) {
+        // Pour les cartons, utiliser les options simplifiées
+        const options = cartonOptions[itemId] || { packingCount: 0, unpackingCount: 0 };
+        const packingOptions = Array(newQuantity).fill(false);
+        const unpackingOptions = Array(newQuantity).fill(false);
+        
+        // Marquer les cartons selon les quantités spécifiées
+        for (let i = 0; i < Math.min(options.packingCount, newQuantity); i++) {
+          packingOptions[i] = true;
+        }
+        for (let i = 0; i < Math.min(options.unpackingCount, newQuantity); i++) {
+          unpackingOptions[i] = true;
+        }
+        
+        const currentVolume = customVolumes[itemId] || item.volume;
+        onAddItem({ ...item, volume: currentVolume, packingOptions, unpackingOptions }, newQuantity);
+      } else {
+        // Pour les autres meubles, comportement normal
+        const existingItem = selectedItems.find(selected => selected.id === itemId);
+        const disassemblyOptions = existingItem?.disassemblyOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
+        const packingOptions = existingItem?.packingOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
+        const unpackingOptions = existingItem?.unpackingOptions?.slice(0, newQuantity) || Array(newQuantity).fill(false);
+        
+        // Pad arrays if quantity increased
+        while (disassemblyOptions.length < newQuantity) disassemblyOptions.push(false);
+        while (packingOptions.length < newQuantity) packingOptions.push(false);
+        while (unpackingOptions.length < newQuantity) unpackingOptions.push(false);
+        
+        // Use custom volume if available
+        const currentVolume = customVolumes[itemId] || item.volume;
+        onAddItem({ ...item, volume: currentVolume, disassemblyOptions, packingOptions, unpackingOptions }, newQuantity);
+      }
     }
   };
 
   const handleAddManualFurniture = (furniture: FurnitureItem, quantity: number) => {
     setManualFurniture(prev => [...prev, furniture]);
     onAddItem(furniture, quantity);
+  };
+
+  const handleCartonOptionsChange = (itemId: string, packingCount: number, unpackingCount: number) => {
+    setCartonOptions(prev => ({ ...prev, [itemId]: { packingCount, unpackingCount } }));
+    
+    // Mettre à jour l'item avec les nouvelles options
+    const quantity = getSelectedQuantity(itemId);
+    if (quantity > 0) {
+      handleQuantityChange(itemId, quantity);
+    }
   };
 
   const increment = (itemId: string) => {
@@ -202,49 +233,73 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
           </Button>
         </div>
 
-        {/* Options individuelles pour chaque quantité */}
-        {isSelected && quantity > 0 && (
+        {/* Options pour les cartons - Interface simplifiée */}
+        {isSelected && quantity > 0 && isCarton && (
+          <div className="space-y-3 mt-3 pt-3 border-t bg-blue-50 p-3 rounded">
+            <div className="text-sm font-medium text-blue-800">Options d'emballage pour {quantity} cartons</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-green-700 block mb-1">
+                  Cartons à emballer
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  max={quantity}
+                  value={cartonOptions[item.id]?.packingCount || 0}
+                  onChange={(e) => handleCartonOptionsChange(
+                    item.id, 
+                    parseInt(e.target.value) || 0, 
+                    cartonOptions[item.id]?.unpackingCount || 0
+                  )}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-blue-700 block mb-1">
+                  Cartons à déballer
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  max={quantity}
+                  value={cartonOptions[item.id]?.unpackingCount || 0}
+                  onChange={(e) => handleCartonOptionsChange(
+                    item.id, 
+                    cartonOptions[item.id]?.packingCount || 0, 
+                    parseInt(e.target.value) || 0
+                  )}
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+            {(cartonOptions[item.id]?.packingCount > 0 || cartonOptions[item.id]?.unpackingCount > 0) && (
+              <div className="text-xs text-gray-600 bg-white p-2 rounded">
+                Services: {cartonOptions[item.id]?.packingCount > 0 && `${cartonOptions[item.id]?.packingCount} emballage(s)`}
+                {cartonOptions[item.id]?.packingCount > 0 && cartonOptions[item.id]?.unpackingCount > 0 && ' • '}
+                {cartonOptions[item.id]?.unpackingCount > 0 && `${cartonOptions[item.id]?.unpackingCount} déballage(s)`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Options individuelles pour les autres meubles */}
+        {isSelected && quantity > 0 && !isCarton && (
           <div className="space-y-2 mt-3 pt-3 border-t">
             {Array.from({ length: quantity }, (_, index) => (
               <div key={index} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
                 <span className="font-medium">#{index + 1}</span>
                 <div className="flex gap-3">
-                  {!isCarton && (
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id={`disassembly-${item.id}-${index}`}
-                        checked={selectedItem?.disassemblyOptions?.[index] || false}
-                        onCheckedChange={(checked) => onUpdateItemOptions(item.id, index, 'disassembly', checked as boolean)}
-                      />
-                      <label htmlFor={`disassembly-${item.id}-${index}`} className="text-xs cursor-pointer">
-                        Démontage/Remontage
-                      </label>
-                    </div>
-                  )}
-                  {isCarton && (
-                    <div className="flex gap-4">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id={`packing-${item.id}-${index}`}
-                          checked={selectedItem?.packingOptions?.[index] || false}
-                          onCheckedChange={(checked) => onUpdateItemOptions(item.id, index, 'packing', checked as boolean)}
-                        />
-                        <label htmlFor={`packing-${item.id}-${index}`} className="text-xs cursor-pointer text-green-700">
-                          Emballage
-                        </label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id={`unpacking-${item.id}-${index}`}
-                          checked={selectedItem?.unpackingOptions?.[index] || false}
-                          onCheckedChange={(checked) => onUpdateItemOptions(item.id, index, 'unpacking', checked as boolean)}
-                        />
-                        <label htmlFor={`unpacking-${item.id}-${index}`} className="text-xs cursor-pointer text-blue-700">
-                          Déballage
-                        </label>
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`disassembly-${item.id}-${index}`}
+                      checked={selectedItem?.disassemblyOptions?.[index] || false}
+                      onCheckedChange={(checked) => onUpdateItemOptions(item.id, index, 'disassembly', checked as boolean)}
+                    />
+                    <label htmlFor={`disassembly-${item.id}-${index}`} className="text-xs cursor-pointer">
+                      Démontage/Remontage
+                    </label>
+                  </div>
                 </div>
               </div>
             ))}
