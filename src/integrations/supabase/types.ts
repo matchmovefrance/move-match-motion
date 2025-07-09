@@ -506,6 +506,8 @@ export type Database = {
           client_reference: string | null
           created_at: string
           created_by: string | null
+          date_range_end: string | null
+          date_range_start: string | null
           departure_address: string | null
           departure_carrying_distance: number | null
           departure_elevator_size: string | null
@@ -517,7 +519,9 @@ export type Database = {
           departure_postal_code: string
           distance_km: number | null
           distance_km_calculated: number | null
+          flexible_dates: boolean | null
           id: string
+          moving_date: string | null
           notes: string | null
           selected_items: Json
           total_volume: number
@@ -541,6 +545,8 @@ export type Database = {
           client_reference?: string | null
           created_at?: string
           created_by?: string | null
+          date_range_end?: string | null
+          date_range_start?: string | null
           departure_address?: string | null
           departure_carrying_distance?: number | null
           departure_elevator_size?: string | null
@@ -552,7 +558,9 @@ export type Database = {
           departure_postal_code: string
           distance_km?: number | null
           distance_km_calculated?: number | null
+          flexible_dates?: boolean | null
           id?: string
+          moving_date?: string | null
           notes?: string | null
           selected_items: Json
           total_volume: number
@@ -576,6 +584,8 @@ export type Database = {
           client_reference?: string | null
           created_at?: string
           created_by?: string | null
+          date_range_end?: string | null
+          date_range_start?: string | null
           departure_address?: string | null
           departure_carrying_distance?: number | null
           departure_elevator_size?: string | null
@@ -587,7 +597,9 @@ export type Database = {
           departure_postal_code?: string
           distance_km?: number | null
           distance_km_calculated?: number | null
+          flexible_dates?: boolean | null
           id?: string
+          moving_date?: string | null
           notes?: string | null
           selected_items?: Json
           total_volume?: number
