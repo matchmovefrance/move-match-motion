@@ -4,6 +4,7 @@ import { Plus, Minus, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { FurnitureItem, SelectedItem } from '../types';
@@ -139,26 +140,28 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
                 <span className="font-medium">#{index + 1}</span>
                 <div className="flex gap-3">
                   {!isCarton && (
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`disassembly-${item.id}-${index}`}
                         checked={selectedItem?.disassemblyOptions?.[index] || false}
-                        onChange={(e) => onUpdateItemOptions(item.id, index, 'disassembly', e.target.checked)}
-                        className="w-3 h-3"
+                        onCheckedChange={(checked) => onUpdateItemOptions(item.id, index, 'disassembly', checked as boolean)}
                       />
-                      <span className="text-xs">Démontage/Remontage</span>
-                    </label>
+                      <label htmlFor={`disassembly-${item.id}-${index}`} className="text-xs cursor-pointer">
+                        Démontage/Remontage
+                      </label>
+                    </div>
                   )}
                   {isCarton && (
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`packing-${item.id}-${index}`}
                         checked={selectedItem?.packingOptions?.[index] || false}
-                        onChange={(e) => onUpdateItemOptions(item.id, index, 'packing', e.target.checked)}
-                        className="w-3 h-3"
+                        onCheckedChange={(checked) => onUpdateItemOptions(item.id, index, 'packing', checked as boolean)}
                       />
-                      <span className="text-xs">Emballage/Déballage</span>
-                    </label>
+                      <label htmlFor={`packing-${item.id}-${index}`} className="text-xs cursor-pointer">
+                        Emballage/Déballage
+                      </label>
+                    </div>
                   )}
                 </div>
               </div>
