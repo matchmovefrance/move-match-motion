@@ -414,14 +414,14 @@ Validité de l'estimation : 30 jours
     pdf.setFont('helvetica', 'bold');
     
     // Table headers
-    const col1Width = 15; // Icon
-    const col2Width = 60; // Nom
+    const col1Width = 10; // Icon
+    const col2Width = 65; // Nom
     const col3Width = 20; // Qté
     const col4Width = 25; // Volume unit
     const col5Width = 25; // Volume total
     const col6Width = 45; // Options
     
-    pdf.text('ICONE', margin + 5, yPosition + 7);
+    pdf.text('•', margin + 5, yPosition + 7);
     pdf.text('ARTICLE', margin + col1Width + 5, yPosition + 7);
     pdf.text('QTE', margin + col1Width + col2Width + 5, yPosition + 7);
     pdf.text('VOL. UNIT', margin + col1Width + col2Width + col3Width + 5, yPosition + 7);
@@ -456,29 +456,8 @@ Validité de l'estimation : 30 jours
         itemTotalVolume += unitVolume;
       }
 
-      // Helper function to get simple icon for PDF
-      const getSimpleIcon = (itemName: string) => {
-        const name = itemName.toLowerCase();
-        if (name.includes('carton')) return '[C]';
-        if (name.includes('lit')) return '[LIT]';
-        if (name.includes('table')) return '[TAB]';
-        if (name.includes('chaise')) return '[CHA]';
-        if (name.includes('armoire')) return '[ARM]';
-        if (name.includes('frigo')) return '[FRI]';
-        if (name.includes('lave')) return '[LAV]';
-        if (name.includes('four')) return '[FOU]';
-        if (name.includes('canapé')) return '[CAN]';
-        if (name.includes('fauteuil')) return '[FAU]';
-        if (name.includes('tv')) return '[TV]';
-        if (name.includes('bibliothèque')) return '[BIB]';
-        if (name.includes('commode')) return '[COM]';
-        if (name.includes('miroir')) return '[MIR]';
-        if (name.includes('tableau')) return '[TAB]';
-        return '[M]'; // Meuble générique
-      };
-
-      // Item row
-      pdf.text(getSimpleIcon(item.name), margin + 5, yPosition + 10);
+      // Item row - simple bullet point instead of complex icons
+      pdf.text('•', margin + 5, yPosition + 10);
       
       // Truncate name if too long
       let displayName = item.name;
