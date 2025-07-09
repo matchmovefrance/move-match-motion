@@ -47,6 +47,13 @@ const VolumeCalculator = () => {
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
 
+  // Hook pour calculer la distance
+  const { distance } = useGoogleMapsDistance({
+    departurePostalCode: extendedFormData.departurePostalCode,
+    arrivalPostalCode: extendedFormData.arrivalPostalCode,
+    enabled: !!(extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode)
+  });
+
   const calculateTotalVolume = () => {
     return selectedItems.reduce((total, item) => {
       return total + (item.volume * item.quantity);
@@ -460,7 +467,9 @@ Validité de l'estimation : 30 jours
       settings?.address || 'France',
       settings?.phone || '+33 1 23 45 67 89',
       settings?.email || 'contact@matchmove.fr',
-      'matchmove.fr'
+      'matchmove.fr',
+      '',
+      `Document fait le: ${currentDate}`
     ];
     
     let rightX = pageWidth - margin;
@@ -494,8 +503,7 @@ Validité de l'estimation : 30 jours
     
     const clientInfoLeft = [
       `Nom: ${clientName || 'Non renseigné'}`,
-      `Référence: ${clientReference || `INV-${Date.now()}`}`,
-      `Date: ${currentDate}`,
+      `Date déménagement: ${movingDate ? new Date(movingDate).toLocaleDateString('fr-FR') : 'Non renseignée'}`,
       `Téléphone: ${clientPhone || 'Non renseigné'}`
     ];
     
@@ -594,7 +602,7 @@ Validité de l'estimation : 30 jours
     
     // Distance si disponible
     if (extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode) {
-      pdf.text(`Distance: Calcul automatique`, pageWidth / 2, yPosition + 20);
+      pdf.text(`Distance: ${distance || 'Calcul en cours'} km`, pageWidth / 2, yPosition + 20);
     }
     
     yPosition += 35;
@@ -973,8 +981,7 @@ Validité de l'estimation : 30 jours
                           id="dateRangeStart"
                           type="date"
                           value={dateRangeStart}
-                          readOnly
-                          className="bg-gray-50"
+                          onChange={(e) => setDateRangeStart(e.target.value)}
                         />
                       </div>
                       <div>
@@ -983,8 +990,7 @@ Validité de l'estimation : 30 jours
                           id="dateRangeEnd"
                           type="date"
                           value={dateRangeEnd}
-                          readOnly
-                          className="bg-gray-50"
+                          onChange={(e) => setDateRangeEnd(e.target.value)}
                         />
                       </div>
                     </div>

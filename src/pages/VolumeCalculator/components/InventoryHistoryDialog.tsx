@@ -24,6 +24,7 @@ interface Inventory {
   arrival_postal_code: string;
   total_volume: number;
   distance_km: number;
+  total_weight?: number;
   selected_items: any; // JSONB field from database
   created_at: string;
 }
@@ -142,36 +143,92 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-medium mb-2">Informations client</h4>
-                <p><strong>Nom:</strong> {selectedInventory.client_name}</p>
-                <p><strong>Référence:</strong> {selectedInventory.client_reference}</p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-2">Détails du déménagement</h4>
-                <p><strong>Volume total:</strong> {selectedInventory.total_volume.toFixed(2)} m³</p>
-                <p><strong>Distance:</strong> {selectedInventory.distance_km?.toFixed(0)} km</p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div>
-              <h4 className="font-medium mb-2">Items ({selectedInventory.selected_items?.length || 0})</h4>
-              <div className="grid gap-2 max-h-60 overflow-y-auto">
-                {(selectedInventory.selected_items || []).map((item: SelectedItem, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                    <span>{item.name}</span>
-                    <div className="flex gap-2">
-                      <Badge variant="secondary">Qté: {item.quantity}</Badge>
-                      <Badge variant="outline">{(item.volume * item.quantity).toFixed(3)} m³</Badge>
-                    </div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium mb-3 text-blue-600">Informations client</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Nom:</strong> {selectedInventory.client_name}</p>
+                    <p><strong>Référence:</strong> {selectedInventory.client_reference}</p>
+                    <p><strong>Email:</strong> {(selectedInventory as any).client_email || 'Non renseigné'}</p>
+                    <p><strong>Téléphone:</strong> {(selectedInventory as any).client_phone || 'Non renseigné'}</p>
                   </div>
-                ))}
+                </div>
+                <div>
+                  <h4 className="font-medium mb-3 text-green-600">Détails du déménagement</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Volume total:</strong> {selectedInventory.total_volume.toFixed(2)} m³</p>
+                    <p><strong>Distance:</strong> {selectedInventory.distance_km?.toFixed(0)} km</p>
+                    <p><strong>Poids estimé:</strong> {selectedInventory.total_weight?.toFixed(0) || 'N/A'} kg</p>
+                    <p><strong>Nb objets:</strong> {selectedInventory.selected_items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium mb-3 text-orange-600">Configuration départ</h4>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Adresse:</strong> {(selectedInventory as any).departure_address || 'Non renseignée'}</p>
+                    <p><strong>Code postal:</strong> {selectedInventory.departure_postal_code}</p>
+                    <p><strong>Type lieu:</strong> {(selectedInventory as any).departure_location_type || 'Non spécifié'}</p>
+                    <p><strong>Étage:</strong> {(selectedInventory as any).departure_floor || '0'}</p>
+                    <p><strong>Ascenseur:</strong> {(selectedInventory as any).departure_has_elevator ? `Oui (${(selectedInventory as any).departure_elevator_size || 'taille N/A'})` : 'Non'}</p>
+                    <p><strong>Monte-charge:</strong> {(selectedInventory as any).departure_has_freight_elevator ? 'Oui' : 'Non'}</p>
+                    <p><strong>Distance portage:</strong> {(selectedInventory as any).departure_carrying_distance || '0'}m</p>
+                    <p><strong>Stationnement:</strong> {(selectedInventory as any).departure_parking_needed ? 'Nécessaire' : 'Non nécessaire'}</p>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-3 text-purple-600">Configuration arrivée</h4>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Adresse:</strong> {(selectedInventory as any).arrival_address || 'Non renseignée'}</p>
+                    <p><strong>Code postal:</strong> {selectedInventory.arrival_postal_code}</p>
+                    <p><strong>Type lieu:</strong> {(selectedInventory as any).arrival_location_type || 'Non spécifié'}</p>
+                    <p><strong>Étage:</strong> {(selectedInventory as any).arrival_floor || '0'}</p>
+                    <p><strong>Ascenseur:</strong> {(selectedInventory as any).arrival_has_elevator ? `Oui (${(selectedInventory as any).arrival_elevator_size || 'taille N/A'})` : 'Non'}</p>
+                    <p><strong>Monte-charge:</strong> {(selectedInventory as any).arrival_has_freight_elevator ? 'Oui' : 'Non'}</p>
+                    <p><strong>Distance portage:</strong> {(selectedInventory as any).arrival_carrying_distance || '0'}m</p>
+                    <p><strong>Stationnement:</strong> {(selectedInventory as any).arrival_parking_needed ? 'Nécessaire' : 'Non nécessaire'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-medium mb-3 text-red-600">Inventaire détaillé ({selectedInventory.selected_items?.length || 0} types d'objets)</h4>
+                <div className="grid gap-2 max-h-60 overflow-y-auto">
+                  {(selectedInventory.selected_items || []).map((item: SelectedItem, index: number) => (
+                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">{item.icon}</span>
+                        <div>
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-xs text-gray-500">{item.category}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge variant="secondary">Qté: {item.quantity}</Badge>
+                        <Badge variant="outline">{(item.volume * item.quantity).toFixed(3)} m³</Badge>
+                        <Badge variant="default">{item.volume.toFixed(3)} m³/u</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {(selectedInventory as any).notes && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium mb-2 text-gray-600">Notes particulières</h4>
+                    <p className="text-sm bg-yellow-50 p-3 rounded border">{(selectedInventory as any).notes}</p>
+                  </div>
+                </>
+              )}
 
             <div className="flex gap-2 pt-4">
               <Button onClick={() => setSelectedInventory(null)} variant="outline">
