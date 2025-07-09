@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FurnitureSelector from './components/FurnitureSelector';
 import VolumeDisplay from './components/VolumeDisplay';
-import { ExtendedClientForm } from './components/ExtendedClientForm';
+import { ClientFormDialog } from './components/ClientFormDialog';
 import { InventoryHistoryDialog } from './components/InventoryHistoryDialog';
 import { FurnitureItem, SelectedItem } from './types';
 import { furnitureCategories } from './data/furnitureData';
@@ -795,7 +795,7 @@ Validité de l'estimation : 30 jours
             />
 
 
-            {/* Information client */}
+            {/* Information client - Popup Dialog */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -804,54 +804,71 @@ Validité de l'estimation : 30 jours
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ExtendedClientForm
-                  clientName={clientName}
-                  setClientName={setClientName}
-                  clientReference={clientReference}
-                  setClientReference={setClientReference}
-                  clientPhone={clientPhone}
-                  setClientPhone={setClientPhone}
-                  clientEmail={clientEmail}
-                  setClientEmail={setClientEmail}
-                  notes={notes}
-                  setNotes={setNotes}
-                  departureAddress={extendedFormData.departureAddress || ''}
-                  setDepartureAddress={(value) => setExtendedFormData(prev => ({ ...prev, departureAddress: value }))}
-                  departurePostalCode={extendedFormData.departurePostalCode || ''}
-                  setDeparturePostalCode={(value) => setExtendedFormData(prev => ({ ...prev, departurePostalCode: value }))}
-                  arrivalAddress={extendedFormData.arrivalAddress || ''}
-                  setArrivalAddress={(value) => setExtendedFormData(prev => ({ ...prev, arrivalAddress: value }))}
-                  arrivalPostalCode={extendedFormData.arrivalPostalCode || ''}
-                  setArrivalPostalCode={(value) => setExtendedFormData(prev => ({ ...prev, arrivalPostalCode: value }))}
-                  departureLocationType={extendedFormData.departureLocationType || 'appartement'}
-                  setDepartureLocationType={(value) => setExtendedFormData(prev => ({ ...prev, departureLocationType: value }))}
-                  departureFloor={extendedFormData.departureFloor || 0}
-                  setDepartureFloor={(value) => setExtendedFormData(prev => ({ ...prev, departureFloor: value }))}
-                  departureHasElevator={extendedFormData.departureHasElevator || false}
-                  setDepartureHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasElevator: value }))}
-                  departureElevatorSize={extendedFormData.departureElevatorSize || ''}
-                  setDepartureElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, departureElevatorSize: value }))}
-                  departureHasFreightElevator={extendedFormData.departureHasFreightElevator || false}
-                  setDepartureHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasFreightElevator: value }))}
-                  departureCarryingDistance={extendedFormData.departureCarryingDistance || 0}
-                  setDepartureCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, departureCarryingDistance: value }))}
-                  departureParkingNeeded={extendedFormData.departureParkingNeeded || false}
-                  setDepartureParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, departureParkingNeeded: value }))}
-                  arrivalLocationType={extendedFormData.arrivalLocationType || 'appartement'}
-                  setArrivalLocationType={(value) => setExtendedFormData(prev => ({ ...prev, arrivalLocationType: value }))}
-                  arrivalFloor={extendedFormData.arrivalFloor || 0}
-                  setArrivalFloor={(value) => setExtendedFormData(prev => ({ ...prev, arrivalFloor: value }))}
-                  arrivalHasElevator={extendedFormData.arrivalHasElevator || false}
-                  setArrivalHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasElevator: value }))}
-                  arrivalElevatorSize={extendedFormData.arrivalElevatorSize || ''}
-                  setArrivalElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, arrivalElevatorSize: value }))}
-                  arrivalHasFreightElevator={extendedFormData.arrivalHasFreightElevator || false}
-                  setArrivalHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasFreightElevator: value }))}
-                  arrivalCarryingDistance={extendedFormData.arrivalCarryingDistance || 0}
-                  setArrivalCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCarryingDistance: value }))}
-                  arrivalParkingNeeded={extendedFormData.arrivalParkingNeeded || false}
-                  setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
-                />
+                <div className="space-y-3">
+                  {/* Champs de base visibles */}
+                  <div className="grid grid-cols-1 gap-2">
+                    <Input
+                      placeholder="Nom du client"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                    />
+                    <Input
+                      placeholder="Référence"
+                      value={clientReference}
+                      onChange={(e) => setClientReference(e.target.value)}
+                    />
+                  </div>
+                  
+                  {/* Bouton pour ouvrir le formulaire complet */}
+                  <ClientFormDialog
+                    clientName={clientName}
+                    setClientName={setClientName}
+                    clientReference={clientReference}
+                    setClientReference={setClientReference}
+                    clientPhone={clientPhone}
+                    setClientPhone={setClientPhone}
+                    clientEmail={clientEmail}
+                    setClientEmail={setClientEmail}
+                    notes={notes}
+                    setNotes={setNotes}
+                    departureAddress={extendedFormData.departureAddress || ''}
+                    setDepartureAddress={(value) => setExtendedFormData(prev => ({ ...prev, departureAddress: value }))}
+                    departurePostalCode={extendedFormData.departurePostalCode || ''}
+                    setDeparturePostalCode={(value) => setExtendedFormData(prev => ({ ...prev, departurePostalCode: value }))}
+                    arrivalAddress={extendedFormData.arrivalAddress || ''}
+                    setArrivalAddress={(value) => setExtendedFormData(prev => ({ ...prev, arrivalAddress: value }))}
+                    arrivalPostalCode={extendedFormData.arrivalPostalCode || ''}
+                    setArrivalPostalCode={(value) => setExtendedFormData(prev => ({ ...prev, arrivalPostalCode: value }))}
+                    departureLocationType={extendedFormData.departureLocationType || 'appartement'}
+                    setDepartureLocationType={(value) => setExtendedFormData(prev => ({ ...prev, departureLocationType: value }))}
+                    departureFloor={extendedFormData.departureFloor || 0}
+                    setDepartureFloor={(value) => setExtendedFormData(prev => ({ ...prev, departureFloor: value }))}
+                    departureHasElevator={extendedFormData.departureHasElevator || false}
+                    setDepartureHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasElevator: value }))}
+                    departureElevatorSize={extendedFormData.departureElevatorSize || ''}
+                    setDepartureElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, departureElevatorSize: value }))}
+                    departureHasFreightElevator={extendedFormData.departureHasFreightElevator || false}
+                    setDepartureHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasFreightElevator: value }))}
+                    departureCarryingDistance={extendedFormData.departureCarryingDistance || 0}
+                    setDepartureCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, departureCarryingDistance: value }))}
+                    departureParkingNeeded={extendedFormData.departureParkingNeeded || false}
+                    setDepartureParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, departureParkingNeeded: value }))}
+                    arrivalLocationType={extendedFormData.arrivalLocationType || 'appartement'}
+                    setArrivalLocationType={(value) => setExtendedFormData(prev => ({ ...prev, arrivalLocationType: value }))}
+                    arrivalFloor={extendedFormData.arrivalFloor || 0}
+                    setArrivalFloor={(value) => setExtendedFormData(prev => ({ ...prev, arrivalFloor: value }))}
+                    arrivalHasElevator={extendedFormData.arrivalHasElevator || false}
+                    setArrivalHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasElevator: value }))}
+                    arrivalElevatorSize={extendedFormData.arrivalElevatorSize || ''}
+                    setArrivalElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, arrivalElevatorSize: value }))}
+                    arrivalHasFreightElevator={extendedFormData.arrivalHasFreightElevator || false}
+                    setArrivalHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasFreightElevator: value }))}
+                    arrivalCarryingDistance={extendedFormData.arrivalCarryingDistance || 0}
+                    setArrivalCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCarryingDistance: value }))}
+                    arrivalParkingNeeded={extendedFormData.arrivalParkingNeeded || false}
+                    setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
+                  />
+                </div>
               </CardContent>
             </Card>
 

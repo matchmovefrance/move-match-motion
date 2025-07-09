@@ -60,11 +60,11 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   const handleVolumeUpdated = (itemId: string, newVolume: number) => {
     setCustomVolumes(prev => ({ ...prev, [itemId]: newVolume }));
     
-    // Mettre à jour l'item dans les items sélectionnés
+    // Mettre à jour l'item dans les items sélectionnés avec le nouveau volume
     const selectedItem = selectedItems.find(item => item.id === itemId);
     if (selectedItem) {
       const updatedItem = { ...selectedItem, volume: newVolume };
-      handleQuantityChange(itemId, selectedItem.quantity);
+      onAddItem(updatedItem, selectedItem.quantity);
     }
   };
 
@@ -106,7 +106,9 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
       while (disassemblyOptions.length < newQuantity) disassemblyOptions.push(false);
       while (packingOptions.length < newQuantity) packingOptions.push(false);
       
-      onAddItem({ ...item, disassemblyOptions, packingOptions }, newQuantity);
+      // Use custom volume if available
+      const currentVolume = customVolumes[itemId] || item.volume;
+      onAddItem({ ...item, volume: currentVolume, disassemblyOptions, packingOptions }, newQuantity);
     }
   };
 
