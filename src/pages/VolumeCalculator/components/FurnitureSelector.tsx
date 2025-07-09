@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Plus, Minus, PlusCircle, Search, Edit } from 'lucide-react';
+import { Plus, Minus, PlusCircle, Search, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import ManualFurnitureDialog from './ManualFurnitureDialog';
 import { EditVolumeDialog } from './EditVolumeDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface FurnitureSelectorProps {
   onAddItem: (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[] }, quantity: number) => void;
@@ -28,6 +29,8 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   const [editingItem, setEditingItem] = useState<FurnitureItem | null>(null);
   const [customVolumes, setCustomVolumes] = useState<Record<string, number>>({});
   const [cartonOptions, setCartonOptions] = useState<{[key: string]: {packingCount: number, unpackingCount: number}}>({});
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [furnitureToDelete, setFurnitureToDelete] = useState<FurnitureItem | null>(null);
   const { toast } = useToast();
 
   // Charger les volumes personnalisés et meubles personnalisés depuis la base de données
@@ -196,8 +199,53 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
     }
   };
 
+  const handleDeleteFurniture = async (furniture: FurnitureItem) => {
+    try {
+      const { error } = await supabase
+        .from('custom_furniture')
+        .delete()
+        .eq('id', furniture.id);
+
+      if (error) throw error;
+
+      // Supprimer de l'état local
+      setManualFurniture(prev => prev.filter(item => item.id !== furniture.id));
+      
+      // Supprimer des quantités sélectionnées
+      setQuantities(prev => {
+        const newQuantities = { ...prev };
+        delete newQuantities[furniture.id];
+        return newQuantities;
+      });
+
+      toast({
+        title: "Meuble supprimé",
+        description: "Le meuble personnalisé a été supprimé avec succès",
+      });
+    } catch (error) {
+      console.error('Error deleting custom furniture:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le meuble personnalisé",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteClick = (furniture: FurnitureItem) => {
+    setFurnitureToDelete(furniture);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    if (furnitureToDelete) {
+      await handleDeleteFurniture(furnitureToDelete);
+      setShowDeleteDialog(false);
+      setFurnitureToDelete(null);
+    }
+  };
+
   const handleCartonOptionsChange = (itemId: string, packingCount: number, unpackingCount: number) => {
-    setCartonOptions(prev => ({ ...prev, [itemId]: { packingCount, unpackingCount } }));
     
     // Mettre à jour l'item avec les nouvelles options
     const quantity = getSelectedQuantity(itemId);
@@ -256,6 +304,18 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
               >
                 <Edit className="h-3 w-3" />
               </Button>
+              {/* Bouton de suppression pour les meubles personnalisés */}
+              {manualFurniture.some(furniture => furniture.id === item.id) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeleteClick(item)}
+                  className="h-6 w-6 p-0 text-gray-500 hover:text-red-600"
+                  title="Supprimer le meuble personnalisé"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
             </div>
           </div>
         </div>
