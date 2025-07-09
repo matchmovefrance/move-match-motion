@@ -218,10 +218,10 @@ const VolumeCalculator = () => {
         selected_items: selectedItems as any,
         created_by: user.id,
         // Ajout des champs de date
-        moving_date: movingDate,
+        moving_date: movingDate || null,
         flexible_dates: flexibleDates,
-        date_range_start: dateRangeStart,
-        date_range_end: dateRangeEnd,
+        date_range_start: dateRangeStart || null,
+        date_range_end: dateRangeEnd || null,
       };
 
       const { error } = await supabase
