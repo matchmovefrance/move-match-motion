@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search } from 'lucide-react';
-import matchmoveLogo from '@/assets/matchmove-logo.png';
+import matchmoveLogo from '@/assets/matchmove-logo-ombre.png';
+import emmausLogo from '@/assets/emmaus-france-logo.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -543,11 +544,15 @@ Validité de l'estimation : 30 jours
     pdf.setFontSize(9);
     
     // Distance d'abord si disponible
-    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
+    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode && calculatedDistance) {
       pdf.setFont('helvetica', 'bold');
-      pdf.text(`DISTANCE: ${calculatedDistance || 'Calcul en cours'} km`, margin + 5, yPosition);
+      pdf.setFontSize(11);
+      pdf.setTextColor(...primaryColor);
+      pdf.text(`🚛 DISTANCE: ${calculatedDistance} km`, margin + 5, yPosition);
       pdf.setFont('helvetica', 'normal');
-      yPosition += 8;
+      pdf.setTextColor(...secondaryColor);
+      pdf.setFontSize(9);
+      yPosition += 10;
     }
     
     // Configuration départ - affichage complet TOUJOURS
@@ -767,6 +772,20 @@ Validité de l'estimation : 30 jours
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
+    
+    // Ajout du logo Emmaüs France avant le footer
+    yPosition += 10;
+    try {
+      // Centrer le logo Emmaüs
+      const emmausWidth = 60;
+      const emmausHeight = 20;
+      const emmausX = (pageWidth - emmausWidth) / 2;
+      pdf.addImage(emmausLogo, 'PNG', emmausX, yPosition, emmausWidth, emmausHeight);
+      yPosition += emmausHeight + 10;
+    } catch (error) {
+      console.log('Logo Emmaüs not loaded:', error);
+    }
+    
     pdf.text(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 10);
     pdf.text(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition + 16);
     pdf.text(`Site web: matchmove.fr`, margin, yPosition + 22);
