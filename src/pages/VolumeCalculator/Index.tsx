@@ -259,7 +259,7 @@ const VolumeCalculator = () => {
     const data = await generateProfessionalInventoryContent();
     const { settings, totalVolume, totalWeight, currentDate, truck } = data;
     
-    // En-tête professionnel
+    // En-tête professionnel avec nouvelles informations
     const header = `═══════════════════════════════════════════════════════
     INVENTAIRE PROFESSIONNEL DE DÉMÉNAGEMENT
 ═══════════════════════════════════════════════════════
@@ -276,17 +276,38 @@ INFORMATIONS CLIENT
 ──────────────────────────────────────────────────────
 Nom du client        : ${clientName || 'Non renseigné'}
 Référence dossier    : ${clientReference || `INV-${Date.now()}`}
-Adresse de départ    : ${clientAddress || 'Non renseignée'}
 Téléphone           : ${clientPhone || 'Non renseigné'}
 Email               : ${clientEmail || 'Non renseigné'}
 Date d'établissement : ${currentDate}
+
+DÉTAILS DU DÉMÉNAGEMENT
+──────────────────────────────────────────────────────
+Adresse de départ    : ${extendedFormData.departureAddress || 'Non renseignée'}
+Code postal départ   : ${extendedFormData.departurePostalCode || 'Non renseigné'}
+Type lieu départ     : ${extendedFormData.departureLocationType || 'Non renseigné'}
+Étage départ         : ${extendedFormData.departureFloor || 0}
+Ascenseur départ     : ${extendedFormData.departureHasElevator ? 'Oui' : 'Non'}
+${extendedFormData.departureHasElevator ? `Taille ascenseur    : ${extendedFormData.departureElevatorSize || 'Non précisée'}` : ''}
+Monte-charge départ  : ${extendedFormData.departureHasFreightElevator ? 'Oui' : 'Non'}
+Distance portage     : ${extendedFormData.departureCarryingDistance || 0} mètres
+Stationnement        : ${extendedFormData.departureParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
+
+Adresse d'arrivée    : ${extendedFormData.arrivalAddress || 'Non renseignée'}
+Code postal arrivée  : ${extendedFormData.arrivalPostalCode || 'Non renseigné'}
+Type lieu arrivée    : ${extendedFormData.arrivalLocationType || 'Non renseigné'}
+Étage arrivée        : ${extendedFormData.arrivalFloor || 0}
+Ascenseur arrivée    : ${extendedFormData.arrivalHasElevator ? 'Oui' : 'Non'}
+${extendedFormData.arrivalHasElevator ? `Taille ascenseur    : ${extendedFormData.arrivalElevatorSize || 'Non précisée'}` : ''}
+Monte-charge arrivée : ${extendedFormData.arrivalHasFreightElevator ? 'Oui' : 'Non'}
+Distance portage     : ${extendedFormData.arrivalCarryingDistance || 0} mètres
+Stationnement        : ${extendedFormData.arrivalParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
 
 RÉSUMÉ TECHNIQUE
 ──────────────────────────────────────────────────────
 Volume total estimé  : ${totalVolume.toFixed(2)} m³
 Nombre d'objets      : ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
 Types différents     : ${selectedItems.length}
-Site web            : matchmove.fr
+Notes particulières  : ${notes || 'Aucune'}
 
 RECOMMANDATION VÉHICULE
 ──────────────────────────────────────────────────────
@@ -754,16 +775,7 @@ Validité de l'estimation : 30 jours
                   Choisissez vos meubles avec les quantités exactes
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Rechercher un meuble..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+              <CardContent>
                 <FurnitureSelector
                   onAddItem={handleAddItem}
                   selectedItems={selectedItems}
