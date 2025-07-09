@@ -303,157 +303,245 @@ Validité de l'estimation : 30 jours
     
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.width;
+    const pageHeight = pdf.internal.pageSize.height;
     const margin = 20;
     let yPosition = 20;
 
+    // Colors
+    const primaryColor: [number, number, number] = [41, 128, 185]; // Blue
+    const secondaryColor: [number, number, number] = [52, 73, 94]; // Dark gray
+    const lightGray: [number, number, number] = [245, 245, 245];
+
+    // Header section
+    const headerHeight = 60;
+    
+    // Background for header
+    pdf.setFillColor(...lightGray);
+    pdf.rect(0, 0, pageWidth, headerHeight, 'F');
+
     // Add logo
     try {
-      pdf.addImage(matchmoveLogo, 'PNG', margin, yPosition, 40, 20);
-      yPosition += 25;
+      pdf.addImage(matchmoveLogo, 'PNG', margin, yPosition, 50, 25);
     } catch (error) {
       console.log('Logo not loaded:', error);
     }
 
-    // Helper function to add text with line breaks
-    const addText = (text: string, x: number, y: number, maxWidth?: number) => {
-      if (maxWidth) {
-        const lines = pdf.splitTextToSize(text, maxWidth);
-        pdf.text(lines, x, y);
-        return y + (lines.length * 7);
-      } else {
-        pdf.text(text, x, y);
-        return y + 7;
-      }
-    };
-
-    // Header
-    pdf.setFontSize(16);
-    pdf.setFont('helvetica', 'bold');
-    yPosition = addText('INVENTAIRE PROFESSIONNEL DE DÉMÉNAGEMENT', margin, yPosition);
-    yPosition += 10;
-
-    // Company Information
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    yPosition = addText('INFORMATIONS ENTREPRISE', margin, yPosition);
-    pdf.setFont('helvetica', 'normal');
-    yPosition = addText(`Entreprise: ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 5);
-    yPosition = addText(`Adresse: ${settings?.address || 'France'}`, margin, yPosition);
-    yPosition = addText(`Téléphone: ${settings?.phone || '+33 1 23 45 67 89'}`, margin, yPosition);
-    yPosition = addText(`Email: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition);
-    yPosition = addText(`SIRET: ${settings?.siret || 'Non renseigné'}`, margin, yPosition);
-    yPosition = addText(`Site web: matchmove.fr`, margin, yPosition);
-    yPosition += 10;
-
-    // Client Information
-    pdf.setFont('helvetica', 'bold');
-    yPosition = addText('INFORMATIONS CLIENT', margin, yPosition);
-    pdf.setFont('helvetica', 'normal');
-    yPosition = addText(`Nom: ${clientName || 'Non renseigné'}`, margin, yPosition + 5);
-    yPosition = addText(`Référence: ${clientReference || `INV-${Date.now()}`}`, margin, yPosition);
-    yPosition = addText(`Adresse: ${clientAddress || 'Non renseignée'}`, margin, yPosition);
-    yPosition = addText(`Téléphone: ${clientPhone || 'Non renseigné'}`, margin, yPosition);
-    yPosition = addText(`Email: ${clientEmail || 'Non renseigné'}`, margin, yPosition);
-    yPosition = addText(`Date: ${currentDate}`, margin, yPosition);
-    yPosition += 10;
-
-    // Technical Summary
-    pdf.setFont('helvetica', 'bold');
-    yPosition = addText('RÉSUMÉ TECHNIQUE', margin, yPosition);
-    pdf.setFont('helvetica', 'normal');
-    yPosition = addText(`Volume total: ${totalVolume.toFixed(2)} m³`, margin, yPosition + 5);
-    yPosition = addText(`Nombre d'objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, margin, yPosition);
-    yPosition = addText(`Véhicule recommandé: ${truck.type} (${truck.size})`, margin, yPosition);
-    yPosition += 10;
-
-    // Inventory by category
-    pdf.setFont('helvetica', 'bold');
-    yPosition = addText('INVENTAIRE DÉTAILLÉ', margin, yPosition);
-    pdf.setFont('helvetica', 'normal');
-    yPosition += 5;
-
-    const itemsByCategory = selectedItems.reduce((acc, item) => {
-      if (!acc[item.category]) {
-        acc[item.category] = [];
-      }
-      acc[item.category].push(item);
-      return acc;
-    }, {} as Record<string, SelectedItem[]>);
-
-    Object.entries(itemsByCategory).forEach(([category, items]) => {
-      // Check if we need a new page
-      if (yPosition > 250) {
-        pdf.addPage();
-        yPosition = 20;
-      }
-
-      const categoryVolume = items.reduce((sum, item) => {
-        let itemVolume = 0;
-        for (let i = 0; i < item.quantity; i++) {
-          let unitVolume = item.volume;
-          if (item.disassemblyOptions?.[i]) unitVolume = unitVolume / 2;
-          itemVolume += unitVolume;
-        }
-        return sum + itemVolume;
-      }, 0);
-      
-      pdf.setFont('helvetica', 'bold');
-      yPosition = addText(`${category.toUpperCase()} - ${categoryVolume.toFixed(2)}m³`, margin, yPosition);
-      pdf.setFont('helvetica', 'normal');
-      
-      items.forEach((item) => {
-        if (yPosition > 270) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        
-        yPosition = addText(`• ${item.icon} ${item.name} (x${item.quantity}) - ${item.volume.toFixed(3)} m³/unité`, margin + 10, yPosition);
-        
-        // Show individual options for each item
-        for (let i = 0; i < item.quantity; i++) {
-          const hasDisassembly = item.disassemblyOptions?.[i];
-          const hasPacking = item.packingOptions?.[i];
-          
-          if (hasDisassembly || hasPacking) {
-            if (yPosition > 270) {
-              pdf.addPage();
-              yPosition = 20;
-            }
-            let optionsText = `  Item #${i + 1}: `;
-            if (hasDisassembly) optionsText += 'Démontage/Remontage ';
-            if (hasPacking) optionsText += 'Emballage/Déballage ';
-            yPosition = addText(optionsText, margin + 20, yPosition);
-          }
-        }
-      });
-      yPosition += 5;
+    // Company information (top right)
+    pdf.setFontSize(10);
+    pdf.setTextColor(...secondaryColor);
+    const companyInfo = [
+      settings?.company_name || 'MatchMove',
+      settings?.address || 'France',
+      settings?.phone || '+33 1 23 45 67 89',
+      settings?.email || 'contact@matchmove.fr',
+      'matchmove.fr'
+    ];
+    
+    let rightX = pageWidth - margin;
+    let companyY = yPosition;
+    companyInfo.forEach((info, index) => {
+      const textWidth = pdf.getTextWidth(info);
+      pdf.text(info, rightX - textWidth, companyY + (index * 4));
     });
 
-    // Notes section
+    yPosition = headerHeight + 20;
+
+    // Title
+    pdf.setFontSize(18);
+    pdf.setTextColor(...primaryColor);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('INVENTAIRE PROFESSIONNEL DE DÉMÉNAGEMENT', margin, yPosition);
+    yPosition += 15;
+
+    // Client information section
+    pdf.setFillColor(...primaryColor);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('INFORMATIONS CLIENT', margin + 5, yPosition + 6);
+    yPosition += 15;
+
+    pdf.setTextColor(...secondaryColor);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10);
+    
+    const clientInfoLeft = [
+      `Nom: ${clientName || 'Non renseigné'}`,
+      `Référence: ${clientReference || `INV-${Date.now()}`}`,
+      `Date: ${currentDate}`
+    ];
+    
+    const clientInfoRight = [
+      `Adresse: ${clientAddress || 'Non renseignée'}`,
+      `Téléphone: ${clientPhone || 'Non renseigné'}`,
+      `Email: ${clientEmail || 'Non renseigné'}`
+    ];
+
+    clientInfoLeft.forEach((info, index) => {
+      pdf.text(info, margin + 5, yPosition + (index * 5));
+    });
+
+    clientInfoRight.forEach((info, index) => {
+      pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 5));
+    });
+
+    yPosition += 25;
+
+    // Summary section
+    pdf.setFillColor(...lightGray);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
+    
+    pdf.setFontSize(12);
+    pdf.setTextColor(...primaryColor);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('RÉSUMÉ', margin + 5, yPosition + 8);
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(...secondaryColor);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 15);
+    pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 8);
+    pdf.text(`Véhicule: ${truck.type}`, pageWidth / 2, yPosition + 15);
+    
+    yPosition += 30;
+
+    // Inventory table header
+    pdf.setFillColor(...primaryColor);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    
+    // Table headers
+    const col1Width = 15; // Icon
+    const col2Width = 60; // Nom
+    const col3Width = 20; // Qté
+    const col4Width = 25; // Volume unit
+    const col5Width = 25; // Volume total
+    const col6Width = 45; // Options
+    
+    pdf.text('🏠', margin + 5, yPosition + 7);
+    pdf.text('ARTICLE', margin + col1Width + 5, yPosition + 7);
+    pdf.text('QTÉ', margin + col1Width + col2Width + 5, yPosition + 7);
+    pdf.text('VOL. UNIT', margin + col1Width + col2Width + col3Width + 5, yPosition + 7);
+    pdf.text('VOL. TOTAL', margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 7);
+    pdf.text('OPTIONS', margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 7);
+    
+    yPosition += 10;
+
+    // Table content
+    pdf.setTextColor(...secondaryColor);
+    pdf.setFont('helvetica', 'normal');
+    
+    let rowIndex = 0;
+    selectedItems.forEach((item) => {
+      // Check if we need a new page
+      if (yPosition > pageHeight - 30) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+
+      // Alternating row colors
+      if (rowIndex % 2 === 0) {
+        pdf.setFillColor(250, 250, 250);
+        pdf.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'F');
+      }
+
+      // Calculate total volume for this item including disassembly options
+      let itemTotalVolume = 0;
+      for (let i = 0; i < item.quantity; i++) {
+        let unitVolume = item.volume;
+        if (item.disassemblyOptions?.[i]) unitVolume = unitVolume / 2;
+        itemTotalVolume += unitVolume;
+      }
+
+      // Item row
+      pdf.text(item.icon, margin + 5, yPosition + 10);
+      
+      // Truncate name if too long
+      let displayName = item.name;
+      if (pdf.getTextWidth(displayName) > col2Width - 5) {
+        while (pdf.getTextWidth(displayName + '...') > col2Width - 5 && displayName.length > 10) {
+          displayName = displayName.slice(0, -1);
+        }
+        displayName += '...';
+      }
+      pdf.text(displayName, margin + col1Width + 5, yPosition + 10);
+      
+      pdf.text(item.quantity.toString(), margin + col1Width + col2Width + 8, yPosition + 10);
+      pdf.text(`${item.volume.toFixed(2)} m³`, margin + col1Width + col2Width + col3Width + 5, yPosition + 10);
+      pdf.text(`${itemTotalVolume.toFixed(2)} m³`, margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 10);
+      
+      // Options summary
+      const isCarton = item.name.toLowerCase().includes('carton');
+      const optionsCount = isCarton 
+        ? item.packingOptions?.filter(opt => opt).length || 0
+        : item.disassemblyOptions?.filter(opt => opt).length || 0;
+      
+      if (optionsCount > 0) {
+        const optionText = isCarton ? `${optionsCount} emb/déb` : `${optionsCount} dém/rem`;
+        pdf.text(optionText, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
+      }
+
+      yPosition += 15;
+      rowIndex++;
+    });
+
+    // Total line
+    yPosition += 5;
+    pdf.setFillColor(...primaryColor);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('TOTAL GÉNÉRAL', margin + 5, yPosition + 8);
+    pdf.text(`${totalVolume.toFixed(2)} m³`, margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 8);
+    pdf.text(`${selectedItems.reduce((sum, item) => sum + item.quantity, 0)} objets`, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 8);
+
+    yPosition += 20;
+
+    // Notes section if any
     if (notes) {
-      if (yPosition > 230) {
+      if (yPosition > pageHeight - 50) {
         pdf.addPage();
         yPosition = 20;
       }
       
+      pdf.setFillColor(...lightGray);
+      pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+      pdf.setTextColor(...primaryColor);
       pdf.setFont('helvetica', 'bold');
-      yPosition = addText('NOTES PARTICULIÈRES', margin, yPosition);
+      pdf.text('NOTES PARTICULIÈRES', margin + 5, yPosition + 6);
+      yPosition += 15;
+      
+      pdf.setTextColor(...secondaryColor);
       pdf.setFont('helvetica', 'normal');
-      yPosition = addText(notes, margin, yPosition + 5, pageWidth - 2 * margin);
+      pdf.setFontSize(9);
+      const noteLines = pdf.splitTextToSize(notes, pageWidth - 2 * margin - 10);
+      pdf.text(noteLines, margin + 5, yPosition);
+      yPosition += noteLines.length * 4 + 10;
     }
 
     // Footer
-    if (yPosition > 250) {
+    if (yPosition > pageHeight - 40) {
       pdf.addPage();
       yPosition = 20;
     }
     
-    yPosition += 10;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'italic');
-    yPosition = addText(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition);
-    yPosition = addText(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition);
-    yPosition = addText('Validité de l\'estimation: 30 jours', margin, yPosition);
+    yPosition = pageHeight - 30;
+    pdf.setFillColor(...secondaryColor);
+    pdf.rect(0, yPosition, pageWidth, 30, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 10);
+    pdf.text(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition + 16);
+    pdf.text(`Site web: matchmove.fr`, margin, yPosition + 22);
+    
+    const validityText = 'Validité de l\'estimation: 30 jours';
+    const validityWidth = pdf.getTextWidth(validityText);
+    pdf.text(validityText, pageWidth - margin - validityWidth, yPosition + 16);
 
     return pdf;
   };
