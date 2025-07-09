@@ -40,16 +40,7 @@ const VolumeCalculator = () => {
 
   const calculateTotalVolume = () => {
     return selectedItems.reduce((total, item) => {
-      let itemTotal = 0;
-      for (let i = 0; i < item.quantity; i++) {
-        let unitVolume = item.volume;
-        // Appliquer la réduction de volume si démontage/remontage est activé pour cet item
-        if (item.disassemblyOptions?.[i]) {
-          unitVolume = unitVolume / 2;
-        }
-        itemTotal += unitVolume;
-      }
-      return total + itemTotal;
+      return total + (item.volume * item.quantity);
     }, 0);
   };
 
@@ -75,7 +66,7 @@ const VolumeCalculator = () => {
     return { type: 'Semi-remorque', size: '40m³+', description: 'Déménagement important' };
   };
 
-  const handleAddItem = (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[] }, quantity: number) => {
+  const handleAddItem = (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[] }, quantity: number) => {
     const existingIndex = selectedItems.findIndex(selected => selected.id === item.id);
     
     if (existingIndex >= 0) {
@@ -83,13 +74,15 @@ const VolumeCalculator = () => {
       updated[existingIndex].quantity = quantity;
       updated[existingIndex].disassemblyOptions = item.disassemblyOptions || updated[existingIndex].disassemblyOptions;
       updated[existingIndex].packingOptions = item.packingOptions || updated[existingIndex].packingOptions;
+      updated[existingIndex].unpackingOptions = item.unpackingOptions || updated[existingIndex].unpackingOptions;
       setSelectedItems(updated);
     } else if (quantity > 0) {
       setSelectedItems([...selectedItems, {
         ...item,
         quantity,
         disassemblyOptions: item.disassemblyOptions || Array(quantity).fill(false),
-        packingOptions: item.packingOptions || Array(quantity).fill(false)
+        packingOptions: item.packingOptions || Array(quantity).fill(false),
+        unpackingOptions: item.unpackingOptions || Array(quantity).fill(false)
       }]);
     }
   };
@@ -510,7 +503,7 @@ Validité de l'estimation : 30 jours
     pdf.setFont('helvetica', 'normal');
     pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 15);
     pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 8);
-    pdf.text(`Véhicule: ${truck.type}`, pageWidth / 2, yPosition + 15);
+    pdf.text(`Articles: ${selectedItems.length} types`, pageWidth / 2, yPosition + 15);
     
     yPosition += 30;
 
@@ -962,10 +955,16 @@ Validité de l'estimation : 30 jours
         onLoadInventory={(inventory) => {
           setClientName(inventory.clientName || '');
           setClientReference(inventory.clientReference || '');
+          setClientPhone(inventory.clientPhone || '');
+          setClientEmail(inventory.clientEmail || '');
+          setNotes(inventory.notes || '');
           setSelectedItems(inventory.selectedItems || []);
+          if (inventory.extendedFormData) {
+            setExtendedFormData(inventory.extendedFormData);
+          }
           toast({
             title: "Inventaire chargé",
-            description: "L'inventaire a été chargé avec succès",
+            description: "L'inventaire complet a été chargé avec succès",
           });
         }}
       />

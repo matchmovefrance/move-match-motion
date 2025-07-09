@@ -24,5 +24,6 @@ export interface FurnitureCategory {
 export interface SelectedItem extends FurnitureItem {
   quantity: number;
   disassemblyOptions?: boolean[]; // Pour chaque quantité, true si démontage/remontage
-  packingOptions?: boolean[]; // Pour chaque quantité, true si emballage/déballage (pour cartons)
+  packingOptions?: boolean[]; // Pour chaque quantité, true si emballage (pour cartons)
+  unpackingOptions?: boolean[]; // Pour chaque quantité, true si déballage (pour cartons)
 }

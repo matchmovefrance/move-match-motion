@@ -177,17 +177,6 @@ const CompanySettings = () => {
           />
         </div>
         
-        <div>
-          <Label htmlFor="pricing_margin">Marge de pricing (%)</Label>
-          <Input
-            id="pricing_margin"
-            type="number"
-            min="0"
-            max="100"
-            value={settings.pricing_margin}
-            onChange={(e) => setSettings({ ...settings, pricing_margin: Number(e.target.value) })}
-          />
-        </div>
         
         <Button 
           onClick={saveSettings} 

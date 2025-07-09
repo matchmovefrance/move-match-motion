@@ -93,13 +93,35 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
     onLoadInventory({
       clientName: inventory.client_name,
       clientReference: inventory.client_reference,
+      clientPhone: (inventory as any).client_phone,
+      clientEmail: (inventory as any).client_email,
+      notes: (inventory as any).notes,
       selectedItems: inventory.selected_items,
-      // Vous pouvez ajouter d'autres champs selon vos besoins
+      extendedFormData: {
+        departureAddress: (inventory as any).departure_address,
+        departurePostalCode: inventory.departure_postal_code,
+        arrivalAddress: (inventory as any).arrival_address,
+        arrivalPostalCode: inventory.arrival_postal_code,
+        departureLocationType: (inventory as any).departure_location_type,
+        departureFloor: (inventory as any).departure_floor,
+        departureHasElevator: (inventory as any).departure_has_elevator,
+        departureElevatorSize: (inventory as any).departure_elevator_size,
+        departureHasFreightElevator: (inventory as any).departure_has_freight_elevator,
+        departureCarryingDistance: (inventory as any).departure_carrying_distance,
+        departureParkingNeeded: (inventory as any).departure_parking_needed,
+        arrivalLocationType: (inventory as any).arrival_location_type,
+        arrivalFloor: (inventory as any).arrival_floor,
+        arrivalHasElevator: (inventory as any).arrival_has_elevator,
+        arrivalElevatorSize: (inventory as any).arrival_elevator_size,
+        arrivalHasFreightElevator: (inventory as any).arrival_has_freight_elevator,
+        arrivalCarryingDistance: (inventory as any).arrival_carrying_distance,
+        arrivalParkingNeeded: (inventory as any).arrival_parking_needed,
+      }
     });
     onClose();
     toast({
       title: "Inventaire chargé",
-      description: "L'inventaire a été chargé dans le calculateur",
+      description: "L'inventaire complet a été chargé dans le calculateur",
     });
   };
 

@@ -480,6 +480,7 @@ export type Database = {
           departure_parking_needed: boolean | null
           departure_postal_code: string
           distance_km: number | null
+          distance_km_calculated: number | null
           id: string
           notes: string | null
           selected_items: Json
@@ -514,6 +515,7 @@ export type Database = {
           departure_parking_needed?: boolean | null
           departure_postal_code: string
           distance_km?: number | null
+          distance_km_calculated?: number | null
           id?: string
           notes?: string | null
           selected_items: Json
@@ -548,6 +550,7 @@ export type Database = {
           departure_parking_needed?: boolean | null
           departure_postal_code?: string
           distance_km?: number | null
+          distance_km_calculated?: number | null
           id?: string
           notes?: string | null
           selected_items?: Json
