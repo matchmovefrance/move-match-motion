@@ -538,7 +538,7 @@ Validité de l'estimation : 30 jours
       pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 5));
     });
 
-    yPosition += 30;
+    yPosition += 20;
 
     // Configuration des lieux section
     // Configuration des lieux - TOUJOURS affichée sur le PDF

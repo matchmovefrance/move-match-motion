@@ -239,15 +239,21 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                     <p><strong>Téléphone:</strong> {(selectedInventory as any).client_phone || 'Non renseigné'}</p>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-medium mb-3 text-green-600">Détails du déménagement</h4>
-                  <div className="space-y-2 text-sm">
-                    <p><strong>Volume total:</strong> {selectedInventory.total_volume.toFixed(2)} m³</p>
-                    <p><strong>Distance:</strong> {selectedInventory.distance_km?.toFixed(0)} km</p>
-                    <p><strong>Poids estimé:</strong> {selectedInventory.total_weight?.toFixed(0) || 'N/A'} kg</p>
-                    <p><strong>Nb objets:</strong> {selectedInventory.selected_items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0}</p>
+                  <div>
+                    <h4 className="font-medium mb-3 text-green-600">Détails du déménagement</h4>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Volume total:</strong> {selectedInventory.total_volume.toFixed(2)} m³</p>
+                      <p><strong>Distance:</strong> {selectedInventory.distance_km?.toFixed(0)} km</p>
+                      <p><strong>Poids estimé:</strong> {selectedInventory.total_weight?.toFixed(0) || 'N/A'} kg</p>
+                      <p><strong>Nb objets:</strong> {selectedInventory.selected_items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0}</p>
+                      {selectedInventory.moving_date && (
+                        <p><strong>Date déménagement:</strong> {new Date(selectedInventory.moving_date).toLocaleDateString('fr-FR')}</p>
+                      )}
+                      {selectedInventory.flexible_dates && selectedInventory.date_range_start && selectedInventory.date_range_end && (
+                        <p><strong>Période flexible:</strong> du {new Date(selectedInventory.date_range_start).toLocaleDateString('fr-FR')} au {new Date(selectedInventory.date_range_end).toLocaleDateString('fr-FR')}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
               </div>
 
               <Separator />
@@ -399,6 +405,12 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                                 <Calendar className="h-4 w-4" />
                                 {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
                               </span>
+                              {inventory.moving_date && (
+                                <span className="flex items-center gap-1 text-blue-600">
+                                  <Calendar className="h-4 w-4" />
+                                  Déménagement: {new Date(inventory.moving_date).toLocaleDateString('fr-FR')}
+                                </span>
+                              )}
                               <span className="flex items-center gap-1">
                                 <MapPin className="h-4 w-4" />
                                 {inventory.departure_postal_code} → {inventory.arrival_postal_code}
