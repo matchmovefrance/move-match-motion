@@ -87,16 +87,19 @@ const VolumeCalculator = () => {
     }
   };
 
-  const handleUpdateItemOptions = (itemId: string, index: number, optionType: 'disassembly' | 'packing', value: boolean) => {
+  const handleUpdateItemOptions = (itemId: string, index: number, optionType: 'disassembly' | 'packing' | 'unpacking', value: boolean) => {
     setSelectedItems(items => items.map(item => {
       if (item.id === itemId) {
         const updated = { ...item };
         if (optionType === 'disassembly') {
           updated.disassemblyOptions = [...(item.disassemblyOptions || [])];
           updated.disassemblyOptions[index] = value;
-        } else {
+        } else if (optionType === 'packing') {
           updated.packingOptions = [...(item.packingOptions || [])];
           updated.packingOptions[index] = value;
+        } else if (optionType === 'unpacking') {
+          updated.unpackingOptions = [...(item.unpackingOptions || [])];
+          updated.unpackingOptions[index] = value;
         }
         return updated;
       }
