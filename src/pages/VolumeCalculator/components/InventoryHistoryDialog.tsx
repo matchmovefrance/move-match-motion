@@ -165,24 +165,24 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
       dateRangeStart: inventory.date_range_start,
       dateRangeEnd: inventory.date_range_end,
       extendedFormData: {
-        departureAddress: (inventory as any).departure_address,
-        departurePostalCode: inventory.departure_postal_code,
-        arrivalAddress: (inventory as any).arrival_address,
-        arrivalPostalCode: inventory.arrival_postal_code,
-        departureLocationType: (inventory as any).departure_location_type,
-        departureFloor: (inventory as any).departure_floor,
-        departureHasElevator: (inventory as any).departure_has_elevator,
-        departureElevatorSize: (inventory as any).departure_elevator_size,
-        departureHasFreightElevator: (inventory as any).departure_has_freight_elevator,
-        departureCarryingDistance: (inventory as any).departure_carrying_distance,
-        departureParkingNeeded: (inventory as any).departure_parking_needed,
-        arrivalLocationType: (inventory as any).arrival_location_type,
-        arrivalFloor: (inventory as any).arrival_floor,
-        arrivalHasElevator: (inventory as any).arrival_has_elevator,
-        arrivalElevatorSize: (inventory as any).arrival_elevator_size,
-        arrivalHasFreightElevator: (inventory as any).arrival_has_freight_elevator,
-        arrivalCarryingDistance: (inventory as any).arrival_carrying_distance,
-        arrivalParkingNeeded: (inventory as any).arrival_parking_needed,
+        departureAddress: (inventory as any).departure_address || '',
+        departurePostalCode: inventory.departure_postal_code || '',
+        arrivalAddress: (inventory as any).arrival_address || '',
+        arrivalPostalCode: inventory.arrival_postal_code || '',
+        departureLocationType: (inventory as any).departure_location_type || 'appartement',
+        departureFloor: (inventory as any).departure_floor || '0',
+        departureHasElevator: (inventory as any).departure_has_elevator || false,
+        departureElevatorSize: (inventory as any).departure_elevator_size || '',
+        departureHasFreightElevator: (inventory as any).departure_has_freight_elevator || false,
+        departureCarryingDistance: (inventory as any).departure_carrying_distance || '0',
+        departureParkingNeeded: (inventory as any).departure_parking_needed || false,
+        arrivalLocationType: (inventory as any).arrival_location_type || 'appartement',
+        arrivalFloor: (inventory as any).arrival_floor || '0',
+        arrivalHasElevator: (inventory as any).arrival_has_elevator || false,
+        arrivalElevatorSize: (inventory as any).arrival_elevator_size || '',
+        arrivalHasFreightElevator: (inventory as any).arrival_has_freight_elevator || false,
+        arrivalCarryingDistance: (inventory as any).arrival_carrying_distance || '0',
+        arrivalParkingNeeded: (inventory as any).arrival_parking_needed || false,
       }
     });
     onClose();
@@ -264,7 +264,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   <div className="space-y-1 text-sm">
                     <p><strong>Adresse:</strong> {(selectedInventory as any).departure_address || 'Non renseignée'}</p>
                     <p><strong>Code postal:</strong> {selectedInventory.departure_postal_code}</p>
-                    <p><strong>Type lieu:</strong> {(selectedInventory as any).departure_location_type || 'Non spécifié'}</p>
+                    <p><strong>Type lieu:</strong> {(selectedInventory as any).departure_location_type || 'Appartement'}</p>
                     <p><strong>Étage:</strong> {(selectedInventory as any).departure_floor || '0'}</p>
                     <p><strong>Ascenseur:</strong> {(selectedInventory as any).departure_has_elevator ? `Oui (${(selectedInventory as any).departure_elevator_size || 'taille N/A'})` : 'Non'}</p>
                     <p><strong>Monte-charge:</strong> {(selectedInventory as any).departure_has_freight_elevator ? 'Oui' : 'Non'}</p>
@@ -277,7 +277,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   <div className="space-y-1 text-sm">
                     <p><strong>Adresse:</strong> {(selectedInventory as any).arrival_address || 'Non renseignée'}</p>
                     <p><strong>Code postal:</strong> {selectedInventory.arrival_postal_code}</p>
-                    <p><strong>Type lieu:</strong> {(selectedInventory as any).arrival_location_type || 'Non spécifié'}</p>
+                    <p><strong>Type lieu:</strong> {(selectedInventory as any).arrival_location_type || 'Appartement'}</p>
                     <p><strong>Étage:</strong> {(selectedInventory as any).arrival_floor || '0'}</p>
                     <p><strong>Ascenseur:</strong> {(selectedInventory as any).arrival_has_elevator ? `Oui (${(selectedInventory as any).arrival_elevator_size || 'taille N/A'})` : 'Non'}</p>
                     <p><strong>Monte-charge:</strong> {(selectedInventory as any).arrival_has_freight_elevator ? 'Oui' : 'Non'}</p>
