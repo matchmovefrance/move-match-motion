@@ -1,5 +1,5 @@
 
-import { Trash2, Package, Edit3 } from 'lucide-react';
+import { Trash2, Package, Edit3, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,13 +12,25 @@ interface VolumeDisplayProps {
   selectedItems: SelectedItem[];
   onUpdateQuantity: (itemId: string, quantity: number) => void;
   onRemoveItem: (itemId: string) => void;
+  distance?: number | null;
+  distanceText?: string | null;
+  isCalculatingDistance?: boolean;
+  distanceError?: string | null;
+  departurePostalCode?: string;
+  arrivalPostalCode?: string;
 }
 
 const VolumeDisplay = ({ 
   totalVolume, 
   selectedItems, 
   onUpdateQuantity, 
-  onRemoveItem 
+  onRemoveItem,
+  distance,
+  distanceText,
+  isCalculatingDistance,
+  distanceError,
+  departurePostalCode,
+  arrivalPostalCode
 }: VolumeDisplayProps) => {
   const getVolumeCategory = (volume: number) => {
     if (volume < 10) return { text: "Petit déménagement", color: "bg-green-500", description: "Camionnette ou petit camion" };

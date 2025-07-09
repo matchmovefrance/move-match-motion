@@ -48,7 +48,7 @@ const VolumeCalculator = () => {
   const [dateRangeEnd, setDateRangeEnd] = useState('');
 
   // Hook pour calculer la distance
-  const { distance } = useGoogleMapsDistance({
+  const { distance, distanceText, isLoading: isCalculatingDistance, error: distanceError } = useGoogleMapsDistance({
     departurePostalCode: extendedFormData.departurePostalCode,
     arrivalPostalCode: extendedFormData.arrivalPostalCode,
     enabled: !!(extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode)
@@ -272,7 +272,7 @@ const VolumeCalculator = () => {
     }
   };
 
-  const generateProfessionalInventoryContent = async (calculatedDistance?: number) => {
+  const generateProfessionalInventoryContent = async (calculatedDistance?: number, distanceText?: string) => {
     const settings = await loadCompanySettings();
     const totalVolume = calculateTotalVolume();
     const totalWeight = calculateTotalWeight();
@@ -288,6 +288,7 @@ const VolumeCalculator = () => {
       documentDate,
       truck,
       calculatedDistance,
+      distanceText,
       selectedItems,
       movingDate,
       flexibleDates,
@@ -298,8 +299,8 @@ const VolumeCalculator = () => {
   };
 
   const generateProfessionalInventoryTXT = async () => {
-    const data = await generateProfessionalInventoryContent(distance);
-    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData } = data;
+    const data = await generateProfessionalInventoryContent(distance, distanceText);
+    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance, distanceText: calculatedDistanceText } = data;
     
     // En-tête professionnel avec nouvelles informations
     const header = `═══════════════════════════════════════════════════════
@@ -351,6 +352,7 @@ RÉSUMÉ TECHNIQUE
 Volume total estimé  : ${totalVolume.toFixed(2)} m³
 Nombre d'objets      : ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
 Types différents     : ${selectedItems.length}
+${extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode && calculatedDistance ? `Distance estimée    : ${calculatedDistanceText || calculatedDistance + 'km'}` : ''}
 Notes particulières  : ${notes || 'Aucune'}
 
 RECOMMANDATION VÉHICULE
@@ -450,8 +452,8 @@ Validité de l'estimation : 30 jours
   };
 
   const generateProfessionalInventoryPDF = async () => {
-    const data = await generateProfessionalInventoryContent(distance);
-    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance } = data;
+    const data = await generateProfessionalInventoryContent(distance, distanceText);
+    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance, distanceText: calculatedDistanceText } = data;
     
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.width;
@@ -559,7 +561,8 @@ Validité de l'estimation : 30 jours
     // Distance d'abord si disponible
     if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
       pdf.setFont('helvetica', 'bold');
-      pdf.text(`DISTANCE: ${calculatedDistance || 'Calcul en cours'} km`, margin + 5, yPosition);
+      const distanceDisplay = calculatedDistanceText || (calculatedDistance ? `${calculatedDistance} km` : 'Calcul en cours');
+      pdf.text(`DISTANCE ESTIMÉE: ${distanceDisplay}`, margin + 5, yPosition);
       pdf.setFont('helvetica', 'normal');
       yPosition += 8;
     }
@@ -925,12 +928,18 @@ Validité de l'estimation : 30 jours
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <VolumeDisplay 
-              totalVolume={calculateTotalVolume()}
-              selectedItems={selectedItems}
-              onUpdateQuantity={handleUpdateQuantity}
-              onRemoveItem={handleRemoveItem}
-            />
+                  <VolumeDisplay
+                    totalVolume={calculateTotalVolume()}
+                    selectedItems={selectedItems}
+                    onUpdateQuantity={handleUpdateQuantity}
+                    onRemoveItem={handleRemoveItem}
+                    distance={distance}
+                    distanceText={distanceText}
+                    isCalculatingDistance={isCalculatingDistance}
+                    distanceError={distanceError}
+                    departurePostalCode={extendedFormData.departurePostalCode}
+                    arrivalPostalCode={extendedFormData.arrivalPostalCode}
+                  />
 
 
             {/* Dates de déménagement */}

@@ -71,13 +71,13 @@ export const loadGoogleMapsScript = (): Promise<void> => {
   });
 };
 
-// Fonction pour calculer la distance entre deux codes postaux avec Google Directions API
+// Fonction pour calculer la distance entre deux codes postaux avec Google Distance Matrix API
 export const calculateDistanceByPostalCode = async (
   departurePostalCode: string,
   arrivalPostalCode: string,
   departureCity?: string,
   arrivalCity?: string
-): Promise<{ distance: number; duration: number } | null> => {
+): Promise<{ distance: number; duration: number; distanceText: string } | null> => {
   return new Promise((resolve) => {
     if (!window.google?.maps) {
       console.warn('Google Maps API not loaded');
@@ -85,46 +85,55 @@ export const calculateDistanceByPostalCode = async (
       return;
     }
 
-    const directionsService = new google.maps.DirectionsService();
+    const service = new google.maps.DistanceMatrixService();
     
     // Construire les adresses avec code postal et ville si disponible
     const origin = departureCity ? `${departurePostalCode} ${departureCity}, France` : `${departurePostalCode}, France`;
     const destination = arrivalCity ? `${arrivalPostalCode} ${arrivalCity}, France` : `${arrivalPostalCode}, France`;
     
-    console.log(`Calcul distance Google Maps: ${origin} -> ${destination}`);
+    console.log(`Calcul distance Google Maps Distance Matrix: ${origin} -> ${destination}`);
     
-    directionsService.route({
-      origin: origin,
-      destination: destination,
+    service.getDistanceMatrix({
+      origins: [origin],
+      destinations: [destination],
       travelMode: google.maps.TravelMode.DRIVING,
-      region: 'FR',
-      language: 'fr'
-    }, (result, status) => {
-      if (status === 'OK' && result?.routes[0]) {
-        const leg = result.routes[0].legs[0];
-        const distanceKm = Math.round(leg.distance!.value / 1000);
-        const durationMin = Math.round(leg.duration!.value / 60);
+      unitSystem: google.maps.UnitSystem.METRIC,
+      avoidHighways: false,
+      avoidTolls: false
+    }, (response, status) => {
+      if (status === 'OK' && response?.rows[0]?.elements[0]) {
+        const element = response.rows[0].elements[0];
         
-        console.log(`Distance calculée Google Maps: ${distanceKm}km, Durée: ${durationMin}min`);
-        console.log(`Trajet: ${origin} -> ${destination}`);
-        
-        resolve({
-          distance: distanceKm,
-          duration: durationMin
-        });
+        if (element.status === 'OK') {
+          const distanceKm = Math.round(element.distance!.value / 1000);
+          const durationMin = Math.round(element.duration!.value / 60);
+          const distanceText = element.distance!.text;
+          
+          console.log(`Distance calculée Google Maps Distance Matrix: ${distanceKm}km (${distanceText}), Durée: ${durationMin}min`);
+          console.log(`Trajet: ${origin} -> ${destination}`);
+          
+          resolve({
+            distance: distanceKm,
+            duration: durationMin,
+            distanceText: distanceText
+          });
+        } else {
+          console.warn('Erreur élément Distance Matrix:', element.status);
+          resolve(null);
+        }
       } else {
-        console.warn('Erreur calcul distance Google Maps:', status);
+        console.warn('Erreur calcul distance Google Maps Distance Matrix:', status);
         resolve(null);
       }
     });
   });
 };
 
-// Fonction utilitaire pour calculer la distance entre deux points avec Google Directions API (compatibilité)
+// Fonction utilitaire pour calculer la distance entre deux points avec Google Distance Matrix API (compatibilité)
 export const calculateGoogleMapsDistance = async (
   origin: string,
   destination: string
-): Promise<{ distance: number; duration: number } | null> => {
+): Promise<{ distance: number; duration: number; distanceText: string } | null> => {
   return new Promise((resolve) => {
     if (!window.google?.maps) {
       console.warn('Google Maps API not loaded');
@@ -132,29 +141,38 @@ export const calculateGoogleMapsDistance = async (
       return;
     }
 
-    const directionsService = new google.maps.DirectionsService();
+    const service = new google.maps.DistanceMatrixService();
     
-    directionsService.route({
-      origin: origin,
-      destination: destination,
+    service.getDistanceMatrix({
+      origins: [origin],
+      destinations: [destination],
       travelMode: google.maps.TravelMode.DRIVING,
-      region: 'FR',
-      language: 'fr'
-    }, (result, status) => {
-      if (status === 'OK' && result?.routes[0]) {
-        const leg = result.routes[0].legs[0];
-        const distanceKm = Math.round(leg.distance!.value / 1000);
-        const durationMin = Math.round(leg.duration!.value / 60);
+      unitSystem: google.maps.UnitSystem.METRIC,
+      avoidHighways: false,
+      avoidTolls: false
+    }, (response, status) => {
+      if (status === 'OK' && response?.rows[0]?.elements[0]) {
+        const element = response.rows[0].elements[0];
         
-        console.log(`Distance calculée Google Maps: ${distanceKm}km, Durée: ${durationMin}min`);
-        console.log(`Trajet: ${origin} -> ${destination}`);
-        
-        resolve({
-          distance: distanceKm,
-          duration: durationMin
-        });
+        if (element.status === 'OK') {
+          const distanceKm = Math.round(element.distance!.value / 1000);
+          const durationMin = Math.round(element.duration!.value / 60);
+          const distanceText = element.distance!.text;
+          
+          console.log(`Distance calculée Google Maps Distance Matrix: ${distanceKm}km (${distanceText}), Durée: ${durationMin}min`);
+          console.log(`Trajet: ${origin} -> ${destination}`);
+          
+          resolve({
+            distance: distanceKm,
+            duration: durationMin,
+            distanceText: distanceText
+          });
+        } else {
+          console.warn('Erreur élément Distance Matrix:', element.status);
+          resolve(null);
+        }
       } else {
-        console.warn('Erreur calcul distance Google Maps:', status);
+        console.warn('Erreur calcul distance Google Maps Distance Matrix:', status);
         resolve(null);
       }
     });

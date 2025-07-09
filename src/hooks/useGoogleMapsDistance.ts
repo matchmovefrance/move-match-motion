@@ -13,6 +13,7 @@ interface UseGoogleMapsDistanceProps {
 interface DistanceResult {
   distance: number | null;
   duration: number | null;
+  distanceText: string | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -26,6 +27,7 @@ export const useGoogleMapsDistance = ({
 }: UseGoogleMapsDistanceProps): DistanceResult => {
   const [distance, setDistance] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [distanceText, setDistanceText] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +36,7 @@ export const useGoogleMapsDistance = ({
       if (!enabled || !departurePostalCode || !arrivalPostalCode) {
         setDistance(null);
         setDuration(null);
+        setDistanceText(null);
         setError(null);
         return;
       }
@@ -54,17 +57,20 @@ export const useGoogleMapsDistance = ({
         if (result) {
           setDistance(result.distance);
           setDuration(result.duration);
-          console.log(`Distance calculée: ${result.distance}km entre ${departurePostalCode} et ${arrivalPostalCode}`);
+          setDistanceText(result.distanceText);
+          console.log(`Distance calculée: ${result.distance}km (${result.distanceText}) entre ${departurePostalCode} et ${arrivalPostalCode}`);
         } else {
           setError('Impossible de calculer la distance');
           setDistance(null);
           setDuration(null);
+          setDistanceText(null);
         }
       } catch (err) {
         console.error('Erreur lors du calcul de distance:', err);
         setError('Erreur lors du calcul de distance');
         setDistance(null);
         setDuration(null);
+        setDistanceText(null);
       } finally {
         setIsLoading(false);
       }
@@ -76,6 +82,7 @@ export const useGoogleMapsDistance = ({
   return {
     distance,
     duration,
+    distanceText,
     isLoading,
     error
   };
