@@ -19,6 +19,19 @@ import { Trash2, Eye, Calendar, MapPin, Search, Filter, ChevronLeft, ChevronRigh
 import { SelectedItem } from '../types';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
+const getLocationTypeDisplayName = (locationType: string) => {
+  switch (locationType) {
+    case 'appartement':
+      return 'Appartement';
+    case 'maison':
+      return 'Maison';
+    case 'garde_meuble':
+      return 'Garde meuble';
+    default:
+      return locationType;
+  }
+};
+
 interface Inventory {
   id: string;
   client_name: string;
@@ -264,7 +277,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   <div className="space-y-1 text-sm">
                     <p><strong>Adresse:</strong> {(selectedInventory as any).departure_address || 'Non renseignée'}</p>
                     <p><strong>Code postal:</strong> {selectedInventory.departure_postal_code}</p>
-                    <p><strong>Type lieu:</strong> {(selectedInventory as any).departure_location_type || 'Appartement'}</p>
+                    <p><strong>Type lieu:</strong> {getLocationTypeDisplayName((selectedInventory as any).departure_location_type || 'appartement')}</p>
                     <p><strong>Étage:</strong> {(selectedInventory as any).departure_floor || '0'}</p>
                     <p><strong>Ascenseur:</strong> {(selectedInventory as any).departure_has_elevator ? `Oui (${(selectedInventory as any).departure_elevator_size || 'taille N/A'})` : 'Non'}</p>
                     <p><strong>Monte-charge:</strong> {(selectedInventory as any).departure_has_freight_elevator ? 'Oui' : 'Non'}</p>
@@ -277,7 +290,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   <div className="space-y-1 text-sm">
                     <p><strong>Adresse:</strong> {(selectedInventory as any).arrival_address || 'Non renseignée'}</p>
                     <p><strong>Code postal:</strong> {selectedInventory.arrival_postal_code}</p>
-                    <p><strong>Type lieu:</strong> {(selectedInventory as any).arrival_location_type || 'Appartement'}</p>
+                    <p><strong>Type lieu:</strong> {getLocationTypeDisplayName((selectedInventory as any).arrival_location_type || 'appartement')}</p>
                     <p><strong>Étage:</strong> {(selectedInventory as any).arrival_floor || '0'}</p>
                     <p><strong>Ascenseur:</strong> {(selectedInventory as any).arrival_has_elevator ? `Oui (${(selectedInventory as any).arrival_elevator_size || 'taille N/A'})` : 'Non'}</p>
                     <p><strong>Monte-charge:</strong> {(selectedInventory as any).arrival_has_freight_elevator ? 'Oui' : 'Non'}</p>
