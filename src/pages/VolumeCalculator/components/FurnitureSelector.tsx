@@ -1,6 +1,6 @@
 
-import { useState } from 'react';
-import { Plus, Minus, PlusCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Minus, PlusCircle, Search, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { FurnitureItem, SelectedItem } from '../types';
 import { furnitureCategories } from '../data/furnitureData';
 import ManualFurnitureDialog from './ManualFurnitureDialog';
+import { EditVolumeDialog } from './EditVolumeDialog';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface FurnitureSelectorProps {
   onAddItem: (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[] }, quantity: number) => void;
@@ -21,6 +24,58 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [manualFurniture, setManualFurniture] = useState<FurnitureItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingItem, setEditingItem] = useState<FurnitureItem | null>(null);
+  const [customVolumes, setCustomVolumes] = useState<Record<string, number>>({});
+  const { toast } = useToast();
+
+  // Charger les volumes personnalisés depuis la base de données
+  useEffect(() => {
+    const loadCustomVolumes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('furniture_volumes')
+          .select('furniture_id, custom_volume');
+        
+        if (error) throw error;
+        
+        const volumeMap = data.reduce((acc, item) => {
+          acc[item.furniture_id] = item.custom_volume;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        setCustomVolumes(volumeMap);
+      } catch (error) {
+        console.error('Error loading custom volumes:', error);
+      }
+    };
+
+    loadCustomVolumes();
+  }, []);
+
+  const getItemVolume = (item: FurnitureItem) => {
+    return customVolumes[item.id] || item.volume;
+  };
+
+  const handleVolumeUpdated = (itemId: string, newVolume: number) => {
+    setCustomVolumes(prev => ({ ...prev, [itemId]: newVolume }));
+    
+    // Mettre à jour l'item dans les items sélectionnés
+    const selectedItem = selectedItems.find(item => item.id === itemId);
+    if (selectedItem) {
+      const updatedItem = { ...selectedItem, volume: newVolume };
+      handleQuantityChange(itemId, selectedItem.quantity);
+    }
+  };
+
+  // Filtrer les meubles en fonction du terme de recherche
+  const filterItems = (items: FurnitureItem[]) => {
+    if (!searchTerm) return items;
+    return items.filter(item => 
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  };
 
   const getSelectedQuantity = (itemId: string) => {
     const selectedItem = selectedItems.find(item => item.id === itemId);
@@ -174,6 +229,17 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
 
   return (
     <div className="space-y-4">
+      {/* Barre de recherche */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
+          placeholder="Rechercher des meubles..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {/* Bouton pour ajouter des meubles manuellement */}
       <div className="flex justify-end">
         <Button

@@ -417,6 +417,147 @@ export type Database = {
           },
         ]
       }
+      furniture_volumes: {
+        Row: {
+          category: string
+          created_at: string
+          custom_volume: number
+          default_volume: number
+          furniture_id: string
+          furniture_name: string
+          id: string
+          modified_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          custom_volume: number
+          default_volume: number
+          furniture_id: string
+          furniture_name: string
+          id?: string
+          modified_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          custom_volume?: number
+          default_volume?: number
+          furniture_id?: string
+          furniture_name?: string
+          id?: string
+          modified_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      inventories: {
+        Row: {
+          arrival_address: string | null
+          arrival_carrying_distance: number | null
+          arrival_elevator_size: string | null
+          arrival_floor: number | null
+          arrival_has_elevator: boolean | null
+          arrival_has_freight_elevator: boolean | null
+          arrival_location_type: string | null
+          arrival_parking_needed: boolean | null
+          arrival_postal_code: string
+          client_email: string | null
+          client_name: string | null
+          client_phone: string | null
+          client_reference: string | null
+          created_at: string
+          created_by: string | null
+          departure_address: string | null
+          departure_carrying_distance: number | null
+          departure_elevator_size: string | null
+          departure_floor: number | null
+          departure_has_elevator: boolean | null
+          departure_has_freight_elevator: boolean | null
+          departure_location_type: string | null
+          departure_parking_needed: boolean | null
+          departure_postal_code: string
+          distance_km: number | null
+          id: string
+          notes: string | null
+          selected_items: Json
+          total_volume: number
+          total_weight: number | null
+          truck_recommendation: Json | null
+          updated_at: string
+        }
+        Insert: {
+          arrival_address?: string | null
+          arrival_carrying_distance?: number | null
+          arrival_elevator_size?: string | null
+          arrival_floor?: number | null
+          arrival_has_elevator?: boolean | null
+          arrival_has_freight_elevator?: boolean | null
+          arrival_location_type?: string | null
+          arrival_parking_needed?: boolean | null
+          arrival_postal_code: string
+          client_email?: string | null
+          client_name?: string | null
+          client_phone?: string | null
+          client_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          departure_address?: string | null
+          departure_carrying_distance?: number | null
+          departure_elevator_size?: string | null
+          departure_floor?: number | null
+          departure_has_elevator?: boolean | null
+          departure_has_freight_elevator?: boolean | null
+          departure_location_type?: string | null
+          departure_parking_needed?: boolean | null
+          departure_postal_code: string
+          distance_km?: number | null
+          id?: string
+          notes?: string | null
+          selected_items: Json
+          total_volume: number
+          total_weight?: number | null
+          truck_recommendation?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          arrival_address?: string | null
+          arrival_carrying_distance?: number | null
+          arrival_elevator_size?: string | null
+          arrival_floor?: number | null
+          arrival_has_elevator?: boolean | null
+          arrival_has_freight_elevator?: boolean | null
+          arrival_location_type?: string | null
+          arrival_parking_needed?: boolean | null
+          arrival_postal_code?: string
+          client_email?: string | null
+          client_name?: string | null
+          client_phone?: string | null
+          client_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          departure_address?: string | null
+          departure_carrying_distance?: number | null
+          departure_elevator_size?: string | null
+          departure_floor?: number | null
+          departure_has_elevator?: boolean | null
+          departure_has_freight_elevator?: boolean | null
+          departure_location_type?: string | null
+          departure_parking_needed?: boolean | null
+          departure_postal_code?: string
+          distance_km?: number | null
+          id?: string
+          notes?: string | null
+          selected_items?: Json
+          total_volume?: number
+          total_weight?: number | null
+          truck_recommendation?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       match_actions: {
         Row: {
           action_date: string | null
