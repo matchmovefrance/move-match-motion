@@ -67,6 +67,8 @@ interface ClientFormDialogProps {
 export function ClientFormDialog(props: ClientFormDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  console.log('ClientFormDialog - selectedItemsCount:', props.selectedItemsCount);
+
   const handleSaveInventory = async () => {
     if (props.onSaveInventory) {
       await props.onSaveInventory();

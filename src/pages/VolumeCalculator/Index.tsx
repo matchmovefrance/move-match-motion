@@ -1039,7 +1039,7 @@ Validité de l'estimation : 30 jours
                     setArrivalPostalCode={(value) => setExtendedFormData(prev => ({ ...prev, arrivalPostalCode: value }))}
                     departureLocationType={extendedFormData.departureLocationType || 'appartement'}
                     setDepartureLocationType={(value) => setExtendedFormData(prev => ({ ...prev, departureLocationType: value }))}
-                    departureFloor={extendedFormData.departureFloor || 0}
+                    departureFloor={extendedFormData.departureFloor || '0'}
                     setDepartureFloor={(value) => setExtendedFormData(prev => ({ ...prev, departureFloor: value }))}
                     departureHasElevator={extendedFormData.departureHasElevator || false}
                     setDepartureHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasElevator: value }))}
@@ -1047,13 +1047,13 @@ Validité de l'estimation : 30 jours
                     setDepartureElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, departureElevatorSize: value }))}
                     departureHasFreightElevator={extendedFormData.departureHasFreightElevator || false}
                     setDepartureHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasFreightElevator: value }))}
-                    departureCarryingDistance={extendedFormData.departureCarryingDistance || 0}
+                    departureCarryingDistance={extendedFormData.departureCarryingDistance || '0'}
                     setDepartureCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, departureCarryingDistance: value }))}
                     departureParkingNeeded={extendedFormData.departureParkingNeeded || false}
                     setDepartureParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, departureParkingNeeded: value }))}
                     arrivalLocationType={extendedFormData.arrivalLocationType || 'appartement'}
                     setArrivalLocationType={(value) => setExtendedFormData(prev => ({ ...prev, arrivalLocationType: value }))}
-                    arrivalFloor={extendedFormData.arrivalFloor || 0}
+                    arrivalFloor={extendedFormData.arrivalFloor || '0'}
                     setArrivalFloor={(value) => setExtendedFormData(prev => ({ ...prev, arrivalFloor: value }))}
                     arrivalHasElevator={extendedFormData.arrivalHasElevator || false}
                     setArrivalHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasElevator: value }))}
@@ -1061,12 +1061,12 @@ Validité de l'estimation : 30 jours
                     setArrivalElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, arrivalElevatorSize: value }))}
                     arrivalHasFreightElevator={extendedFormData.arrivalHasFreightElevator || false}
                     setArrivalHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasFreightElevator: value }))}
-                    arrivalCarryingDistance={extendedFormData.arrivalCarryingDistance || 0}
+                    arrivalCarryingDistance={extendedFormData.arrivalCarryingDistance || '0'}
                     setArrivalCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCarryingDistance: value }))}
                     arrivalParkingNeeded={extendedFormData.arrivalParkingNeeded || false}
                     setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
                     onSaveInventory={saveInventory}
-                    selectedItemsCount={selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
+                    selectedItemsCount={selectedItems.length}
                   />
                 </div>
               </CardContent>
