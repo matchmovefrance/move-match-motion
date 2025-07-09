@@ -80,7 +80,7 @@ const MovingDetailsSection = ({ formData, onInputChange }: MovingDetailsSectionP
               <span className="text-blue-600">Calcul en cours...</span>
             ) : distance ? (
               <span className="text-blue-600 font-semibold">
-                {distance} km {duration && `(${Math.round(duration / 60)}h${duration % 60}min)`}
+                {distance} km
               </span>
             ) : (
               <span className="text-orange-600">Non calculée</span>

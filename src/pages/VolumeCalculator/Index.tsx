@@ -254,7 +254,7 @@ const VolumeCalculator = () => {
     }
   };
 
-  const generateProfessionalInventoryContent = async () => {
+  const generateProfessionalInventoryContent = async (calculatedDistance?: number) => {
     const settings = await loadCompanySettings();
     const totalVolume = calculateTotalVolume();
     const totalWeight = calculateTotalWeight();
@@ -269,6 +269,7 @@ const VolumeCalculator = () => {
       currentDate,
       documentDate,
       truck,
+      calculatedDistance,
       selectedItems,
       movingDate,
       flexibleDates,
@@ -279,7 +280,7 @@ const VolumeCalculator = () => {
   };
 
   const generateProfessionalInventoryTXT = async () => {
-    const data = await generateProfessionalInventoryContent();
+    const data = await generateProfessionalInventoryContent(distance);
     const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData } = data;
     
     // En-tête professionnel avec nouvelles informations
@@ -431,8 +432,8 @@ Validité de l'estimation : 30 jours
   };
 
   const generateProfessionalInventoryPDF = async () => {
-    const data = await generateProfessionalInventoryContent();
-    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData } = data;
+    const data = await generateProfessionalInventoryContent(distance);
+    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance } = data;
     
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.width;
@@ -544,7 +545,7 @@ Validité de l'estimation : 30 jours
     // Distance d'abord si disponible
     if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
       pdf.setFont('helvetica', 'bold');
-      pdf.text(`DISTANCE: ${distance || 'Calcul en cours'} km`, margin + 5, yPosition);
+      pdf.text(`DISTANCE: ${calculatedDistance || 'Calcul en cours'} km`, margin + 5, yPosition);
       pdf.setFont('helvetica', 'normal');
       yPosition += 8;
     }
