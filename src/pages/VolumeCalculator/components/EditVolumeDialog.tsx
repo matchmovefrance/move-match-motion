@@ -20,14 +20,14 @@ interface EditVolumeDialogProps {
     name: string;
     volume: number;
     category: string;
-  };
+  } | null;
   isOpen: boolean;
   onClose: () => void;
   onVolumeUpdated: (itemId: string, newVolume: number) => void;
 }
 
 export function EditVolumeDialog({ item, isOpen, onClose, onVolumeUpdated }: EditVolumeDialogProps) {
-  const [newVolume, setNewVolume] = useState(item.volume.toString());
+  const [newVolume, setNewVolume] = useState(item?.volume?.toString() || '0');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -96,6 +96,10 @@ export function EditVolumeDialog({ item, isOpen, onClose, onVolumeUpdated }: Edi
       setIsLoading(false);
     }
   };
+
+  if (!item) {
+    return null;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
