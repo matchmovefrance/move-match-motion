@@ -526,7 +526,12 @@ Validité de l'estimation : 30 jours
     yPosition += 30;
 
     // Configuration des lieux section
-    if (extendedFormData.departureLocationType || extendedFormData.arrivalLocationType) {
+    // Configuration des lieux - affichage toujours si on a des infos
+    const hasLocationInfo = extendedFormData.departurePostalCode || extendedFormData.arrivalPostalCode || 
+                           extendedFormData.departureLocationType || extendedFormData.arrivalLocationType ||
+                           extendedFormData.departureFloor || extendedFormData.arrivalFloor;
+    
+    if (hasLocationInfo) {
       pdf.setFillColor(...primaryColor);
       pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
       pdf.setTextColor(255, 255, 255);
@@ -539,22 +544,34 @@ Validité de l'estimation : 30 jours
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(9);
       
-      // Configuration départ
+      // Distance d'abord si disponible
+      if (extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`DISTANCE: ${distance || 'Calcul en cours'} km`, margin + 5, yPosition);
+        pdf.setFont('helvetica', 'normal');
+        yPosition += 8;
+      }
+      
+      // Configuration départ - affichage complet
       const departureConfig = [
-        `DÉPART:`,
-        `Type: ${extendedFormData.departureLocationType || 'Non spécifié'}`,
-        `Étage: ${extendedFormData.departureFloor || 'Non spécifié'}`,
+        `LIEU DE DÉPART:`,
+        `Adresse: ${extendedFormData.departureAddress || 'Non spécifiée'}`,
+        `Code postal: ${extendedFormData.departurePostalCode || 'Non spécifié'}`,
+        `Type de lieu: ${extendedFormData.departureLocationType || 'Non spécifié'}`,
+        `Étage: ${extendedFormData.departureFloor ? `${extendedFormData.departureFloor}${extendedFormData.departureFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
         `Ascenseur: ${extendedFormData.departureHasElevator ? `Oui (${extendedFormData.departureElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
         `Monte-charge: ${extendedFormData.departureHasFreightElevator ? 'Oui' : 'Non'}`,
         `Distance portage: ${extendedFormData.departureCarryingDistance || '0'}m`,
         `Stationnement: ${extendedFormData.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`
       ];
       
-      // Configuration arrivée
+      // Configuration arrivée - affichage complet
       const arrivalConfig = [
-        `ARRIVÉE:`,
-        `Type: ${extendedFormData.arrivalLocationType || 'Non spécifié'}`,
-        `Étage: ${extendedFormData.arrivalFloor || 'Non spécifié'}`,
+        `LIEU D'ARRIVÉE:`,
+        `Adresse: ${extendedFormData.arrivalAddress || 'Non spécifiée'}`,
+        `Code postal: ${extendedFormData.arrivalPostalCode || 'Non spécifié'}`,
+        `Type de lieu: ${extendedFormData.arrivalLocationType || 'Non spécifié'}`,
+        `Étage: ${extendedFormData.arrivalFloor ? `${extendedFormData.arrivalFloor}${extendedFormData.arrivalFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
         `Ascenseur: ${extendedFormData.arrivalHasElevator ? `Oui (${extendedFormData.arrivalElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
         `Monte-charge: ${extendedFormData.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
         `Distance portage: ${extendedFormData.arrivalCarryingDistance || '0'}m`,
@@ -581,7 +598,7 @@ Validité de l'estimation : 30 jours
         }
       });
 
-      yPosition += 35;
+      yPosition += 45;
     }
 
     // Summary section
@@ -599,11 +616,6 @@ Validité de l'estimation : 30 jours
     pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 15);
     pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 8);
     pdf.text(`Articles: ${selectedItems.length} types`, pageWidth / 2, yPosition + 15);
-    
-    // Distance si disponible
-    if (extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode) {
-      pdf.text(`Distance: ${distance || 'Calcul en cours'} km`, pageWidth / 2, yPosition + 20);
-    }
     
     yPosition += 35;
 
