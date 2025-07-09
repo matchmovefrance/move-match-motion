@@ -19,8 +19,7 @@ const CompanySettings = () => {
     address: '',
     phone: '',
     email: '',
-    siret: '',
-    pricing_margin: 15
+    siret: ''
   });
 
   useEffect(() => {
@@ -35,7 +34,7 @@ const CompanySettings = () => {
       
       const { data, error } = await supabase
         .from('company_settings')
-        .select('company_name, address, phone, email, siret, pricing_margin')
+        .select('company_name, address, phone, email, siret')
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -49,8 +48,7 @@ const CompanySettings = () => {
           address: data.address || '',
           phone: data.phone || '',
           email: data.email || '',
-          siret: data.siret || '',
-          pricing_margin: data.pricing_margin || 15
+          siret: data.siret || ''
         });
       }
     } catch (error) {
@@ -80,7 +78,6 @@ const CompanySettings = () => {
           phone: settings.phone,
           email: settings.email,
           siret: settings.siret,
-          pricing_margin: settings.pricing_margin,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'user_id'

@@ -473,13 +473,16 @@ Validité de l'estimation : 30 jours
     const clientInfoLeft = [
       `Nom: ${clientName || 'Non renseigné'}`,
       `Référence: ${clientReference || `INV-${Date.now()}`}`,
-      `Date: ${currentDate}`
+      `Date: ${currentDate}`,
+      `Téléphone: ${clientPhone || 'Non renseigné'}`
     ];
     
     const clientInfoRight = [
-      `Adresse: ${clientAddress || 'Non renseignée'}`,
-      `Téléphone: ${clientPhone || 'Non renseigné'}`,
-      `Email: ${clientEmail || 'Non renseigné'}`
+      `Email: ${clientEmail || 'Non renseigné'}`,
+      `Adresse départ: ${extendedFormData.departureAddress || 'Non renseignée'}`,
+      `CP départ: ${extendedFormData.departurePostalCode || 'Non renseigné'}`,
+      `Adresse arrivée: ${extendedFormData.arrivalAddress || 'Non renseignée'}`,
+      `CP arrivée: ${extendedFormData.arrivalPostalCode || 'Non renseigné'}`
     ];
 
     clientInfoLeft.forEach((info, index) => {
@@ -490,11 +493,70 @@ Validité de l'estimation : 30 jours
       pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 5));
     });
 
-    yPosition += 25;
+    yPosition += 30;
+
+    // Configuration des lieux section
+    if (extendedFormData.departureLocationType || extendedFormData.arrivalLocationType) {
+      pdf.setFillColor(...primaryColor);
+      pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('CONFIGURATION DES LIEUX', margin + 5, yPosition + 6);
+      yPosition += 15;
+
+      pdf.setTextColor(...secondaryColor);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      
+      // Configuration départ
+      const departureConfig = [
+        `DÉPART:`,
+        `Type: ${extendedFormData.departureLocationType || 'Non spécifié'}`,
+        `Étage: ${extendedFormData.departureFloor || 'Non spécifié'}`,
+        `Ascenseur: ${extendedFormData.departureHasElevator ? `Oui (${extendedFormData.departureElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
+        `Monte-charge: ${extendedFormData.departureHasFreightElevator ? 'Oui' : 'Non'}`,
+        `Distance portage: ${extendedFormData.departureCarryingDistance || '0'}m`,
+        `Stationnement: ${extendedFormData.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`
+      ];
+      
+      // Configuration arrivée
+      const arrivalConfig = [
+        `ARRIVÉE:`,
+        `Type: ${extendedFormData.arrivalLocationType || 'Non spécifié'}`,
+        `Étage: ${extendedFormData.arrivalFloor || 'Non spécifié'}`,
+        `Ascenseur: ${extendedFormData.arrivalHasElevator ? `Oui (${extendedFormData.arrivalElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
+        `Monte-charge: ${extendedFormData.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
+        `Distance portage: ${extendedFormData.arrivalCarryingDistance || '0'}m`,
+        `Stationnement: ${extendedFormData.arrivalParkingNeeded ? 'Demandé' : 'Non demandé'}`
+      ];
+
+      departureConfig.forEach((info, index) => {
+        if (index === 0) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(info, margin + 5, yPosition + (index * 4));
+          pdf.setFont('helvetica', 'normal');
+        } else {
+          pdf.text(info, margin + 5, yPosition + (index * 4));
+        }
+      });
+
+      arrivalConfig.forEach((info, index) => {
+        if (index === 0) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 4));
+          pdf.setFont('helvetica', 'normal');
+        } else {
+          pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 4));
+        }
+      });
+
+      yPosition += 35;
+    }
 
     // Summary section
     pdf.setFillColor(...lightGray);
-    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
     
     pdf.setFontSize(12);
     pdf.setTextColor(...primaryColor);
@@ -505,10 +567,16 @@ Validité de l'estimation : 30 jours
     pdf.setTextColor(...secondaryColor);
     pdf.setFont('helvetica', 'normal');
     pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 15);
+    pdf.text(`Poids estimé: ${totalWeight.toFixed(0)} kg`, margin + 5, yPosition + 20);
     pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 8);
     pdf.text(`Articles: ${selectedItems.length} types`, pageWidth / 2, yPosition + 15);
     
-    yPosition += 30;
+    // Distance si disponible
+    if (extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode) {
+      pdf.text(`Distance: Calcul automatique`, pageWidth / 2, yPosition + 20);
+    }
+    
+    yPosition += 35;
 
     // Inventory table header
     pdf.setFillColor(...primaryColor);
@@ -534,16 +602,34 @@ Validité de l'estimation : 30 jours
     
     yPosition += 10;
 
-    // Table content
+    // Table content avec détails des options
     pdf.setTextColor(...secondaryColor);
     pdf.setFont('helvetica', 'normal');
     
     let rowIndex = 0;
     selectedItems.forEach((item) => {
       // Check if we need a new page
-      if (yPosition > pageHeight - 30) {
+      if (yPosition > pageHeight - 50) {
         pdf.addPage();
         yPosition = 20;
+        
+        // Re-draw table header on new page
+        pdf.setFillColor(...primaryColor);
+        pdf.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'bold');
+        
+        pdf.text('•', margin + 5, yPosition + 7);
+        pdf.text('ARTICLE', margin + col1Width + 5, yPosition + 7);
+        pdf.text('QTE', margin + col1Width + col2Width + 5, yPosition + 7);
+        pdf.text('VOL. UNIT', margin + col1Width + col2Width + col3Width + 5, yPosition + 7);
+        pdf.text('VOL. TOTAL', margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 7);
+        pdf.text('OPTIONS', margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 7);
+        
+        yPosition += 10;
+        pdf.setTextColor(...secondaryColor);
+        pdf.setFont('helvetica', 'normal');
       }
 
       // Alternating row colors
@@ -552,15 +638,10 @@ Validité de l'estimation : 30 jours
         pdf.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'F');
       }
 
-      // Calculate total volume for this item including disassembly options
-      let itemTotalVolume = 0;
-      for (let i = 0; i < item.quantity; i++) {
-        let unitVolume = item.volume;
-        if (item.disassemblyOptions?.[i]) unitVolume = unitVolume / 2;
-        itemTotalVolume += unitVolume;
-      }
+      // Item total volume (sans réduction)
+      const itemTotalVolume = item.volume * item.quantity;
 
-      // Item row - simple bullet point instead of complex icons
+      // Item row
       pdf.text('•', margin + 5, yPosition + 10);
       
       // Truncate name if too long
@@ -574,18 +655,27 @@ Validité de l'estimation : 30 jours
       pdf.text(displayName, margin + col1Width + 5, yPosition + 10);
       
       pdf.text(item.quantity.toString(), margin + col1Width + col2Width + 8, yPosition + 10);
-      pdf.text(`${item.volume.toFixed(2)} m³`, margin + col1Width + col2Width + col3Width + 5, yPosition + 10);
-      pdf.text(`${itemTotalVolume.toFixed(2)} m³`, margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 10);
+      pdf.text(`${item.volume.toFixed(3)} m³`, margin + col1Width + col2Width + col3Width + 5, yPosition + 10);
+      pdf.text(`${itemTotalVolume.toFixed(3)} m³`, margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 10);
       
-      // Options summary
+      // Options détaillées
       const isCarton = item.name.toLowerCase().includes('carton');
-      const optionsCount = isCarton 
-        ? item.packingOptions?.filter(opt => opt).length || 0
-        : item.disassemblyOptions?.filter(opt => opt).length || 0;
       
-      if (optionsCount > 0) {
-        const optionText = isCarton ? `${optionsCount} emb/déb` : `${optionsCount} dém/rem`;
-        pdf.text(optionText, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
+      if (isCarton) {
+        const packingCount = item.packingOptions?.filter(opt => opt).length || 0;
+        const unpackingCount = item.unpackingOptions?.filter(opt => opt).length || 0;
+        
+        if (packingCount > 0 || unpackingCount > 0) {
+          let optionText = '';
+          if (packingCount > 0) optionText += `${packingCount}E`;
+          if (unpackingCount > 0) optionText += `${packingCount > 0 ? '/' : ''}${unpackingCount}D`;
+          pdf.text(optionText, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
+        }
+      } else {
+        const disassemblyCount = item.disassemblyOptions?.filter(opt => opt).length || 0;
+        if (disassemblyCount > 0) {
+          pdf.text(`${disassemblyCount} Dém/Rem`, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
+        }
       }
 
       yPosition += 15;
