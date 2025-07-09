@@ -328,7 +328,7 @@ DÉTAILS DU DÉMÉNAGEMENT
 ──────────────────────────────────────────────────────
 Adresse de départ    : ${extendedFormData?.departureAddress || 'Non renseignée'}
 Code postal départ   : ${extendedFormData?.departurePostalCode || 'Non renseigné'}
-Type lieu départ     : ${extendedFormData?.departureLocationType || 'Non renseigné'}
+Type lieu départ     : ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}
 Étage départ         : ${extendedFormData?.departureFloor || '0'}
 Ascenseur départ     : ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}
 ${extendedFormData?.departureHasElevator ? `Taille ascenseur    : ${extendedFormData?.departureElevatorSize || 'Non précisée'}` : ''}
@@ -338,7 +338,7 @@ Stationnement        : ${extendedFormData?.departureParkingNeeded ? 'Nécessaire
 
 Adresse d'arrivée    : ${extendedFormData?.arrivalAddress || 'Non renseignée'}
 Code postal arrivée  : ${extendedFormData?.arrivalPostalCode || 'Non renseigné'}
-Type lieu arrivée    : ${extendedFormData?.arrivalLocationType || 'Non renseigné'}
+Type lieu arrivée    : ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}
 Étage arrivée        : ${extendedFormData?.arrivalFloor || '0'}
 Ascenseur arrivée    : ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}
 ${extendedFormData?.arrivalHasElevator ? `Taille ascenseur    : ${extendedFormData?.arrivalElevatorSize || 'Non précisée'}` : ''}
@@ -569,7 +569,7 @@ Validité de l'estimation : 30 jours
       `LIEU DE DÉPART:`,
       `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
       `Code postal: ${extendedFormData?.departurePostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType) || 'Non spécifié'}`,
+      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
       `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? `${extendedFormData?.departureFloor}${extendedFormData?.departureFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
       `Ascenseur: ${extendedFormData?.departureHasElevator ? `Oui (${extendedFormData?.departureElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
       `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
@@ -582,7 +582,7 @@ Validité de l'estimation : 30 jours
       `LIEU D'ARRIVÉE:`,
       `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
       `Code postal: ${extendedFormData?.arrivalPostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType) || 'Non spécifié'}`,
+      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
       `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? `${extendedFormData?.arrivalFloor}${extendedFormData?.arrivalFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
       `Ascenseur: ${extendedFormData?.arrivalHasElevator ? `Oui (${extendedFormData?.arrivalElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
       `Monte-charge: ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
