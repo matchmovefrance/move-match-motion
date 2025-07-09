@@ -151,6 +151,46 @@ export const furnitureCategories: FurnitureCategory[] = [
             description: 'Étagère fixée au mur',
             icon: '📚',
             category: 'Salon'
+          },
+          {
+            id: 'kallax-1x4',
+            name: 'KALLAX 1x4',
+            volume: 0.442,
+            description: 'Étagère KALLAX 1x4',
+            icon: '📚',
+            category: 'Salon'
+          },
+          {
+            id: 'kallax-2x2',
+            name: 'KALLAX 2x2',
+            volume: 0.231,
+            description: 'Étagère KALLAX 2x2',
+            icon: '📚',
+            category: 'Salon'
+          },
+          {
+            id: 'kallax-2x4',
+            name: 'KALLAX 2x4',
+            volume: 0.442,
+            description: 'Étagère KALLAX 2x4',
+            icon: '📚',
+            category: 'Salon'
+          },
+          {
+            id: 'kallax-4x4',
+            name: 'KALLAX 4x4',
+            volume: 0.843,
+            description: 'Étagère KALLAX 4x4',
+            icon: '📚',
+            category: 'Salon'
+          },
+          {
+            id: 'kallax-5x5',
+            name: 'KALLAX 5x5',
+            volume: 1.292,
+            description: 'Étagère KALLAX 5x5',
+            icon: '📚',
+            category: 'Salon'
           }
         ]
       },

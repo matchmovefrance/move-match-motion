@@ -441,7 +441,7 @@ Validité de l'estimation : 30 jours
     let yPosition = 20;
 
     // Colors
-    const primaryColor: [number, number, number] = [41, 128, 185]; // Blue
+    const primaryColor: [number, number, number] = [98, 184, 136]; // #62b888
     const secondaryColor: [number, number, number] = [52, 73, 94]; // Dark gray
     const lightGray: [number, number, number] = [245, 245, 245];
 
@@ -696,8 +696,8 @@ Validité de l'estimation : 30 jours
         
         if (packingCount > 0 || unpackingCount > 0) {
           let optionText = '';
-          if (packingCount > 0) optionText += `${packingCount}E`;
-          if (unpackingCount > 0) optionText += `${packingCount > 0 ? '/' : ''}${unpackingCount}D`;
+          if (packingCount > 0) optionText += `${packingCount} Emb`;
+          if (unpackingCount > 0) optionText += `${packingCount > 0 ? ' / ' : ''}${unpackingCount} Déb`;
           pdf.text(optionText, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
         }
       } else {
