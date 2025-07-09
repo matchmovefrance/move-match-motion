@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search } from 'lucide-react';
-import matchmoveLogo from '@/assets/matchmove-logo-original.png';
-import emmausPartnershipLogo from '@/assets/emmaus-matchmove-partnership.png';
+import matchmoveLogo from '@/assets/matchmove-logo.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -544,15 +543,11 @@ Validité de l'estimation : 30 jours
     pdf.setFontSize(9);
     
     // Distance d'abord si disponible
-    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode && calculatedDistance) {
+    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
       pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(11);
-      pdf.setTextColor(...primaryColor);
-      pdf.text(`🚛 DISTANCE: ${calculatedDistance} km`, margin + 5, yPosition);
+      pdf.text(`DISTANCE: ${calculatedDistance || 'Calcul en cours'} km`, margin + 5, yPosition);
       pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(...secondaryColor);
-      pdf.setFontSize(9);
-      yPosition += 10;
+      yPosition += 8;
     }
     
     // Configuration départ - affichage complet TOUJOURS
@@ -772,23 +767,6 @@ Validité de l'estimation : 30 jours
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    
-    // Ajout du logo Emmaüs-MATCHMOVE partnership avant le footer (mais après le contenu)
-    yPosition += 15;
-    try {
-      // Centrer le logo de partenariat
-      const partnershipWidth = 80;
-      const partnershipHeight = 25;
-      const partnershipX = (pageWidth - partnershipWidth) / 2;
-      pdf.addImage(emmausPartnershipLogo, 'PNG', partnershipX, yPosition, partnershipWidth, partnershipHeight);
-      yPosition += partnershipHeight + 15;
-    } catch (error) {
-      console.log('Logo partenariat not loaded:', error);
-    }
-    
-    // Footer text (gardé comme avant)
-    pdf.setFontSize(8);
-    pdf.setTextColor(...secondaryColor);
     pdf.text(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 10);
     pdf.text(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition + 16);
     pdf.text(`Site web: matchmove.fr`, margin, yPosition + 22);
