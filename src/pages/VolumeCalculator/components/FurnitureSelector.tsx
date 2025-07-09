@@ -30,28 +30,48 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   const [cartonOptions, setCartonOptions] = useState<{[key: string]: {packingCount: number, unpackingCount: number}}>({});
   const { toast } = useToast();
 
-  // Charger les volumes personnalisés depuis la base de données
+  // Charger les volumes personnalisés et meubles personnalisés depuis la base de données
   useEffect(() => {
-    const loadCustomVolumes = async () => {
+    const loadData = async () => {
       try {
-        const { data, error } = await supabase
+        // Charger les volumes personnalisés
+        const { data: volumeData, error: volumeError } = await supabase
           .from('furniture_volumes')
           .select('furniture_id, custom_volume');
         
-        if (error) throw error;
+        if (volumeError) throw volumeError;
         
-        const volumeMap = data.reduce((acc, item) => {
+        const volumeMap = volumeData.reduce((acc, item) => {
           acc[item.furniture_id] = item.custom_volume;
           return acc;
         }, {} as Record<string, number>);
         
         setCustomVolumes(volumeMap);
+
+        // Charger les meubles personnalisés
+        const { data: customFurnitureData, error: customError } = await supabase
+          .from('custom_furniture')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (customError) throw customError;
+        
+        const customItems = customFurnitureData.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          volume: item.volume,
+          description: item.description || '',
+          icon: item.icon || '📦'
+        }));
+        
+        setManualFurniture(customItems);
       } catch (error) {
-        console.error('Error loading custom volumes:', error);
+        console.error('Error loading data:', error);
       }
     };
 
-    loadCustomVolumes();
+    loadData();
   }, []);
 
   const getItemVolume = (item: FurnitureItem) => {
@@ -135,9 +155,45 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
     }
   };
 
-  const handleAddManualFurniture = (furniture: FurnitureItem, quantity: number) => {
-    setManualFurniture(prev => [...prev, furniture]);
-    onAddItem(furniture, quantity);
+  const handleAddManualFurniture = async (furniture: FurnitureItem, quantity: number) => {
+    try {
+      // Sauvegarder dans la base de données
+      const { data, error } = await supabase
+        .from('custom_furniture')
+        .insert({
+          name: furniture.name,
+          category: furniture.category,
+          volume: furniture.volume,
+          description: furniture.description,
+          icon: furniture.icon,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Mettre à jour l'état local avec l'ID de la base de données
+      const savedFurniture = {
+        ...furniture,
+        id: data.id
+      };
+
+      setManualFurniture(prev => [...prev, savedFurniture]);
+      onAddItem(savedFurniture, quantity);
+      
+      toast({
+        title: "Meuble ajouté",
+        description: "Le meuble personnalisé a été enregistré avec succès",
+      });
+    } catch (error) {
+      console.error('Error saving custom furniture:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'enregistrer le meuble personnalisé",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleCartonOptionsChange = (itemId: string, packingCount: number, unpackingCount: number) => {
