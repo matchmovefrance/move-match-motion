@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search } from 'lucide-react';
-import matchmoveLogo from '@/assets/matchmove-logo-ombre.png';
-import emmausLogo from '@/assets/emmaus-france-logo.png';
+import matchmoveLogo from '@/assets/matchmove-logo-original.png';
+import emmausPartnershipLogo from '@/assets/emmaus-matchmove-partnership.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -773,19 +773,22 @@ Validité de l'estimation : 30 jours
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Ajout du logo Emmaüs France avant le footer
-    yPosition += 10;
+    // Ajout du logo Emmaüs-MATCHMOVE partnership avant le footer (mais après le contenu)
+    yPosition += 15;
     try {
-      // Centrer le logo Emmaüs
-      const emmausWidth = 60;
-      const emmausHeight = 20;
-      const emmausX = (pageWidth - emmausWidth) / 2;
-      pdf.addImage(emmausLogo, 'PNG', emmausX, yPosition, emmausWidth, emmausHeight);
-      yPosition += emmausHeight + 10;
+      // Centrer le logo de partenariat
+      const partnershipWidth = 80;
+      const partnershipHeight = 25;
+      const partnershipX = (pageWidth - partnershipWidth) / 2;
+      pdf.addImage(emmausPartnershipLogo, 'PNG', partnershipX, yPosition, partnershipWidth, partnershipHeight);
+      yPosition += partnershipHeight + 15;
     } catch (error) {
-      console.log('Logo Emmaüs not loaded:', error);
+      console.log('Logo partenariat not loaded:', error);
     }
     
+    // Footer text (gardé comme avant)
+    pdf.setFontSize(8);
+    pdf.setTextColor(...secondaryColor);
     pdf.text(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 10);
     pdf.text(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition + 16);
     pdf.text(`Site web: matchmove.fr`, margin, yPosition + 22);
