@@ -527,11 +527,7 @@ Validité de l'estimation : 30 jours
     ];
     
     const clientInfoRight = [
-      `Email: ${clientEmail || 'Non renseigné'}`,
-      `Adresse départ: ${extendedFormData.departureAddress || 'Non renseignée'}`,
-      `CP départ: ${extendedFormData.departurePostalCode || 'Non renseigné'}`,
-      `Adresse arrivée: ${extendedFormData.arrivalAddress || 'Non renseignée'}`,
-      `CP arrivée: ${extendedFormData.arrivalPostalCode || 'Non renseigné'}`
+      `Email: ${clientEmail || 'Non renseigné'}`
     ];
 
     clientInfoLeft.forEach((info, index) => {
