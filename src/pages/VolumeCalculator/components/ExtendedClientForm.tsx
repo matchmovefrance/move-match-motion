@@ -139,7 +139,7 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
         </CardContent>
       </Card>
 
-      {/* Adresses de déménagement */}
+      {/* Configuration des adresses */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

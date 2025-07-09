@@ -54,6 +54,19 @@ const VolumeCalculator = () => {
     enabled: !!(extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode)
   });
 
+  const getLocationTypeDisplayName = (locationType: string) => {
+    switch (locationType) {
+      case 'appartement':
+        return 'Appartement';
+      case 'maison':
+        return 'Maison';
+      case 'garde_meuble':
+        return 'Garde meuble';
+      default:
+        return locationType;
+    }
+  };
+
   const calculateTotalVolume = () => {
     return selectedItems.reduce((total, item) => {
       return total + (item.volume * item.quantity);
@@ -204,6 +217,11 @@ const VolumeCalculator = () => {
         total_weight: totalWeight,
         selected_items: selectedItems as any,
         created_by: user.id,
+        // Ajout des champs de date
+        moving_date: movingDate,
+        flexible_dates: flexibleDates,
+        date_range_start: dateRangeStart,
+        date_range_end: dateRangeEnd,
       };
 
       const { error } = await supabase
@@ -555,7 +573,7 @@ Validité de l'estimation : 30 jours
       `LIEU DE DÉPART:`,
       `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
       `Code postal: ${extendedFormData?.departurePostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${extendedFormData?.departureLocationType || 'Non spécifié'}`,
+      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType) || 'Non spécifié'}`,
       `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? `${extendedFormData?.departureFloor}${extendedFormData?.departureFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
       `Ascenseur: ${extendedFormData?.departureHasElevator ? `Oui (${extendedFormData?.departureElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
       `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
@@ -568,7 +586,7 @@ Validité de l'estimation : 30 jours
       `LIEU D'ARRIVÉE:`,
       `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
       `Code postal: ${extendedFormData?.arrivalPostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${extendedFormData?.arrivalLocationType || 'Non spécifié'}`,
+      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType) || 'Non spécifié'}`,
       `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? `${extendedFormData?.arrivalFloor}${extendedFormData?.arrivalFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
       `Ascenseur: ${extendedFormData?.arrivalHasElevator ? `Oui (${extendedFormData?.arrivalElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
       `Monte-charge: ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
@@ -1182,6 +1200,11 @@ Validité de l'estimation : 30 jours
           if (inventory.extendedFormData) {
             setExtendedFormData(inventory.extendedFormData);
           }
+          // Restaurer les dates de déménagement
+          setMovingDate(inventory.movingDate || '');
+          setFlexibleDates(inventory.flexibleDates || false);
+          setDateRangeStart(inventory.dateRangeStart || '');
+          setDateRangeEnd(inventory.dateRangeEnd || '');
           toast({
             title: "Inventaire chargé",
             description: "L'inventaire complet a été chargé avec succès",

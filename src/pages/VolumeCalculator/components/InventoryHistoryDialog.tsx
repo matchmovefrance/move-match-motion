@@ -10,16 +10,20 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Trash2, Eye, Calendar, MapPin } from 'lucide-react';
+import { Trash2, Eye, Calendar, MapPin, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SelectedItem } from '../types';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface Inventory {
   id: string;
   client_name: string;
   client_reference: string;
+  client_email?: string;
   departure_postal_code: string;
   arrival_postal_code: string;
   total_volume: number;
@@ -27,6 +31,11 @@ interface Inventory {
   total_weight?: number;
   selected_items: any; // JSONB field from database
   created_at: string;
+  // Ajout des champs de date
+  moving_date?: string;
+  flexible_dates?: boolean;
+  date_range_start?: string;
+  date_range_end?: string;
 }
 
 interface InventoryHistoryDialogProps {
@@ -37,8 +46,15 @@ interface InventoryHistoryDialogProps {
 
 export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: InventoryHistoryDialogProps) {
   const [inventories, setInventories] = useState<Inventory[]>([]);
+  const [filteredInventories, setFilteredInventories] = useState<Inventory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<Inventory | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'normal' | 'compact'>('normal');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [inventoryToDelete, setInventoryToDelete] = useState<Inventory | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -54,6 +70,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
       if (error) throw error;
       setInventories(data || []);
+      setFilteredInventories(data || []);
     } catch (error) {
       console.error('Error loading inventories:', error);
       toast({
@@ -66,6 +83,29 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
     }
   };
 
+  // Fonction de filtrage
+  const filterInventories = () => {
+    if (!searchTerm) {
+      setFilteredInventories(inventories);
+      return;
+    }
+
+    const filtered = inventories.filter(inventory => {
+      const clientName = inventory.client_name?.toLowerCase() || '';
+      const clientEmail = inventory.client_email?.toLowerCase() || '';
+      const searchLower = searchTerm.toLowerCase();
+      
+      return clientName.includes(searchLower) || clientEmail.includes(searchLower);
+    });
+
+    setFilteredInventories(filtered);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    filterInventories();
+  }, [searchTerm, inventories]);
+
   const deleteInventory = async (id: string) => {
     try {
       const { error } = await supabase
@@ -75,7 +115,15 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
       if (error) throw error;
 
-      setInventories(inventories.filter(inv => inv.id !== id));
+      const updatedInventories = inventories.filter(inv => inv.id !== id);
+      setInventories(updatedInventories);
+      setFilteredInventories(updatedInventories.filter(inv => {
+        const clientName = inv.client_name?.toLowerCase() || '';
+        const clientEmail = inv.client_email?.toLowerCase() || '';
+        const searchLower = searchTerm.toLowerCase();
+        return !searchTerm || clientName.includes(searchLower) || clientEmail.includes(searchLower);
+      }));
+      
       toast({
         title: "Inventaire supprimé",
         description: "L'inventaire a été supprimé avec succès",
@@ -90,6 +138,19 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
     }
   };
 
+  const handleDeleteClick = (inventory: Inventory) => {
+    setInventoryToDelete(inventory);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    if (inventoryToDelete) {
+      await deleteInventory(inventoryToDelete.id);
+      setShowDeleteDialog(false);
+      setInventoryToDelete(null);
+    }
+  };
+
   const handleLoadInventory = (inventory: Inventory) => {
     onLoadInventory({
       clientName: inventory.client_name,
@@ -98,6 +159,11 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
       clientEmail: (inventory as any).client_email,
       notes: (inventory as any).notes,
       selectedItems: inventory.selected_items,
+      // Ajout des champs de date
+      movingDate: inventory.moving_date,
+      flexibleDates: inventory.flexible_dates,
+      dateRangeStart: inventory.date_range_start,
+      dateRangeEnd: inventory.date_range_end,
       extendedFormData: {
         departureAddress: (inventory as any).departure_address,
         departurePostalCode: inventory.departure_postal_code,
@@ -125,6 +191,12 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
       description: "L'inventaire complet a été chargé dans le calculateur",
     });
   };
+
+  // Pagination
+  const totalPages = Math.ceil(filteredInventories.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentInventories = filteredInventories.slice(startIndex, endIndex);
 
   useEffect(() => {
     if (isOpen) {
@@ -262,56 +334,133 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
           </div>
         ) : (
           <div className="space-y-4">
-            {inventories.map((inventory) => (
-              <Card key={inventory.id} className="hover:bg-gray-50 transition-colors">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">{inventory.client_name || 'Sans nom'}</CardTitle>
-                      <CardDescription>
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" />
-                            {inventory.departure_postal_code} → {inventory.arrival_postal_code}
-                          </span>
+            {/* Barre de recherche et contrôles */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Rechercher par nom ou email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={viewMode} onValueChange={(value: 'normal' | 'compact') => setViewMode(value)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="compact">Compact</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Résultats */}
+            {filteredInventories.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {searchTerm ? 'Aucun inventaire trouvé pour cette recherche' : 'Aucun inventaire trouvé'}
+              </div>
+            ) : (
+              <>
+                {currentInventories.map((inventory) => (
+                  <Card key={inventory.id} className={`hover:bg-gray-50 transition-colors ${viewMode === 'compact' ? 'py-2' : ''}`}>
+                    <CardHeader className={viewMode === 'compact' ? 'pb-1 pt-3' : 'pb-3'}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <CardTitle className={viewMode === 'compact' ? 'text-base' : 'text-lg'}>
+                            {inventory.client_name || 'Sans nom'}
+                          </CardTitle>
+                          <CardDescription>
+                            <div className={`flex items-center gap-4 mt-1 ${viewMode === 'compact' ? 'text-xs' : ''}`}>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-4 w-4" />
+                                {inventory.departure_postal_code} → {inventory.arrival_postal_code}
+                              </span>
+                              {inventory.client_email && (
+                                <span className="text-gray-500">{inventory.client_email}</span>
+                              )}
+                            </div>
+                          </CardDescription>
                         </div>
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedInventory(inventory)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Voir
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteInventory(inventory.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size={viewMode === 'compact' ? 'sm' : 'sm'}
+                            onClick={() => setSelectedInventory(inventory)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Voir
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size={viewMode === 'compact' ? 'sm' : 'sm'}
+                            onClick={() => handleDeleteClick(inventory)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    {viewMode === 'normal' && (
+                      <CardContent className="pt-0">
+                        <div className="flex gap-4 text-sm text-gray-600">
+                          <span>Volume: {inventory.total_volume.toFixed(2)} m³</span>
+                          <span>Items: {inventory.selected_items?.length || 0}</span>
+                          {inventory.distance_km && <span>Distance: {inventory.distance_km.toFixed(0)} km</span>}
+                        </div>
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-gray-600">
+                      Page {currentPage} sur {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="flex gap-4 text-sm text-gray-600">
-                    <span>Volume: {inventory.total_volume.toFixed(2)} m³</span>
-                    <span>Items: {inventory.selected_items?.length || 0}</span>
-                    {inventory.distance_km && <span>Distance: {inventory.distance_km.toFixed(0)} km</span>}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                )}
+              </>
+            )}
           </div>
         )}
+
+        {/* Dialog de confirmation de suppression */}
+        <ConfirmDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          title="Supprimer l'inventaire"
+          description={`Êtes-vous sûr de vouloir supprimer l'inventaire de "${inventoryToDelete?.client_name || 'ce client'}" ?`}
+          confirmText="Supprimer"
+          cancelText="Annuler"
+          onConfirm={confirmDelete}
+          variant="destructive"
+        />
       </DialogContent>
     </Dialog>
   );
