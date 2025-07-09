@@ -867,6 +867,8 @@ Validité de l'estimation : 30 jours
                     setArrivalCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCarryingDistance: value }))}
                     arrivalParkingNeeded={extendedFormData.arrivalParkingNeeded || false}
                     setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
+                    onSaveInventory={saveInventory}
+                    selectedItemsCount={selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
                   />
                 </div>
               </CardContent>

@@ -1,6 +1,6 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { User, Maximize2 } from 'lucide-react';
+import { User, Maximize2, Save } from 'lucide-react';
 import { ExtendedClientForm } from './ExtendedClientForm';
 
 interface ClientFormDialogProps {
@@ -57,6 +57,10 @@ interface ClientFormDialogProps {
   setArrivalCarryingDistance: (value: string) => void;
   arrivalParkingNeeded: boolean;
   setArrivalParkingNeeded: (value: boolean) => void;
+  
+  // Actions
+  onSaveInventory?: () => void;
+  selectedItemsCount?: number;
 }
 
 export function ClientFormDialog(props: ClientFormDialogProps) {
@@ -74,6 +78,16 @@ export function ClientFormDialog(props: ClientFormDialogProps) {
           <DialogTitle>Informations Client Complètes</DialogTitle>
         </DialogHeader>
         <ExtendedClientForm {...props} />
+        <DialogFooter className="flex gap-2">
+          <Button 
+            onClick={props.onSaveInventory}
+            disabled={!props.selectedItemsCount || props.selectedItemsCount === 0}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Sauvegarder l'inventaire avec ces détails
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
