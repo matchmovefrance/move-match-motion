@@ -203,7 +203,6 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
               ) : distance ? (
                 <div className="text-sm text-blue-600 mt-1">
                   <p>{distance} km</p>
-                  {duration && <p>Durée estimée: {Math.round(duration / 60)} min</p>}
                 </div>
               ) : null}
             </div>
