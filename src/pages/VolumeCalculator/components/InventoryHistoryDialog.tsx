@@ -200,6 +200,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   useEffect(() => {
     if (isOpen) {
+      setSelectedInventory(null); // Toujours afficher la liste au début
       loadInventories();
     }
   }, [isOpen, user]);
@@ -209,10 +210,22 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Détails de l'inventaire</DialogTitle>
-            <DialogDescription>
-              {selectedInventory.client_name} - {new Date(selectedInventory.created_at).toLocaleDateString('fr-FR')}
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>Détails de l'inventaire</DialogTitle>
+                <DialogDescription>
+                  {selectedInventory.client_name} - {new Date(selectedInventory.created_at).toLocaleDateString('fr-FR')}
+                </DialogDescription>
+              </div>
+              <Button 
+                onClick={() => setSelectedInventory(null)} 
+                variant="outline"
+                size="sm"
+                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+              >
+                ← Retour à la liste
+              </Button>
+            </div>
           </DialogHeader>
           
             <div className="space-y-6">
@@ -302,11 +315,18 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                 </>
               )}
 
-            <div className="flex gap-2 pt-4">
-              <Button onClick={() => setSelectedInventory(null)} variant="outline">
-                Retour
+            <div className="flex gap-3 pt-4 border-t">
+              <Button 
+                onClick={() => setSelectedInventory(null)} 
+                variant="outline"
+                className="flex-1 bg-gray-50 hover:bg-gray-100"
+              >
+                ← Retour à la liste
               </Button>
-              <Button onClick={() => handleLoadInventory(selectedInventory)}>
+              <Button 
+                onClick={() => handleLoadInventory(selectedInventory)}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
                 Charger cet inventaire
               </Button>
             </div>
