@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search } from 'lucide-react';
 import matchmoveLogo from '@/assets/matchmove-logo.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +33,10 @@ const VolumeCalculator = () => {
   const [notes, setNotes] = useState('');
   const [exportFormat, setExportFormat] = useState<'pdf' | 'txt'>('pdf');
   const [companySettings, setCompanySettings] = useState<any>(null);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [isExtendedForm, setIsExtendedForm] = useState(false);
+  const [extendedFormData, setExtendedFormData] = useState<any>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   const calculateTotalVolume = () => {
     return selectedItems.reduce((total, item) => {
@@ -124,6 +128,86 @@ const VolumeCalculator = () => {
 
   const handleReset = () => {
     setSelectedItems([]);
+    setClientName('');
+    setClientReference('');
+    setClientAddress('');
+    setClientPhone('');
+    setClientEmail('');
+    setNotes('');
+    setExtendedFormData({});
+  };
+
+  const saveInventory = async () => {
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour sauvegarder un inventaire",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedItems.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Aucun item sélectionné",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const totalVolume = calculateTotalVolume();
+      const totalWeight = calculateTotalWeight();
+
+      const inventoryData = {
+        client_name: clientName,
+        client_reference: clientReference,
+        client_phone: clientPhone,
+        client_email: clientEmail,
+        notes: notes,
+        departure_address: extendedFormData.departureAddress || '',
+        departure_postal_code: extendedFormData.departurePostalCode || '',
+        arrival_address: extendedFormData.arrivalAddress || '',
+        arrival_postal_code: extendedFormData.arrivalPostalCode || '',
+        departure_location_type: extendedFormData.departureLocationType,
+        departure_floor: extendedFormData.departureFloor,
+        departure_has_elevator: extendedFormData.departureHasElevator,
+        departure_elevator_size: extendedFormData.departureElevatorSize,
+        departure_has_freight_elevator: extendedFormData.departureHasFreightElevator,
+        departure_carrying_distance: extendedFormData.departureCarryingDistance,
+        departure_parking_needed: extendedFormData.departureParkingNeeded,
+        arrival_location_type: extendedFormData.arrivalLocationType,
+        arrival_floor: extendedFormData.arrivalFloor,
+        arrival_has_elevator: extendedFormData.arrivalHasElevator,
+        arrival_elevator_size: extendedFormData.arrivalElevatorSize,
+        arrival_has_freight_elevator: extendedFormData.arrivalHasFreightElevator,
+        arrival_carrying_distance: extendedFormData.arrivalCarryingDistance,
+        arrival_parking_needed: extendedFormData.arrivalParkingNeeded,
+        total_volume: totalVolume,
+        total_weight: totalWeight,
+        selected_items: selectedItems as any,
+        created_by: user.id,
+      };
+
+      const { error } = await supabase
+        .from('inventories')
+        .insert(inventoryData);
+
+      if (error) throw error;
+
+      toast({
+        title: "Inventaire sauvegardé",
+        description: "L'inventaire a été sauvegardé avec succès",
+      });
+    } catch (error) {
+      console.error('Error saving inventory:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder l'inventaire",
+        variant: "destructive",
+      });
+    }
   };
 
   const loadCompanySettings = async () => {
@@ -670,7 +754,16 @@ Validité de l'estimation : 30 jours
                   Choisissez vos meubles avec les quantités exactes
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Rechercher un meuble..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
                 <FurnitureSelector
                   onAddItem={handleAddItem}
                   selectedItems={selectedItems}
@@ -690,21 +783,36 @@ Validité de l'estimation : 30 jours
             />
 
 
-            {/* Client Information */}
+            {/* Information client */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  Informations Client
+                  Information client
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="basic" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="basic">Essentiel</TabsTrigger>
-                    <TabsTrigger value="details">Détails</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="basic" className="space-y-3">
+              <CardContent className="space-y-4">
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    variant={!isExtendedForm ? "default" : "outline"}
+                    onClick={() => setIsExtendedForm(false)}
+                    className="flex-1"
+                    size="sm"
+                  >
+                    Simple
+                  </Button>
+                  <Button
+                    variant={isExtendedForm ? "default" : "outline"}
+                    onClick={() => setIsExtendedForm(true)}
+                    className="flex-1"
+                    size="sm"
+                  >
+                    Complet
+                  </Button>
+                </div>
+
+                {!isExtendedForm ? (
+                  <div className="space-y-3">
                     <div>
                       <label htmlFor="clientName" className="block text-sm font-medium text-gray-700 mb-1">
                         Nom du client *
@@ -727,42 +835,6 @@ Validité de l'estimation : 30 jours
                         placeholder="Ex: DEV-2024-001"
                       />
                     </div>
-                  </TabsContent>
-                  <TabsContent value="details" className="space-y-3">
-                    <div>
-                      <label htmlFor="clientAddress" className="block text-sm font-medium text-gray-700 mb-1">
-                        Adresse de départ
-                      </label>
-                      <Input
-                        id="clientAddress"
-                        value={clientAddress}
-                        onChange={(e) => setClientAddress(e.target.value)}
-                        placeholder="Adresse complète"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="clientPhone" className="block text-sm font-medium text-gray-700 mb-1">
-                        Téléphone
-                      </label>
-                      <Input
-                        id="clientPhone"
-                        value={clientPhone}
-                        onChange={(e) => setClientPhone(e.target.value)}
-                        placeholder="06 XX XX XX XX"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <Input
-                        id="clientEmail"
-                        type="email"
-                        value={clientEmail}
-                        onChange={(e) => setClientEmail(e.target.value)}
-                        placeholder="client@email.com"
-                      />
-                    </div>
                     <div>
                       <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                         Notes particulières
@@ -772,11 +844,60 @@ Validité de l'estimation : 30 jours
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="Accès difficile, objets fragiles, etc."
-                        rows={3}
+                        rows={2}
                       />
                     </div>
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                ) : (
+                  <ExtendedClientForm
+                    clientName={clientName}
+                    setClientName={setClientName}
+                    clientReference={clientReference}
+                    setClientReference={setClientReference}
+                    clientPhone={clientPhone}
+                    setClientPhone={setClientPhone}
+                    clientEmail={clientEmail}
+                    setClientEmail={setClientEmail}
+                    notes={notes}
+                    setNotes={setNotes}
+                    departureAddress={extendedFormData.departureAddress || ''}
+                    setDepartureAddress={(value) => setExtendedFormData(prev => ({ ...prev, departureAddress: value }))}
+                    departurePostalCode={extendedFormData.departurePostalCode || ''}
+                    setDeparturePostalCode={(value) => setExtendedFormData(prev => ({ ...prev, departurePostalCode: value }))}
+                    arrivalAddress={extendedFormData.arrivalAddress || ''}
+                    setArrivalAddress={(value) => setExtendedFormData(prev => ({ ...prev, arrivalAddress: value }))}
+                    arrivalPostalCode={extendedFormData.arrivalPostalCode || ''}
+                    setArrivalPostalCode={(value) => setExtendedFormData(prev => ({ ...prev, arrivalPostalCode: value }))}
+                    departureLocationType={extendedFormData.departureLocationType || 'appartement'}
+                    setDepartureLocationType={(value) => setExtendedFormData(prev => ({ ...prev, departureLocationType: value }))}
+                    departureFloor={extendedFormData.departureFloor || 0}
+                    setDepartureFloor={(value) => setExtendedFormData(prev => ({ ...prev, departureFloor: value }))}
+                    departureHasElevator={extendedFormData.departureHasElevator || false}
+                    setDepartureHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasElevator: value }))}
+                    departureElevatorSize={extendedFormData.departureElevatorSize || ''}
+                    setDepartureElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, departureElevatorSize: value }))}
+                    departureHasFreightElevator={extendedFormData.departureHasFreightElevator || false}
+                    setDepartureHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, departureHasFreightElevator: value }))}
+                    departureCarryingDistance={extendedFormData.departureCarryingDistance || 0}
+                    setDepartureCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, departureCarryingDistance: value }))}
+                    departureParkingNeeded={extendedFormData.departureParkingNeeded || false}
+                    setDepartureParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, departureParkingNeeded: value }))}
+                    arrivalLocationType={extendedFormData.arrivalLocationType || 'appartement'}
+                    setArrivalLocationType={(value) => setExtendedFormData(prev => ({ ...prev, arrivalLocationType: value }))}
+                    arrivalFloor={extendedFormData.arrivalFloor || 0}
+                    setArrivalFloor={(value) => setExtendedFormData(prev => ({ ...prev, arrivalFloor: value }))}
+                    arrivalHasElevator={extendedFormData.arrivalHasElevator || false}
+                    setArrivalHasElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasElevator: value }))}
+                    arrivalElevatorSize={extendedFormData.arrivalElevatorSize || ''}
+                    setArrivalElevatorSize={(value) => setExtendedFormData(prev => ({ ...prev, arrivalElevatorSize: value }))}
+                    arrivalHasFreightElevator={extendedFormData.arrivalHasFreightElevator || false}
+                    setArrivalHasFreightElevator={(value) => setExtendedFormData(prev => ({ ...prev, arrivalHasFreightElevator: value }))}
+                    arrivalCarryingDistance={extendedFormData.arrivalCarryingDistance || 0}
+                    setArrivalCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCarryingDistance: value }))}
+                    arrivalParkingNeeded={extendedFormData.arrivalParkingNeeded || false}
+                    setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -794,6 +915,15 @@ Validité de l'estimation : 30 jours
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Réinitialiser
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => setShowHistoryDialog(true)}
+                  className="w-full"
+                >
+                  <History className="h-4 w-4 mr-2" />
+                  Historique des inventaires
                 </Button>
                 
                 <div>
@@ -829,20 +959,43 @@ Validité de l'estimation : 30 jours
                   Optimiser en 3D
                 </Button>
 
+                <Button
+                  onClick={saveInventory}
+                  disabled={selectedItems.length === 0}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Sauvegarder l'inventaire
+                </Button>
+
                 <Separator />
                 
                 <div className="text-sm text-gray-600 space-y-1">
                   <p><strong>ℹ️ Information :</strong></p>
-                  <p>• Volumes basés sur standards professionnels</p>
-                  <p>• Données entreprise depuis paramètres admin</p>
-                  <p>• Export PDF avec mise en forme professionnelle</p>
-                  <p>• Export direct vers l'optimiseur 3D</p>
+                  <p>• Volumes modifiables avec persistance</p>
+                  <p>• Calcul automatique de distance</p>
+                  <p>• Configuration détaillée des lieux</p>
+                  <p>• Historique complet des inventaires</p>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      <InventoryHistoryDialog
+        isOpen={showHistoryDialog}
+        onClose={() => setShowHistoryDialog(false)}
+        onLoadInventory={(inventory) => {
+          setClientName(inventory.clientName || '');
+          setClientReference(inventory.clientReference || '');
+          setSelectedItems(inventory.selectedItems || []);
+          toast({
+            title: "Inventaire chargé",
+            description: "L'inventaire a été chargé avec succès",
+          });
+        }}
+      />
     </div>
   );
 };

@@ -274,11 +274,11 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
                   <AccordionTrigger className="text-left font-medium">
                     {subcategory.name} ({subcategory.items.length} objets)
                   </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                      {subcategory.items.map(renderFurnitureItem)}
-                    </div>
-                  </AccordionContent>
+                   <AccordionContent>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                       {filterItems(subcategory.items).map(renderFurnitureItem)}
+                     </div>
+                   </AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
