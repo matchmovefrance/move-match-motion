@@ -152,9 +152,20 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
               )}
             </div>
             <p className="text-sm text-gray-600 mb-1">{item.description}</p>
-            <p className="text-sm font-medium text-blue-600">
-              {item.volume} m³ {quantity > 1 && `(${(item.volume * quantity).toFixed(2)} m³ total)`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-blue-600">
+                {customVolumes[item.id] || item.volume} m³ {quantity > 1 && `(${((customVolumes[item.id] || item.volume) * quantity).toFixed(2)} m³ total)`}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingItem(item)}
+                className="h-6 w-6 p-0 text-gray-500 hover:text-blue-600"
+                title="Modifier le volume"
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -300,6 +311,18 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
         open={showManualDialog}
         onOpenChange={setShowManualDialog}
         onAddFurniture={handleAddManualFurniture}
+      />
+
+      <EditVolumeDialog
+        item={editingItem ? {
+          id: editingItem.id,
+          name: editingItem.name,
+          volume: customVolumes[editingItem.id] || editingItem.volume,
+          category: editingItem.category
+        } : null}
+        isOpen={editingItem !== null}
+        onClose={() => setEditingItem(null)}
+        onVolumeUpdated={handleVolumeUpdated}
       />
     </div>
   );
