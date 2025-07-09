@@ -511,6 +511,16 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
         onClose={() => setEditingItem(null)}
         onVolumeUpdated={handleVolumeUpdated}
       />
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={confirmDelete}
+        title="Supprimer le meuble personnalisé"
+        description="Êtes-vous sûr de vouloir supprimer ce meuble personnalisé ?"
+        confirmText="Supprimer"
+        cancelText="Annuler"
+      />
     </div>
   );
 };
