@@ -114,13 +114,23 @@ export const calculateDistanceByPostalCode = async (
           const distanceKm = Math.round(element.distance!.value / 1000);
           const durationMin = Math.round(element.duration!.value / 60);
           const distanceText = element.distance!.text;
+          const durationText = element.duration!.text;
           
           console.log(`✅ Distance calculée Google Maps Distance Matrix:`);
           console.log(`   - Distance: ${distanceKm}km (${distanceText})`);
-          console.log(`   - Durée: ${durationMin}min`);
+          console.log(`   - Durée: ${durationMin}min (${durationText})`);
           console.log(`   - Trajet: ${origin} -> ${destination}`);
           console.log(`   - Valeur brute distance: ${element.distance!.value} mètres`);
           console.log(`   - Valeur brute durée: ${element.duration!.value} secondes`);
+          
+          // Vérifier la cohérence des données
+          const expectedDurationFromText = durationText.toLowerCase().includes('heure') ? 
+            (parseInt(durationText.split(' ')[0]) * 60) + (parseInt(durationText.split(' ')[2]) || 0) : 
+            parseInt(durationText);
+          
+          if (Math.abs(durationMin - expectedDurationFromText) > 10) {
+            console.warn(`⚠️ Incohérence durée détectée: calculée=${durationMin}min, texte=${durationText}`);
+          }
           
           resolve({
             distance: distanceKm,

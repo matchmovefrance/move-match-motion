@@ -1200,17 +1200,6 @@ Validité de l'estimation : 30 jours
                 
                 <Separator />
                 
-                {/* Bouton temporaire pour déboguer le cache */}
-                <Button
-                  onClick={clearDistanceCache}
-                  variant="outline"
-                  className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                >
-                  🗑️ Vider le cache des distances (Debug)
-                </Button>
-                
-                <Separator />
-                
                 <div className="text-sm text-gray-600 space-y-1">
                   <p><strong>ℹ️ Information :</strong></p>
                   <p>• Volumes modifiables avec persistance</p>
