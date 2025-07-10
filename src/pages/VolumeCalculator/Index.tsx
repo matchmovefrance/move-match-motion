@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search } from 'lucide-react';
+import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search, Eye } from 'lucide-react';
 import matchmoveLogo from '@/assets/matchmove-logo-new.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import FurnitureSelector from './components/FurnitureSelector';
 import VolumeDisplay from './components/VolumeDisplay';
 import { ClientFormDialog } from './components/ClientFormDialog';
 import { InventoryHistoryDialog } from './components/InventoryHistoryDialog';
+import { InventoryDisplayDialog } from './components/InventoryDisplayDialog';
 import { FurnitureItem, SelectedItem } from './types';
 import { furnitureCategories } from './data/furnitureData';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
@@ -38,6 +39,7 @@ const VolumeCalculator = () => {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'txt'>('pdf');
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [showInventoryDialog, setShowInventoryDialog] = useState(false);
   const [isExtendedForm, setIsExtendedForm] = useState(false);
   const [extendedFormData, setExtendedFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -1157,6 +1159,15 @@ Validité de l'estimation : 30 jours
                   <History className="h-4 w-4 mr-2" />
                   Historique des inventaires
                 </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => setShowInventoryDialog(true)}
+                  className="w-full"
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Afficher l'inventaire
+                </Button>
                 
                 <div>
                   <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-2">
@@ -1238,6 +1249,12 @@ Validité de l'estimation : 30 jours
             description: "L'inventaire complet a été chargé avec succès",
           });
         }}
+      />
+
+      <InventoryDisplayDialog
+        isOpen={showInventoryDialog}
+        onClose={() => setShowInventoryDialog(false)}
+        selectedItems={selectedItems}
       />
     </div>
   );
