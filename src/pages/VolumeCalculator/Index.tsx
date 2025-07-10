@@ -727,6 +727,13 @@ Validité de l'estimation : 30 jours
         const packingCount = item.packingOptions?.filter(opt => opt).length || 0;
         const unpackingCount = item.unpackingOptions?.filter(opt => opt).length || 0;
         
+        console.log(`🎁 Debug PDF Cartons - ${item.name}:`, {
+          packingOptions: item.packingOptions,
+          unpackingOptions: item.unpackingOptions,
+          packingCount,
+          unpackingCount
+        });
+        
         if (packingCount > 0 || unpackingCount > 0) {
           let optionText = '';
           if (packingCount > 0) optionText += `${packingCount} Emb`;
