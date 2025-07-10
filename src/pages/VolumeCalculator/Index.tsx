@@ -231,6 +231,9 @@ const VolumeCalculator = () => {
 
       if (error) throw error;
 
+      // Vider automatiquement le cache après la sauvegarde pour plus de fluidité
+      pricingEngine.clearDistanceCache();
+
       toast({
         title: "Inventaire sauvegardé",
         description: "L'inventaire a été sauvegardé avec succès",
@@ -1187,17 +1190,6 @@ Validité de l'estimation : 30 jours
                   Sauvegarder l'inventaire
                 </Button>
 
-                <Separator />
-                
-                {/* Bouton temporaire pour déboguer le cache */}
-                <Button
-                  onClick={clearDistanceCache}
-                  variant="outline"
-                  className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                >
-                  🗑️ Vider le cache des distances (Debug)
-                </Button>
-                
                 <Separator />
                 
                 <div className="text-sm text-gray-600 space-y-1">

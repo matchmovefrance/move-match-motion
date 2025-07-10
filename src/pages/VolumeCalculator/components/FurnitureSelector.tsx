@@ -246,6 +246,11 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   };
 
   const handleCartonOptionsChange = (itemId: string, packingCount: number, unpackingCount: number) => {
+    // Mettre à jour cartonOptions avec les nouvelles valeurs
+    setCartonOptions(prev => ({
+      ...prev,
+      [itemId]: { packingCount, unpackingCount }
+    }));
     
     // Mettre à jour l'item avec les nouvelles options
     const quantity = getSelectedQuantity(itemId);
