@@ -71,6 +71,20 @@ export const loadGoogleMapsScript = (): Promise<void> => {
   });
 };
 
+// Fonction pour nettoyer et formater un code postal français
+const cleanPostalCode = (postalCode: string): string => {
+  // Nettoyer le code postal : enlever espaces, tirets et caractères non numériques
+  const cleaned = postalCode.replace(/[^\d]/g, '');
+  
+  // Vérifier que c'est un code postal français valide (5 chiffres)
+  if (cleaned.length === 5 && /^\d{5}$/.test(cleaned)) {
+    return cleaned;
+  }
+  
+  // Si le code postal n'est pas valide, retourner tel quel mais nettoyé
+  return cleaned || postalCode.trim();
+};
+
 // Fonction pour calculer la distance entre deux codes postaux avec Google Distance Matrix API
 export const calculateDistanceByPostalCode = async (
   departurePostalCode: string,
@@ -87,9 +101,13 @@ export const calculateDistanceByPostalCode = async (
 
     const service = new google.maps.DistanceMatrixService();
     
-    // Construire les adresses avec code postal et ville si disponible
-    const origin = departureCity ? `${departurePostalCode} ${departureCity}, France` : `${departurePostalCode}, France`;
-    const destination = arrivalCity ? `${arrivalPostalCode} ${arrivalCity}, France` : `${arrivalPostalCode}, France`;
+    // Nettoyer et formater les codes postaux
+    const cleanDeparturePostal = cleanPostalCode(departurePostalCode);
+    const cleanArrivalPostal = cleanPostalCode(arrivalPostalCode);
+    
+    // Construire les adresses avec code postal nettoyé et ville si disponible
+    const origin = departureCity ? `${cleanDeparturePostal} ${departureCity}, France` : `${cleanDeparturePostal}, France`;
+    const destination = arrivalCity ? `${cleanArrivalPostal} ${arrivalCity}, France` : `${cleanArrivalPostal}, France`;
     
     console.log(`🔍 Calcul distance Google Maps Distance Matrix: ${origin} -> ${destination}`);
     
