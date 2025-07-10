@@ -367,13 +367,14 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
                   type="number"
                   min="0"
                   max={quantity}
-                  value={cartonOptions[item.id]?.packingCount || 0}
+                  value={cartonOptions[item.id]?.packingCount || ''}
                   onChange={(e) => handleCartonOptionsChange(
                     item.id, 
                     parseInt(e.target.value) || 0, 
                     cartonOptions[item.id]?.unpackingCount || 0
                   )}
                   className="h-8 text-sm"
+                  placeholder="0"
                 />
               </div>
               <div>
@@ -384,13 +385,14 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
                   type="number"
                   min="0"
                   max={quantity}
-                  value={cartonOptions[item.id]?.unpackingCount || 0}
+                  value={cartonOptions[item.id]?.unpackingCount || ''}
                   onChange={(e) => handleCartonOptionsChange(
                     item.id, 
                     cartonOptions[item.id]?.packingCount || 0, 
                     parseInt(e.target.value) || 0
                   )}
                   className="h-8 text-sm"
+                  placeholder="0"
                 />
               </div>
             </div>

@@ -247,9 +247,10 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
               <Input
                 id="departureCarryingDistance"
                 type="number"
-                value={props.departureCarryingDistance}
+                value={props.departureCarryingDistance || ''}
                 onChange={(e) => props.setDepartureCarryingDistance(e.target.value)}
                 placeholder="Distance entre le camion et la porte"
+                min="0"
               />
             </div>
           </div>
@@ -344,9 +345,10 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
               <Input
                 id="arrivalCarryingDistance"
                 type="number"
-                value={props.arrivalCarryingDistance}
+                value={props.arrivalCarryingDistance || ''}
                 onChange={(e) => props.setArrivalCarryingDistance(e.target.value)}
                 placeholder="Distance entre le camion et la porte"
+                min="0"
               />
             </div>
           </div>
