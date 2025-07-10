@@ -480,8 +480,9 @@ Validité de l'estimation : 30 jours
     // Add logo with proper proportions (format carré 1:1)
     try {
       // Logo carré - même largeur et hauteur pour conserver les proportions originales
-      const logoSize = 60; // Taille augmentée à 60x60
-      pdf.addImage(matchmoveLogo, 'PNG', margin, yPosition, logoSize, logoSize);
+      const logoSize = 60; // Taille 60x60
+      const logoYPosition = 5; // Position Y ajustée pour être dans le header (monte de ~1cm)
+      pdf.addImage(matchmoveLogo, 'PNG', margin, logoYPosition, logoSize, logoSize);
     } catch (error) {
       console.log('Logo not loaded:', error);
     }
