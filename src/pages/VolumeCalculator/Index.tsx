@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calculator, RotateCcw, Download, Package, FileText, Send, FileDown, History, Search } from 'lucide-react';
-import matchmoveLogo from '@/assets/matchmove-logo.png';
+import matchmoveLogo from '@/assets/matchmove-logo-new.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
