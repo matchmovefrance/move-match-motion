@@ -252,10 +252,34 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
       [itemId]: { packingCount, unpackingCount }
     }));
     
-    // Mettre à jour l'item avec les nouvelles options
+    // Mettre à jour l'item avec les nouvelles options immédiatement
     const quantity = getSelectedQuantity(itemId);
     if (quantity > 0) {
-      handleQuantityChange(itemId, quantity);
+      // Trouver l'item
+      let item = furnitureCategories
+        .flatMap(cat => cat.subcategories)
+        .flatMap(subcat => subcat.items)
+        .find(item => item.id === itemId);
+      if (!item) {
+        item = manualFurniture.find(item => item.id === itemId);
+      }
+      
+      if (item) {
+        // Créer les nouveaux tableaux d'options
+        const packingOptions = Array(quantity).fill(false);
+        const unpackingOptions = Array(quantity).fill(false);
+        
+        // Marquer les cartons selon les quantités spécifiées
+        for (let i = 0; i < Math.min(packingCount, quantity); i++) {
+          packingOptions[i] = true;
+        }
+        for (let i = 0; i < Math.min(unpackingCount, quantity); i++) {
+          unpackingOptions[i] = true;
+        }
+        
+        const currentVolume = customVolumes[itemId] || item.volume;
+        onAddItem({ ...item, volume: currentVolume, packingOptions, unpackingOptions }, quantity);
+      }
     }
   };
 
