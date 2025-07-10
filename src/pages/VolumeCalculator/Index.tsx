@@ -477,9 +477,12 @@ Validité de l'estimation : 30 jours
     pdf.setFillColor(...lightGray);
     pdf.rect(0, 0, pageWidth, headerHeight, 'F');
 
-    // Add logo
+    // Add logo with proper proportions
     try {
-      pdf.addImage(matchmoveLogo, 'PNG', margin, yPosition, 50, 25);
+      // Dimensions adaptées pour conserver les proportions du nouveau logo
+      const logoWidth = 60;
+      const logoHeight = 20; // Rapport 3:1 pour le logo horizontal
+      pdf.addImage(matchmoveLogo, 'PNG', margin, yPosition, logoWidth, logoHeight);
     } catch (error) {
       console.log('Logo not loaded:', error);
     }
