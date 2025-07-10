@@ -1255,6 +1255,19 @@ Validité de l'estimation : 30 jours
         isOpen={showInventoryDialog}
         onClose={() => setShowInventoryDialog(false)}
         selectedItems={selectedItems}
+        clientData={{
+          name: clientName,
+          reference: clientReference,
+          phone: clientPhone,
+          email: clientEmail,
+          address: clientAddress,
+          notes: notes
+        }}
+        extendedFormData={extendedFormData}
+        movingDate={movingDate}
+        flexibleDates={flexibleDates}
+        dateRangeStart={dateRangeStart}
+        dateRangeEnd={dateRangeEnd}
       />
     </div>
   );
