@@ -31,7 +31,7 @@ function App() {
                 <ProtectedRoute>
                   <>
                     <Header />
-                    <main className="pt-12">
+                    <main className="pt-8">
                       <Index />
                     </main>
                   </>
@@ -44,7 +44,7 @@ function App() {
                 <ProtectedRoute>
                   <>
                     <Header />
-                    <main className="pt-12">
+                    <main className="pt-8">
                       <PricingTool />
                     </main>
                   </>
@@ -57,7 +57,7 @@ function App() {
                 <ProtectedRoute>
                   <>
                     <Header />
-                    <main className="pt-12">
+                    <main className="pt-8">
                       <VolumeCalculator />
                     </main>
                   </>
@@ -70,7 +70,7 @@ function App() {
                 <ProtectedRoute>
                   <>
                     <Header />
-                    <main className="pt-12">
+                    <main className="pt-8">
                       <TruckOptimizer />
                     </main>
                   </>
