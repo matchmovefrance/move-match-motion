@@ -77,6 +77,22 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
     loadData();
   }, []);
 
+  // Synchroniser cartonOptions avec les selectedItems (important pour le chargement d'historique)
+  useEffect(() => {
+    const newCartonOptions: {[key: string]: {packingCount: number, unpackingCount: number}} = {};
+    
+    selectedItems.forEach(item => {
+      if (item.name.toLowerCase().includes('carton')) {
+        const packingCount = item.packingOptions?.filter(Boolean).length || 0;
+        const unpackingCount = item.unpackingOptions?.filter(Boolean).length || 0;
+        
+        newCartonOptions[item.id] = { packingCount, unpackingCount };
+      }
+    });
+    
+    setCartonOptions(newCartonOptions);
+  }, [selectedItems]);
+
   const getItemVolume = (item: FurnitureItem) => {
     return customVolumes[item.id] || item.volume;
   };

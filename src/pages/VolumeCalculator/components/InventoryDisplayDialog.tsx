@@ -44,27 +44,18 @@ export const InventoryDisplayDialog: React.FC<InventoryDisplayDialogProps> = ({
   };
 
   const countPackingOptions = (item: SelectedItem) => {
-    console.log('Counting packing options for item:', item.name, 'packingOptions:', item.packingOptions);
     if (!item.packingOptions || !Array.isArray(item.packingOptions)) return 0;
-    const count = item.packingOptions.filter(Boolean).length;
-    console.log('Packing count:', count);
-    return count;
+    return item.packingOptions.filter(Boolean).length;
   };
 
   const countUnpackingOptions = (item: SelectedItem) => {
-    console.log('Counting unpacking options for item:', item.name, 'unpackingOptions:', item.unpackingOptions);
     if (!item.unpackingOptions || !Array.isArray(item.unpackingOptions)) return 0;
-    const count = item.unpackingOptions.filter(Boolean).length;
-    console.log('Unpacking count:', count);
-    return count;
+    return item.unpackingOptions.filter(Boolean).length;
   };
 
   const countDisassemblyOptions = (item: SelectedItem) => {
-    console.log('Counting disassembly options for item:', item.name, 'disassemblyOptions:', item.disassemblyOptions);
     if (!item.disassemblyOptions || !Array.isArray(item.disassemblyOptions)) return 0;
-    const count = item.disassemblyOptions.filter(Boolean).length;
-    console.log('Disassembly count:', count);
-    return count;
+    return item.disassemblyOptions.filter(Boolean).length;
   };
 
   const formatVolume = (volume: number) => {
