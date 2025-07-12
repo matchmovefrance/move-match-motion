@@ -527,10 +527,10 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                           <Eye className="h-3 w-3" />
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="default"
                           size="sm"
                           onClick={() => handleLoadInventory(inventory)}
-                          className="h-8 px-3 text-xs font-medium"
+                          className="h-8 px-3 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           Charger
                         </Button>
