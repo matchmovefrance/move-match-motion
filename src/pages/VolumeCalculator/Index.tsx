@@ -49,6 +49,9 @@ const VolumeCalculator = () => {
   const [flexibleDates, setFlexibleDates] = useState(false);
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
+  
+  // Formule
+  const [formule, setFormule] = useState('standard');
 
   // Hook pour calculer la distance
   const { distance, distanceText, isLoading: isCalculatingDistance, error: distanceError } = useGoogleMapsDistance({
@@ -167,6 +170,7 @@ const VolumeCalculator = () => {
     setFlexibleDates(false);
     setDateRangeStart('');
     setDateRangeEnd('');
+    setFormule('standard');
   };
 
   const saveInventory = async () => {
@@ -225,6 +229,7 @@ const VolumeCalculator = () => {
         flexible_dates: flexibleDates,
         date_range_start: dateRangeStart || null,
         date_range_end: dateRangeEnd || null,
+        formule: formule,
       };
 
       const { error } = await supabase
@@ -342,6 +347,7 @@ ${extendedFormData?.departureHasElevator ? `Taille ascenseur    : ${extendedForm
 Monte-charge départ  : ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}
 Distance portage     : ${extendedFormData?.departureCarryingDistance || '0'} mètres
 Stationnement        : ${extendedFormData?.departureParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
+Formule              : ${formule || 'standard'}
 
 Adresse d'arrivée    : ${extendedFormData?.arrivalAddress || 'Non renseignée'}
 Code postal arrivée  : ${extendedFormData?.arrivalPostalCode || 'Non renseigné'}
@@ -586,7 +592,8 @@ Validité de l'estimation : 30 jours
       `Ascenseur: ${extendedFormData?.departureHasElevator ? `Oui (${extendedFormData?.departureElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
       `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
       `Distance portage: ${extendedFormData?.departureCarryingDistance || '0'}m`,
-      `Stationnement: ${extendedFormData?.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`
+      `Stationnement: ${extendedFormData?.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`,
+      `Formule: ${formule || 'standard'}`
     ];
     
     // Configuration arrivée - affichage complet TOUJOURS
@@ -1128,6 +1135,8 @@ Validité de l'estimation : 30 jours
                     setArrivalCarryingDistance={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCarryingDistance: value }))}
                     arrivalParkingNeeded={extendedFormData.arrivalParkingNeeded || false}
                     setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
+                    formule={formule}
+                    setFormule={setFormule}
                     onSaveInventory={saveInventory}
                     selectedItemsCount={selectedItems.length}
                   />
@@ -1236,6 +1245,7 @@ Validité de l'estimation : 30 jours
           setClientEmail(inventory.clientEmail || '');
           setNotes(inventory.notes || '');
           setSelectedItems(inventory.selectedItems || []);
+          setFormule(inventory.formule || 'standard');
           if (inventory.extendedFormData) {
             setExtendedFormData(inventory.extendedFormData);
           }

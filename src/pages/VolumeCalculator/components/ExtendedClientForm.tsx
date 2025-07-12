@@ -62,6 +62,10 @@ interface ExtendedClientFormProps {
   setArrivalCarryingDistance: (value: string) => void;
   arrivalParkingNeeded: boolean;
   setArrivalParkingNeeded: (value: boolean) => void;
+  
+  // Formule
+  formule: string;
+  setFormule: (value: string) => void;
 }
 
 export function ExtendedClientForm(props: ExtendedClientFormProps) {
@@ -219,7 +223,7 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label htmlFor="departureLocationType">Type de logement</Label>
               <Select value={props.departureLocationType} onValueChange={props.setDepartureLocationType}>
@@ -241,6 +245,20 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
                 onChange={(e) => props.setDepartureFloor(e.target.value)}
                 placeholder="Ex: RDC, 1, 2..."
               />
+            </div>
+            <div>
+              <Label htmlFor="formule">Formule</Label>
+              <Select value={props.formule} onValueChange={props.setFormule}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner la formule" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Eco">Eco</SelectItem>
+                  <SelectItem value="Eco +">Eco +</SelectItem>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="Luxe">Luxe</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="departureCarryingDistance">Distance de portage (en mètres)</Label>

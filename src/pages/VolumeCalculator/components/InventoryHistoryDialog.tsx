@@ -196,6 +196,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
       clientEmail: (inventory as any).client_email,
       notes: (inventory as any).notes,
       selectedItems: inventory.selected_items,
+      formule: (inventory as any).formule || 'standard',
       // Ajout des champs de date
       movingDate: inventory.moving_date,
       flexibleDates: inventory.flexible_dates,

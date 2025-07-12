@@ -59,6 +59,10 @@ interface ClientFormDialogProps {
   arrivalParkingNeeded: boolean;
   setArrivalParkingNeeded: (value: boolean) => void;
   
+  // Formule
+  formule: string;
+  setFormule: (value: string) => void;
+  
   // Actions
   onSaveInventory?: () => void;
   selectedItemsCount?: number;

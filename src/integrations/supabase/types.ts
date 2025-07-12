@@ -520,6 +520,7 @@ export type Database = {
           distance_km: number | null
           distance_km_calculated: number | null
           flexible_dates: boolean | null
+          formule: string | null
           id: string
           moving_date: string | null
           notes: string | null
@@ -559,6 +560,7 @@ export type Database = {
           distance_km?: number | null
           distance_km_calculated?: number | null
           flexible_dates?: boolean | null
+          formule?: string | null
           id?: string
           moving_date?: string | null
           notes?: string | null
@@ -598,6 +600,7 @@ export type Database = {
           distance_km?: number | null
           distance_km_calculated?: number | null
           flexible_dates?: boolean | null
+          formule?: string | null
           id?: string
           moving_date?: string | null
           notes?: string | null
