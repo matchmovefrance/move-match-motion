@@ -12,12 +12,17 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Trash2, Eye, Calendar, MapPin, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, Eye, Calendar as CalendarIcon, MapPin, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SelectedItem } from '../types';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 const getLocationTypeDisplayName = (locationType: string) => {
   switch (locationType) {
@@ -63,9 +68,10 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   const [isLoading, setIsLoading] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<Inventory | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'normal' | 'compact'>('normal');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(20);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [inventoryToDelete, setInventoryToDelete] = useState<Inventory | null>(null);
   const { toast } = useToast();
@@ -98,18 +104,36 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   // Fonction de filtrage
   const filterInventories = () => {
-    if (!searchTerm) {
-      setFilteredInventories(inventories);
-      return;
+    let filtered = inventories;
+
+    // Filtrage par texte
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(inventory => {
+        const clientName = inventory.client_name?.toLowerCase() || '';
+        const clientEmail = inventory.client_email?.toLowerCase() || '';
+        const clientReference = inventory.client_reference?.toLowerCase() || '';
+        
+        return clientName.includes(searchLower) || 
+               clientEmail.includes(searchLower) || 
+               clientReference.includes(searchLower);
+      });
     }
 
-    const filtered = inventories.filter(inventory => {
-      const clientName = inventory.client_name?.toLowerCase() || '';
-      const clientEmail = inventory.client_email?.toLowerCase() || '';
-      const searchLower = searchTerm.toLowerCase();
-      
-      return clientName.includes(searchLower) || clientEmail.includes(searchLower);
-    });
+    // Filtrage par date
+    if (dateFrom) {
+      filtered = filtered.filter(inventory => 
+        new Date(inventory.created_at) >= dateFrom
+      );
+    }
+
+    if (dateTo) {
+      const endOfDay = new Date(dateTo);
+      endOfDay.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(inventory => 
+        new Date(inventory.created_at) <= endOfDay
+      );
+    }
 
     setFilteredInventories(filtered);
     setCurrentPage(1);
@@ -117,7 +141,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   useEffect(() => {
     filterInventories();
-  }, [searchTerm, inventories]);
+  }, [searchTerm, dateFrom, dateTo, inventories]);
 
   const deleteInventory = async (id: string) => {
     try {
@@ -221,7 +245,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   if (selectedInventory) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -239,9 +263,9 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                 ← Retour à la liste
               </Button>
             </div>
-          </DialogHeader>
+            </DialogHeader>
           
-            <div className="space-y-6">
+            <div className="space-y-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <h4 className="font-medium mb-3 text-blue-600">Informations client</h4>
@@ -357,7 +381,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Historique des inventaires</DialogTitle>
           <DialogDescription>
@@ -372,126 +396,183 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
             Aucun inventaire trouvé
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 flex-1 flex flex-col">
             {/* Barre de recherche et contrôles */}
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col lg:flex-row gap-4 border-b pb-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par nom ou email..."
+                  placeholder="Rechercher par nom, email ou référence..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
+              
+              {/* Filtres de date */}
               <div className="flex gap-2">
-                <Select value={viewMode} onValueChange={(value: 'normal' | 'compact') => setViewMode(value)}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="compact">Compact</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-40 justify-start text-left font-normal",
+                        !dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFrom ? format(dateFrom, "dd MMM yyyy", { locale: fr }) : "Date début"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={setDateFrom}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-40 justify-start text-left font-normal",
+                        !dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateTo ? format(dateTo, "dd MMM yyyy", { locale: fr }) : "Date fin"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={setDateTo}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setDateFrom(undefined);
+                    setDateTo(undefined);
+                  }}
+                  className="px-3"
+                >
+                  Effacer
+                </Button>
               </div>
             </div>
 
             {/* Résultats */}
-            {filteredInventories.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                {searchTerm ? 'Aucun inventaire trouvé pour cette recherche' : 'Aucun inventaire trouvé'}
-              </div>
-            ) : (
-              <>
-                {currentInventories.map((inventory) => (
-                  <Card key={inventory.id} className={`hover:bg-gray-50 transition-colors ${viewMode === 'compact' ? 'py-2' : ''}`}>
-                    <CardHeader className={viewMode === 'compact' ? 'pb-1 pt-3' : 'pb-3'}>
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className={viewMode === 'compact' ? 'text-base' : 'text-lg'}>
-                            {inventory.client_name || 'Sans nom'}
-                          </CardTitle>
-                          <CardDescription>
-                            <div className={`flex items-center gap-4 mt-1 ${viewMode === 'compact' ? 'text-xs' : ''}`}>
+            <div className="flex-1 overflow-y-auto">
+              {filteredInventories.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {searchTerm || dateFrom || dateTo ? 'Aucun inventaire trouvé pour cette recherche' : 'Aucun inventaire trouvé'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {currentInventories.map((inventory) => (
+                    <div 
+                      key={inventory.id} 
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm truncate">
+                              {inventory.client_name || 'Sans nom'}
+                            </h4>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                               <span className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
+                                <CalendarIcon className="h-3 w-3" />
                                 {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
                               </span>
-                              {inventory.moving_date && (
-                                <span className="flex items-center gap-1 text-blue-600">
-                                  <Calendar className="h-4 w-4" />
-                                  Déménagement: {new Date(inventory.moving_date).toLocaleDateString('fr-FR')}
-                                </span>
-                              )}
                               <span className="flex items-center gap-1">
-                                <MapPin className="h-4 w-4" />
+                                <MapPin className="h-3 w-3" />
                                 {inventory.departure_postal_code} → {inventory.arrival_postal_code}
                               </span>
-                              {inventory.client_email && (
-                                <span className="text-gray-500">{inventory.client_email}</span>
-                              )}
+                              <span>{inventory.total_volume.toFixed(1)} m³</span>
                             </div>
-                          </CardDescription>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size={viewMode === 'compact' ? 'sm' : 'sm'}
-                            onClick={() => setSelectedInventory(inventory)}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Voir
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size={viewMode === 'compact' ? 'sm' : 'sm'}
-                            onClick={() => handleDeleteClick(inventory)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          </div>
+                          <div className="flex items-center gap-6 text-xs">
+                            <div className="text-center">
+                              <div className="font-medium">{inventory.selected_items?.length || 0}</div>
+                              <div className="text-muted-foreground">Items</div>
+                            </div>
+                            {inventory.distance_km && (
+                              <div className="text-center">
+                                <div className="font-medium">{inventory.distance_km.toFixed(0)}</div>
+                                <div className="text-muted-foreground">km</div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </CardHeader>
-                    {viewMode === 'normal' && (
-                      <CardContent className="pt-0">
-                        <div className="flex gap-4 text-sm text-gray-600">
-                          <span>Volume: {inventory.total_volume.toFixed(2)} m³</span>
-                          <span>Items: {inventory.selected_items?.length || 0}</span>
-                          {inventory.distance_km && <span>Distance: {inventory.distance_km.toFixed(0)} km</span>}
-                        </div>
-                      </CardContent>
-                    )}
-                  </Card>
-                ))}
+                      <div className="flex gap-1 ml-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedInventory(inventory)}
+                          className="h-8 px-2"
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleLoadInventory(inventory)}
+                          className="h-8 px-3 text-xs font-medium"
+                        >
+                          Charger
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(inventory)}
+                          className="h-8 px-2 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm text-gray-600">
-                      Page {currentPage} sur {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 pt-4 border-t mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} sur {totalPages} ({filteredInventories.length} résultats)
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
