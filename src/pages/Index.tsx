@@ -125,41 +125,6 @@ const Index = () => {
 
   return (
     <div className="container mx-auto py-8">
-      {/* Tools Section - Only for non-demenageur roles */}
-      {profile?.role !== 'demenageur' && (
-        <div className="mb-6">
-          <div className="bg-white rounded-lg shadow-sm border p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-gray-700">Outils</h3>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handlePricingToolClick}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
-                >
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  Devis
-                </button>
-                
-                <button 
-                  onClick={handleVolumeCalculatorClick}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
-                >
-                  <Calculator className="h-3.5 w-3.5" />
-                  Volume
-                </button>
-
-                <button 
-                  onClick={handleTruckOptimizerClick}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 rounded-md hover:bg-orange-100 transition-colors"
-                >
-                  <Package className="h-3.5 w-3.5" />
-                  3D
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Navigation */}
       <nav className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">

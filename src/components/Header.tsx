@@ -65,16 +65,37 @@ const Header = () => {
           </div>
         </div>
 
+        
         <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 border-blue-500 text-blue-500 hover:bg-blue-50 hover:text-blue-600"
-            onClick={openPricingTool}
-          >
-            <CircleDollarSign className="h-4 w-4" />
-            <span>Pricing Tool</span>
-          </Button>
+          {/* Tools Menu */}
+          {(user?.email && profile?.role !== 'demenageur') && (
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => window.open('/pricing-tool', '_blank')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
+              >
+                <CircleDollarSign className="h-3.5 w-3.5" />
+                Devis
+              </button>
+              
+              <button 
+                onClick={() => window.open('/volume-calculator', '_blank')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-600 border border-green-200 rounded-md hover:bg-green-50 transition-colors"
+              >
+                <span className="h-3.5 w-3.5 text-center">📏</span>
+                Volume
+              </button>
+
+              <button 
+                onClick={() => window.open('/truck-optimizer', '_blank')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-600 border border-orange-200 rounded-md hover:bg-orange-50 transition-colors"
+              >
+                <span className="h-3.5 w-3.5 text-center">📦</span>
+                3D
+              </button>
+            </div>
+          )}
+
           
           <div className="text-right">
             <p className="text-sm font-medium text-gray-900">
