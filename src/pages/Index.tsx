@@ -127,33 +127,35 @@ const Index = () => {
     <div className="container mx-auto py-8">
       {/* Tools Section - Only for non-demenageur roles */}
       {profile?.role !== 'demenageur' && (
-        <div className="mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">Outils</h3>
-            <div className="flex flex-wrap gap-3">
-              <Button 
-                onClick={handlePricingToolClick}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              >
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Outil de Devis
-              </Button>
-              
-              <Button 
-                onClick={handleVolumeCalculatorClick}
-                className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
-              >
-                <Calculator className="h-4 w-4 mr-2" />
-                Calculateur de Volume
-              </Button>
+        <div className="mb-6">
+          <div className="bg-white rounded-lg shadow-sm border p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gray-700">Outils</h3>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handlePricingToolClick}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                >
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  Devis
+                </button>
+                
+                <button 
+                  onClick={handleVolumeCalculatorClick}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
+                >
+                  <Calculator className="h-3.5 w-3.5" />
+                  Volume
+                </button>
 
-              <Button 
-                onClick={handleTruckOptimizerClick}
-                className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Optimiseur de Chargement 3D
-              </Button>
+                <button 
+                  onClick={handleTruckOptimizerClick}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 rounded-md hover:bg-orange-100 transition-colors"
+                >
+                  <Package className="h-3.5 w-3.5" />
+                  3D
+                </button>
+              </div>
             </div>
           </div>
         </div>
