@@ -71,6 +71,14 @@ const Header = () => {
           {(user?.email && profile?.role !== 'demenageur') && (
             <div className="flex items-center gap-2">
               <button 
+                onClick={() => navigate('/')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 border border-purple-200 rounded-md hover:bg-purple-50 transition-colors"
+              >
+                <span className="h-3.5 w-3.5 text-center">🎯</span>
+                Matching
+              </button>
+              
+              <button 
                 onClick={() => window.open('/pricing-tool', '_blank')}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
               >
