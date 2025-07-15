@@ -817,7 +817,7 @@ Validité de l'estimation : 30 jours
     try {
       if (exportFormat === 'pdf') {
         const pdf = await generateProfessionalInventoryPDF();
-        const fileName = `inventaire-${clientReference || clientName || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+        const fileName = `${clientName || 'Client'}_inventaire-${clientReference || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
         pdf.save(fileName);
         
         toast({
@@ -831,7 +831,7 @@ Validité de l'estimation : 30 jours
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const fileName = `inventaire-${clientReference || clientName || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.txt`;
+        const fileName = `${clientName || 'Client'}_inventaire-${clientReference || 'demenagement'}-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.txt`;
         a.download = fileName;
         document.body.appendChild(a);
         a.click();
