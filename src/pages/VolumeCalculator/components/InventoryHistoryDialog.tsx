@@ -573,25 +573,34 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
             {/* Séparateur */}
             <div className="border-t bg-background"></div>
 
-            {/* Pagination fixée en bas */}
+            {/* Pagination fixée en bas - toujours visible */}
             <div className="flex justify-between items-center py-3 px-1 bg-background border-t">
               <div className="text-sm text-muted-foreground">
                 {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
               </div>
               
-              {totalPages > 1 ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1 || totalPages <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {totalPages <= 1 ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                      disabled
+                    >
+                      1
+                    </Button>
+                  ) : (
+                    Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
                       // Afficher toutes les pages si <= 7, sinon version tronquée
                       if (totalPages <= 7) {
                         return (
@@ -627,23 +636,19 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                         }
                         return null;
                       }
-                    })}
-                  </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                    })
+                  )}
                 </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  Page 1 sur 1
-                </div>
-              )}
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || totalPages <= 1}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
