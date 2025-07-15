@@ -17,7 +17,7 @@ import { furnitureCategories } from './data/furnitureData';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { optimizePDFGeneration, addOptionsLegend } from './utils/pdfOptimizer';
+import { generateUltraLightPDF } from './utils/ultraLightPDF';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Calendar } from 'lucide-react';
@@ -483,35 +483,18 @@ Validité de l'estimation : 30 jours
 
   const generateProfessionalInventoryPDF = async () => {
     const data = await generateProfessionalInventoryContent(distance, distanceText);
-    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance, distanceText: calculatedDistanceText } = data;
+    const { settings, totalVolume, extendedFormData } = data;
     
-    const pdf = new jsPDF();
-    const pageWidth = pdf.internal.pageSize.width;
-    const pageHeight = pdf.internal.pageSize.height;
-    const margin = 20;
-    let yPosition = 20;
-
-    // Colors
-    const primaryColor: [number, number, number] = [98, 184, 136]; // #62b888
-    const secondaryColor: [number, number, number] = [52, 73, 94]; // Dark gray
-    const lightGray: [number, number, number] = [245, 245, 245];
-
-    // Header section
-    const headerHeight = 60;
-    
-    // Background for header
-    pdf.setFillColor(...lightGray);
-    pdf.rect(0, 0, pageWidth, headerHeight, 'F');
-
-    // Add logo with proper proportions (format carré 1:1)
-    try {
-      // Logo carré - même largeur et hauteur pour conserver les proportions originales
-      const logoSize = 60; // Taille 60x60
-      const logoYPosition = 5; // Position Y ajustée pour être dans le header (monte de ~1cm)
-      pdf.addImage(matchmoveLogo, 'PNG', margin, logoYPosition, logoSize, logoSize);
-    } catch (error) {
-      console.log('Logo not loaded:', error);
-    }
+    // Utiliser le générateur ultra-léger pour réduire la taille du PDF
+    return generateUltraLightPDF(
+      selectedItems,
+      totalVolume,
+      settings,
+      movingDate,
+      extendedFormData,
+      notes
+    );
+  };
 
     // Company information (top right)
     pdf.setFontSize(10);
