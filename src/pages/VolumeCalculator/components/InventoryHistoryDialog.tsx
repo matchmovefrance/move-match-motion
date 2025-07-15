@@ -573,8 +573,8 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
             {/* Séparateur */}
             <div className="border-t bg-background"></div>
 
-            {/* Pagination fixée en bas - toujours visible */}
-            <div className="flex justify-between items-center py-3 px-1 bg-background border-t">
+            {/* Pagination fixée en bas - TOUJOURS VISIBLE */}
+            <div className="flex justify-between items-center py-4 px-2 bg-background border-t-2 border-gray-200">
               <div className="text-sm text-muted-foreground">
                 {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
               </div>
@@ -584,67 +584,31 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   variant="outline"
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1 || totalPages <= 1}
+                  disabled={currentPage === 1}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 
+                {/* Boutons de pages - TOUJOURS AFFICHÉS */}
                 <div className="flex items-center gap-1">
-                  {totalPages <= 1 ? (
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <Button
-                      variant="default"
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
                       size="sm"
-                      className="w-8 h-8 p-0"
-                      disabled
+                      onClick={() => setCurrentPage(page)}
+                      className="w-8 h-8 p-0 font-medium"
                     >
-                      1
+                      {page}
                     </Button>
-                  ) : (
-                    Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                      // Afficher toutes les pages si <= 7, sinon version tronquée
-                      if (totalPages <= 7) {
-                        return (
-                          <Button
-                            key={page}
-                            variant={currentPage === page ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setCurrentPage(page)}
-                            className="w-8 h-8 p-0"
-                          >
-                            {page}
-                          </Button>
-                        );
-                      } else {
-                        // Logique pour pagination avec ellipses
-                        if (page === 1 || page === totalPages || 
-                            (page >= currentPage - 1 && page <= currentPage + 1)) {
-                          return (
-                            <Button
-                              key={page}
-                              variant={currentPage === page ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => setCurrentPage(page)}
-                              className="w-8 h-8 p-0"
-                            >
-                              {page}
-                            </Button>
-                          );
-                        } else if (page === 2 && currentPage > 4) {
-                          return <span key={page} className="px-2">...</span>;
-                        } else if (page === totalPages - 1 && currentPage < totalPages - 3) {
-                          return <span key={page} className="px-2">...</span>;
-                        }
-                        return null;
-                      }
-                    })
-                  )}
+                  ))}
                 </div>
                 
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || totalPages <= 1}
+                  disabled={currentPage === totalPages}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
