@@ -494,13 +494,13 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
              </div>
 
             {/* Résultats avec scroll fluide */}
-            <div className="flex-1 overflow-y-auto max-h-[calc(100vh-350px)] pr-2" style={{ scrollBehavior: 'smooth' }}>
+            <div className="flex-1 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
               {filteredInventories.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {searchTerm || dateFrom || dateTo ? 'Aucun inventaire trouvé pour cette recherche' : 'Aucun inventaire trouvé'}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 pb-4">
                   {currentInventories.map((inventory) => (
                     <div 
                       key={inventory.id} 
@@ -568,28 +568,47 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   ))}
                 </div>
               )}
+            </div>
 
-              {/* Pagination - Toujours visible */}
-              <div className="flex justify-between items-center pt-4 border-t mt-4">
-                <div className="text-sm text-muted-foreground">
-                  {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
-                </div>
-                
-                {totalPages > 1 ? (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                        // Afficher toutes les pages si <= 7, sinon version tronquée
-                        if (totalPages <= 7) {
+            {/* Séparateur */}
+            <div className="border-t bg-background"></div>
+
+            {/* Pagination fixée en bas */}
+            <div className="flex justify-between items-center py-3 px-1 bg-background border-t">
+              <div className="text-sm text-muted-foreground">
+                {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
+              </div>
+              
+              {totalPages > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Afficher toutes les pages si <= 7, sinon version tronquée
+                      if (totalPages <= 7) {
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className="w-8 h-8 p-0"
+                          >
+                            {page}
+                          </Button>
+                        );
+                      } else {
+                        // Logique pour pagination avec ellipses
+                        if (page === 1 || page === totalPages || 
+                            (page >= currentPage - 1 && page <= currentPage + 1)) {
                           return (
                             <Button
                               key={page}
@@ -601,46 +620,30 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                               {page}
                             </Button>
                           );
-                        } else {
-                          // Logique pour pagination avec ellipses
-                          if (page === 1 || page === totalPages || 
-                              (page >= currentPage - 1 && page <= currentPage + 1)) {
-                            return (
-                              <Button
-                                key={page}
-                                variant={currentPage === page ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(page)}
-                                className="w-8 h-8 p-0"
-                              >
-                                {page}
-                              </Button>
-                            );
-                          } else if (page === 2 && currentPage > 4) {
-                            return <span key={page} className="px-2">...</span>;
-                          } else if (page === totalPages - 1 && currentPage < totalPages - 3) {
-                            return <span key={page} className="px-2">...</span>;
-                          }
-                          return null;
+                        } else if (page === 2 && currentPage > 4) {
+                          return <span key={page} className="px-2">...</span>;
+                        } else if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                          return <span key={page} className="px-2">...</span>;
                         }
-                      })}
-                    </div>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                        return null;
+                      }
+                    })}
                   </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Page 1 sur 1
-                  </div>
-                )}
-              </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Page 1 sur 1
+                </div>
+              )}
             </div>
           </div>
         )}
