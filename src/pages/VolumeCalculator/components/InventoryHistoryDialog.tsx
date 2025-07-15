@@ -382,8 +382,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col animate-fade-in"
-                     style={{ transition: 'all 0.3s ease-in-out' }}>
+      <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Historique des inventaires</DialogTitle>
           <DialogDescription>
@@ -398,109 +397,111 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
             Aucun inventaire trouvé
           </div>
         ) : (
-          <div className="space-y-4 flex-1 flex flex-col">
-            {/* Barre de recherche et contrôles */}
-            <div className="flex flex-col lg:flex-row gap-4 border-b pb-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher par nom, email ou référence..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              {/* Filtres de date */}
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-40 justify-start text-left font-normal",
-                        !dateFrom && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFrom ? format(dateFrom, "dd MMM yyyy", { locale: fr }) : "Date début"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateFrom}
-                      onSelect={setDateFrom}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
+          <div className="flex flex-col h-full min-h-0">
+            {/* Barre de recherche et contrôles - FIXE EN HAUT */}
+            <div className="flex-none">
+              <div className="flex flex-col lg:flex-row gap-4 border-b pb-4 mb-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher par nom, email ou référence..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                
+                {/* Filtres de date */}
+                <div className="flex gap-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-[200px] justify-start text-left font-normal",
+                          !dateFrom && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateFrom ? format(dateFrom, "PPP", { locale: fr }) : "Date début"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={setDateFrom}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-40 justify-start text-left font-normal",
-                        !dateTo && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateTo ? format(dateTo, "dd MMM yyyy", { locale: fr }) : "Date fin"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateTo}
-                      onSelect={setDateTo}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-[200px] justify-start text-left font-normal",
+                          !dateTo && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateTo ? format(dateTo, "PPP", { locale: fr }) : "Date fin"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={setDateTo}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
 
-                 <Button 
-                   variant="outline" 
-                   onClick={() => {
-                     setDateFrom(undefined);
-                     setDateTo(undefined);
-                   }}
-                   className="px-3"
-                 >
-                   Effacer
-                 </Button>
-               </div>
-               
-               {/* Sélecteur d'items par page */}
-               <div className="flex items-center gap-2">
-                 <span className="text-sm text-muted-foreground">Items par page:</span>
-                 <Select value={itemsPerPage.toString()} onValueChange={(value) => {
-                   setItemsPerPage(parseInt(value));
-                   setCurrentPage(1);
-                 }}>
-                   <SelectTrigger className="w-20">
-                     <SelectValue />
-                   </SelectTrigger>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setDateFrom(undefined);
+                      setDateTo(undefined);
+                    }}
+                    className="px-3"
+                  >
+                    Effacer
+                  </Button>
+                </div>
+                
+                {/* Sélecteur d'items par page */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Items par page:</span>
+                  <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                    setItemsPerPage(parseInt(value));
+                    setCurrentPage(1);
+                  }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="10">10</SelectItem>
                       <SelectItem value="20">20</SelectItem>
                       <SelectItem value="50">50</SelectItem>
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
-                 </Select>
-               </div>
-             </div>
+                  </Select>
+                </div>
+              </div>
+            </div>
 
-            {/* Résultats avec scroll fluide */}
-            <div className="flex-1 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
+            {/* Zone de contenu scrollable - FLEX-1 AVEC OVERFLOW */}
+            <div className="flex-1 overflow-y-auto min-h-0">
               {filteredInventories.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {searchTerm || dateFrom || dateTo ? 'Aucun inventaire trouvé pour cette recherche' : 'Aucun inventaire trouvé'}
                 </div>
               ) : (
-                <div className="space-y-2 pb-4">
+                <div className="space-y-2 pr-2">
                   {currentInventories.map((inventory) => (
                     <div 
                       key={inventory.id} 
@@ -570,48 +571,47 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
               )}
             </div>
 
-            {/* Séparateur */}
-            <div className="border-t bg-background"></div>
-
-            {/* Pagination fixée en bas - TOUJOURS VISIBLE */}
-            <div className="flex justify-between items-center py-4 px-2 bg-background border-t-2 border-gray-200">
-              <div className="text-sm text-muted-foreground">
-                {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                
-                {/* Boutons de pages - TOUJOURS AFFICHÉS */}
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="w-8 h-8 p-0 font-medium"
-                    >
-                      {page}
-                    </Button>
-                  ))}
+            {/* Pagination FIXE EN BAS - TOUJOURS VISIBLE */}
+            <div className="flex-none border-t bg-background mt-4">
+              <div className="flex justify-between items-center py-4 px-2">
+                <div className="text-sm text-muted-foreground">
+                  {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
                 </div>
                 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* Boutons de pages - TOUJOURS VISIBLES */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-8 h-8 p-0 font-medium"
+                      >
+                        {page}
+                      </Button>
+                    ))}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
