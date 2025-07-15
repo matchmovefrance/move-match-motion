@@ -71,7 +71,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [inventoryToDelete, setInventoryToDelete] = useState<Inventory | null>(null);
   const { toast } = useToast();
@@ -460,18 +460,35 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                   </PopoverContent>
                 </Popover>
 
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setDateFrom(undefined);
-                    setDateTo(undefined);
-                  }}
-                  className="px-3"
-                >
-                  Effacer
-                </Button>
-              </div>
-            </div>
+                 <Button 
+                   variant="outline" 
+                   onClick={() => {
+                     setDateFrom(undefined);
+                     setDateTo(undefined);
+                   }}
+                   className="px-3"
+                 >
+                   Effacer
+                 </Button>
+               </div>
+               
+               {/* Sélecteur d'items par page */}
+               <div className="flex items-center gap-2">
+                 <span className="text-sm text-muted-foreground">Items par page:</span>
+                 <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                   setItemsPerPage(parseInt(value));
+                   setCurrentPage(1);
+                 }}>
+                   <SelectTrigger className="w-20">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="50">50</SelectItem>
+                     <SelectItem value="100">100</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
+             </div>
 
             {/* Résultats */}
             <div className="flex-1 overflow-y-auto">
