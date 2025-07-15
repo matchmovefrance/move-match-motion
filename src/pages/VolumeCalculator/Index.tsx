@@ -467,36 +467,46 @@ Validité de l'estimation : 30 jours
     const data = await generateProfessionalInventoryContent(distance, distanceText);
     const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance, distanceText: calculatedDistanceText } = data;
     
-    const pdf = new jsPDF();
+    // Configuration PDF optimisée pour taille réduite
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      compress: true, // Active la compression native
+      putOnlyUsedFonts: true, // N'inclut que les polices utilisées
+      floatPrecision: 2 // Réduit la précision des nombres
+    });
+    
     const pageWidth = pdf.internal.pageSize.width;
     const pageHeight = pdf.internal.pageSize.height;
     const margin = 20;
     let yPosition = 20;
 
-    // Colors
-    const primaryColor: [number, number, number] = [98, 184, 136]; // #62b888
-    const secondaryColor: [number, number, number] = [52, 73, 94]; // Dark gray
+    // Couleurs optimisées (utilisation de couleurs simples)
+    const primaryColor: [number, number, number] = [98, 184, 136];
+    const secondaryColor: [number, number, number] = [52, 73, 94];
     const lightGray: [number, number, number] = [245, 245, 245];
 
-    // Header section
+    // Header section optimisé
     const headerHeight = 60;
     
-    // Background for header
+    // Background simplifié
     pdf.setFillColor(...lightGray);
     pdf.rect(0, 0, pageWidth, headerHeight, 'F');
 
-    // Add logo with proper proportions (format carré 1:1)
+    // Logo optimisé - version compressée
     try {
-      // Logo carré - même largeur et hauteur pour conserver les proportions originales
-      const logoSize = 60; // Taille 60x60
-      const logoYPosition = 5; // Position Y ajustée pour être dans le header (monte de ~1cm)
-      pdf.addImage(matchmoveLogo, 'PNG', margin, logoYPosition, logoSize, logoSize);
+      // Réduction de la taille du logo pour diminuer la taille du PDF
+      const logoSize = 40; // Réduit de 60 à 40
+      const logoYPosition = 8;
+      // Compression de l'image lors de l'ajout
+      pdf.addImage(matchmoveLogo, 'PNG', margin, logoYPosition, logoSize, logoSize, undefined, 'FAST');
     } catch (error) {
       console.log('Logo not loaded:', error);
     }
 
-    // Company information (top right)
-    pdf.setFontSize(10);
+    // Informations entreprise optimisées
+    pdf.setFontSize(9); // Réduit de 10 à 9
     pdf.setTextColor(...secondaryColor);
     const companyInfo = [
       settings?.company_name || 'MatchMove',
@@ -504,316 +514,267 @@ Validité de l'estimation : 30 jours
       settings?.phone || '+33 1 23 45 67 89',
       settings?.email || 'contact@matchmove.fr',
       'matchmove.fr',
-      '',
-      `Document fait le: ${currentDate}`
+      `Document: ${currentDate}`
     ];
     
     let rightX = pageWidth - margin;
-    let companyY = yPosition;
     companyInfo.forEach((info, index) => {
-      const textWidth = pdf.getTextWidth(info);
-      pdf.text(info, rightX - textWidth, companyY + (index * 4));
+      if (info) { // Évite les lignes vides
+        const textWidth = pdf.getTextWidth(info);
+        pdf.text(info, rightX - textWidth, yPosition + (index * 3.5));
+      }
     });
 
-    yPosition = headerHeight + 20;
+    yPosition = headerHeight + 15;
 
-    // Title
-    pdf.setFontSize(18);
+    // Titre optimisé
+    pdf.setFontSize(16); // Réduit de 18 à 16
     pdf.setTextColor(...primaryColor);
     pdf.setFont('helvetica', 'bold');
     pdf.text('INVENTAIRE PROFESSIONNEL DE DÉMÉNAGEMENT', margin, yPosition);
-    yPosition += 15;
+    yPosition += 12;
 
-    // Client information section
+    // Section client optimisée
     pdf.setFillColor(...primaryColor);
-    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 6, 'F');
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('INFORMATIONS CLIENT', margin + 5, yPosition + 6);
-    yPosition += 15;
-
-    pdf.setTextColor(...secondaryColor);
-    pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(10);
-    
-    const clientInfoLeft = [
-      `Nom: ${clientName || 'Non renseigné'}`,
-      `Date déménagement: ${movingDate ? new Date(movingDate).toLocaleDateString('fr-FR') : 'Non renseignée'}`,
-      `Téléphone: ${clientPhone || 'Non renseigné'}`
-    ];
-    
-    const clientInfoRight = [
-      `Email: ${clientEmail || 'Non renseigné'}`
-    ];
-
-    clientInfoLeft.forEach((info, index) => {
-      pdf.text(info, margin + 5, yPosition + (index * 5));
-    });
-
-    clientInfoRight.forEach((info, index) => {
-      pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 5));
-    });
-
-    yPosition += 20;
-
-    // Configuration des lieux section
-    // Configuration des lieux - TOUJOURS affichée sur le PDF
-    console.log('Debug PDF - extendedFormData:', extendedFormData);
-    
-    pdf.setFillColor(...primaryColor);
-    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(12);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('CONFIGURATION DES LIEUX', margin + 5, yPosition + 6);
-    yPosition += 15;
+    pdf.text('INFORMATIONS CLIENT', margin + 5, yPosition + 4);
+    yPosition += 10;
 
     pdf.setTextColor(...secondaryColor);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     
-    // Distance d'abord si disponible
-    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
-      pdf.setFont('helvetica', 'bold');
-      const distanceDisplay = calculatedDistanceText || (calculatedDistance ? `${calculatedDistance} km` : 'Calcul en cours');
-      pdf.text(`DISTANCE ESTIMÉE: ${distanceDisplay}`, margin + 5, yPosition);
-      pdf.setFont('helvetica', 'normal');
-      yPosition += 8;
-    }
-    
-    // Configuration départ - affichage complet TOUJOURS
-    const departureConfig = [
-      `LIEU DE DÉPART:`,
-      `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
-      `Code postal: ${extendedFormData?.departurePostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
-      `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? `${extendedFormData?.departureFloor}${extendedFormData?.departureFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
-      `Ascenseur: ${extendedFormData?.departureHasElevator ? `Oui (${extendedFormData?.departureElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
-      `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
-      `Distance portage: ${extendedFormData?.departureCarryingDistance || '0'}m`,
-      `Stationnement: ${extendedFormData?.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`,
-      `Formule: ${formule || 'standard'}`
-    ];
-    
-    // Configuration arrivée - affichage complet TOUJOURS
-    const arrivalConfig = [
-      `LIEU D'ARRIVÉE:`,
-      `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
-      `Code postal: ${extendedFormData?.arrivalPostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
-      `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? `${extendedFormData?.arrivalFloor}${extendedFormData?.arrivalFloor === 0 ? ' (RDC)' : ''}` : 'Non spécifié'}`,
-      `Ascenseur: ${extendedFormData?.arrivalHasElevator ? `Oui (${extendedFormData?.arrivalElevatorSize || 'taille non spécifiée'})` : 'Non'}`,
-      `Monte-charge: ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
-      `Distance portage: ${extendedFormData?.arrivalCarryingDistance || '0'}m`,
-      `Stationnement: ${extendedFormData?.arrivalParkingNeeded ? 'Demandé' : 'Non demandé'}`
+    // Informations client condensées
+    const clientInfo = [
+      `Nom: ${clientName || 'Non renseigné'}`,
+      `Email: ${clientEmail || 'Non renseigné'}`,
+      `Téléphone: ${clientPhone || 'Non renseigné'}`,
+      `Date: ${movingDate ? new Date(movingDate).toLocaleDateString('fr-FR') : 'Non renseignée'}`
     ];
 
-    departureConfig.forEach((info, index) => {
-      if (index === 0) {
-        pdf.setFont('helvetica', 'bold');
+    clientInfo.forEach((info, index) => {
+      if (index < 2) {
         pdf.text(info, margin + 5, yPosition + (index * 4));
-        pdf.setFont('helvetica', 'normal');
       } else {
-        pdf.text(info, margin + 5, yPosition + (index * 4));
+        pdf.text(info, pageWidth / 2 + 10, yPosition + ((index - 2) * 4));
       }
     });
 
-    arrivalConfig.forEach((info, index) => {
-      if (index === 0) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 4));
-        pdf.setFont('helvetica', 'normal');
-      } else {
-        pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 4));
-      }
-    });
+    yPosition += 15;
 
-    yPosition += 45;
-
-    // Summary section
-    pdf.setFillColor(...lightGray);
-    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
-    
-    pdf.setFontSize(12);
-    pdf.setTextColor(...primaryColor);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('RÉSUMÉ', margin + 5, yPosition + 8);
-    
-    pdf.setFontSize(10);
-    pdf.setTextColor(...secondaryColor);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 15);
-    pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 8);
-    pdf.text(`Articles: ${selectedItems.length} types`, pageWidth / 2, yPosition + 15);
-    
-    yPosition += 35;
-
-    // Inventory table header
+    // Configuration des lieux optimisée
     pdf.setFillColor(...primaryColor);
-    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 6, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
-    
-    // Table headers
-    const col1Width = 10; // Icon
-    const col2Width = 65; // Nom
-    const col3Width = 20; // Qté
-    const col4Width = 25; // Volume unit
-    const col5Width = 25; // Volume total
-    const col6Width = 45; // Options
-    
-    pdf.text('•', margin + 5, yPosition + 7);
-    pdf.text('ARTICLE', margin + col1Width + 5, yPosition + 7);
-    pdf.text('QTE', margin + col1Width + col2Width + 5, yPosition + 7);
-    pdf.text('VOL. UNIT', margin + col1Width + col2Width + col3Width + 5, yPosition + 7);
-    pdf.text('VOL. TOTAL', margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 7);
-    pdf.text('OPTIONS', margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 7);
-    
+    pdf.text('CONFIGURATION DES LIEUX', margin + 5, yPosition + 4);
     yPosition += 10;
 
-    // Table content avec détails des options
     pdf.setTextColor(...secondaryColor);
     pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    
+    // Distance si disponible
+    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
+      pdf.setFont('helvetica', 'bold');
+      const distanceDisplay = calculatedDistanceText || (calculatedDistance ? `${calculatedDistance} km` : 'Calcul en cours');
+      pdf.text(`DISTANCE: ${distanceDisplay}`, margin + 5, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      yPosition += 6;
+    }
+    
+    // Configuration condensée
+    const departureInfo = [
+      `DÉPART: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
+      `CP: ${extendedFormData?.departurePostalCode || 'N/A'} - ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
+      `Étage: ${extendedFormData?.departureFloor || 0} - Asc: ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}`
+    ];
+    
+    const arrivalInfo = [
+      `ARRIVÉE: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
+      `CP: ${extendedFormData?.arrivalPostalCode || 'N/A'} - ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
+      `Étage: ${extendedFormData?.arrivalFloor || 0} - Asc: ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}`
+    ];
+
+    departureInfo.forEach((info, index) => {
+      pdf.text(info, margin + 5, yPosition + (index * 3.5));
+    });
+
+    arrivalInfo.forEach((info, index) => {
+      pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 3.5));
+    });
+
+    yPosition += 18;
+
+    // Résumé optimisé
+    pdf.setFillColor(...lightGray);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 18, 'F');
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(...primaryColor);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('RÉSUMÉ', margin + 5, yPosition + 6);
+    
+    pdf.setFontSize(9);
+    pdf.setTextColor(...secondaryColor);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Volume total: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 12);
+    pdf.text(`Objets: ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}`, pageWidth / 2, yPosition + 6);
+    pdf.text(`Types: ${selectedItems.length}`, pageWidth / 2, yPosition + 12);
+    
+    yPosition += 25;
+
+    // Tableau d'inventaire optimisé
+    pdf.setFillColor(...primaryColor);
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    
+    // En-têtes simplifiés
+    pdf.text('ARTICLE', margin + 5, yPosition + 5);
+    pdf.text('QTE', margin + 75, yPosition + 5);
+    pdf.text('VOL.U', margin + 95, yPosition + 5);
+    pdf.text('VOL.T', margin + 120, yPosition + 5);
+    pdf.text('OPTIONS', margin + 145, yPosition + 5);
+    
+    yPosition += 8;
+
+    // Contenu du tableau optimisé
+    pdf.setTextColor(...secondaryColor);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
     
     let rowIndex = 0;
     selectedItems.forEach((item) => {
-      // Check if we need a new page
-      if (yPosition > pageHeight - 50) {
+      // Nouvelle page si nécessaire
+      if (yPosition > pageHeight - 40) {
         pdf.addPage();
         yPosition = 20;
         
-        // Re-draw table header on new page
+        // Re-dessiner l'en-tête
         pdf.setFillColor(...primaryColor);
-        pdf.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
+        pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
         pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(10);
+        pdf.setFontSize(9);
         pdf.setFont('helvetica', 'bold');
         
-        pdf.text('•', margin + 5, yPosition + 7);
-        pdf.text('ARTICLE', margin + col1Width + 5, yPosition + 7);
-        pdf.text('QTE', margin + col1Width + col2Width + 5, yPosition + 7);
-        pdf.text('VOL. UNIT', margin + col1Width + col2Width + col3Width + 5, yPosition + 7);
-        pdf.text('VOL. TOTAL', margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 7);
-        pdf.text('OPTIONS', margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 7);
+        pdf.text('ARTICLE', margin + 5, yPosition + 5);
+        pdf.text('QTE', margin + 75, yPosition + 5);
+        pdf.text('VOL.U', margin + 95, yPosition + 5);
+        pdf.text('VOL.T', margin + 120, yPosition + 5);
+        pdf.text('OPTIONS', margin + 145, yPosition + 5);
         
-        yPosition += 10;
+        yPosition += 8;
         pdf.setTextColor(...secondaryColor);
         pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
       }
 
-      // Alternating row colors
+      // Ligne alternée simplifiée
       if (rowIndex % 2 === 0) {
         pdf.setFillColor(250, 250, 250);
-        pdf.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'F');
+        pdf.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
       }
 
-      // Item total volume (sans réduction)
       const itemTotalVolume = item.volume * item.quantity;
 
-      // Item row
-      pdf.text('•', margin + 5, yPosition + 10);
-      
-      // Truncate name if too long
+      // Nom tronqué
       let displayName = item.name;
-      if (pdf.getTextWidth(displayName) > col2Width - 5) {
-        while (pdf.getTextWidth(displayName + '...') > col2Width - 5 && displayName.length > 10) {
+      if (pdf.getTextWidth(displayName) > 65) {
+        while (pdf.getTextWidth(displayName + '...') > 65 && displayName.length > 10) {
           displayName = displayName.slice(0, -1);
         }
         displayName += '...';
       }
-      pdf.text(displayName, margin + col1Width + 5, yPosition + 10);
       
-      pdf.text(item.quantity.toString(), margin + col1Width + col2Width + 8, yPosition + 10);
-      pdf.text(`${item.volume.toFixed(3)} m³`, margin + col1Width + col2Width + col3Width + 5, yPosition + 10);
-      pdf.text(`${itemTotalVolume.toFixed(3)} m³`, margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 10);
+      pdf.text(displayName, margin + 5, yPosition + 7);
+      pdf.text(item.quantity.toString(), margin + 80, yPosition + 7);
+      pdf.text(`${item.volume.toFixed(2)}`, margin + 95, yPosition + 7);
+      pdf.text(`${itemTotalVolume.toFixed(2)}`, margin + 120, yPosition + 7);
       
-      // Options détaillées
+      // Options condensées
       const isCarton = item.name.toLowerCase().includes('carton');
-      
       if (isCarton) {
         const packingCount = item.packingOptions?.filter(opt => opt).length || 0;
         const unpackingCount = item.unpackingOptions?.filter(opt => opt).length || 0;
-        
-        console.log(`🎁 Debug PDF Cartons - ${item.name}:`, {
-          packingOptions: item.packingOptions,
-          unpackingOptions: item.unpackingOptions,
-          packingCount,
-          unpackingCount
-        });
-        
         if (packingCount > 0 || unpackingCount > 0) {
           let optionText = '';
-          if (packingCount > 0) optionText += `${packingCount} Emb`;
-          if (unpackingCount > 0) optionText += `${packingCount > 0 ? ' / ' : ''}${unpackingCount} Déb`;
-          pdf.text(optionText, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
+          if (packingCount > 0) optionText += `${packingCount}E`;
+          if (unpackingCount > 0) optionText += `${packingCount > 0 ? '/' : ''}${unpackingCount}D`;
+          pdf.text(optionText, margin + 145, yPosition + 7);
         }
       } else {
         const disassemblyCount = item.disassemblyOptions?.filter(opt => opt).length || 0;
         if (disassemblyCount > 0) {
-          pdf.text(`${disassemblyCount} Dém/Rem`, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 10);
+          pdf.text(`${disassemblyCount}DR`, margin + 145, yPosition + 7);
         }
       }
 
-      yPosition += 15;
+      yPosition += 10;
       rowIndex++;
     });
 
-    // Total line
-    yPosition += 5;
+    // Total optimisé
+    yPosition += 3;
     pdf.setFillColor(...primaryColor);
-    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
+    pdf.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('TOTAL GÉNÉRAL', margin + 5, yPosition + 8);
-    pdf.text(`${totalVolume.toFixed(2)} m³`, margin + col1Width + col2Width + col3Width + col4Width + 5, yPosition + 8);
-    pdf.text(`${selectedItems.reduce((sum, item) => sum + item.quantity, 0)} objets`, margin + col1Width + col2Width + col3Width + col4Width + col5Width + 5, yPosition + 8);
+    pdf.setFontSize(9);
+    pdf.text('TOTAL', margin + 5, yPosition + 6);
+    pdf.text(`${totalVolume.toFixed(2)} m³`, margin + 120, yPosition + 6);
+    pdf.text(`${selectedItems.reduce((sum, item) => sum + item.quantity, 0)} obj`, margin + 145, yPosition + 6);
 
-    yPosition += 20;
+    yPosition += 15;
 
-    // Notes section if any
+    // Notes si présentes
     if (notes) {
-      if (yPosition > pageHeight - 50) {
+      if (yPosition > pageHeight - 35) {
         pdf.addPage();
         yPosition = 20;
       }
       
       pdf.setFillColor(...lightGray);
-      pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+      pdf.rect(margin, yPosition, pageWidth - 2 * margin, 6, 'F');
       pdf.setTextColor(...primaryColor);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('NOTES PARTICULIÈRES', margin + 5, yPosition + 6);
-      yPosition += 15;
+      pdf.setFontSize(9);
+      pdf.text('NOTES', margin + 5, yPosition + 4);
+      yPosition += 10;
       
       pdf.setTextColor(...secondaryColor);
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
+      pdf.setFontSize(8);
       const noteLines = pdf.splitTextToSize(notes, pageWidth - 2 * margin - 10);
       pdf.text(noteLines, margin + 5, yPosition);
-      yPosition += noteLines.length * 4 + 10;
+      yPosition += noteLines.length * 3 + 8;
     }
 
-    // Footer
-    if (yPosition > pageHeight - 40) {
+    // Footer optimisé
+    if (yPosition > pageHeight - 25) {
       pdf.addPage();
       yPosition = 20;
     }
     
-    yPosition = pageHeight - 30;
+    yPosition = pageHeight - 20;
     pdf.setFillColor(...secondaryColor);
-    pdf.rect(0, yPosition, pageWidth, 30, 'F');
+    pdf.rect(0, yPosition, pageWidth, 20, 'F');
     
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(9);
+    pdf.setFontSize(8);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Document généré par ${settings?.company_name || 'MatchMove'}`, margin, yPosition + 10);
-    pdf.text(`Contact: ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition + 16);
-    pdf.text(`Site web: matchmove.fr`, margin, yPosition + 22);
+    pdf.text(`${settings?.company_name || 'MatchMove'} - ${settings?.email || 'contact@matchmove.fr'}`, margin, yPosition + 7);
     
-    const validityText = 'Validité de l\'estimation: 30 jours';
+    const validityText = 'Validité: 30 jours';
     const validityWidth = pdf.getTextWidth(validityText);
-    pdf.text(validityText, pageWidth - margin - validityWidth, yPosition + 16);
+    pdf.text(validityText, pageWidth - margin - validityWidth, yPosition + 7);
+    
+    pdf.text('matchmove.fr', margin, yPosition + 13);
 
     return pdf;
   };
