@@ -11,17 +11,19 @@ import { FurnitureItem, SelectedItem } from '../types';
 import { furnitureCategories } from '../data/furnitureData';
 import ManualFurnitureDialog from './ManualFurnitureDialog';
 import { EditVolumeDialog } from './EditVolumeDialog';
+import { DimensionsInput } from './DimensionsInput';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface FurnitureSelectorProps {
-  onAddItem: (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[] }, quantity: number) => void;
+  onAddItem: (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[]; dimensions?: string }, quantity: number) => void;
   selectedItems: SelectedItem[];
   onUpdateItemOptions: (itemId: string, index: number, optionType: 'disassembly' | 'packing' | 'unpacking', value: boolean) => void;
+  onUpdateItemDimensions: (itemId: string, dimensions: string) => void;
 }
 
-const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: FurnitureSelectorProps) => {
+const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions, onUpdateItemDimensions }: FurnitureSelectorProps) => {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [manualFurniture, setManualFurniture] = useState<FurnitureItem[]>([]);
@@ -336,7 +338,7 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
               )}
             </div>
             <p className="text-sm text-gray-600 mb-1">{item.description}</p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium text-blue-600">
                 {customVolumes[item.id] || item.volume} m³ {quantity > 1 && `(${((customVolumes[item.id] || item.volume) * quantity).toFixed(2)} m³ total)`}
               </p>
@@ -361,6 +363,15 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}
+            </div>
+            {/* Composant pour gérer les dimensions */}
+            <div className="mt-2">
+              <DimensionsInput
+                itemId={item.id}
+                itemName={item.name}
+                currentDimensions={selectedItem?.dimensions}
+                onDimensionsChange={onUpdateItemDimensions}
+              />
             </div>
           </div>
         </div>

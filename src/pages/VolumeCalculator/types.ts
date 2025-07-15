@@ -6,6 +6,7 @@ export interface FurnitureItem {
   description: string;
   icon: string;
   category: string;
+  dimensions?: string; // Format: "120 × 60 × 75" (Longueur × Profondeur × Hauteur en cm)
 }
 
 export interface FurnitureSubcategory {
@@ -26,4 +27,5 @@ export interface SelectedItem extends FurnitureItem {
   disassemblyOptions?: boolean[]; // Pour chaque quantité, true si démontage/remontage
   packingOptions?: boolean[]; // Pour chaque quantité, true si emballage (pour cartons)
   unpackingOptions?: boolean[]; // Pour chaque quantité, true si déballage (pour cartons)
+  dimensions?: string; // Format: "120 × 60 × 75" (Longueur × Profondeur × Hauteur en cm)
 }

@@ -17,6 +17,7 @@ import { furnitureCategories } from './data/furnitureData';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { optimizePDFGeneration, addOptionsLegend } from './utils/pdfOptimizer';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Calendar } from 'lucide-react';
@@ -101,7 +102,7 @@ const VolumeCalculator = () => {
     return { type: 'Semi-remorque', size: '40m³+', description: 'Déménagement important' };
   };
 
-  const handleAddItem = (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[] }, quantity: number) => {
+  const handleAddItem = (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[]; dimensions?: string }, quantity: number) => {
     const existingIndex = selectedItems.findIndex(selected => selected.id === item.id);
     
     if (existingIndex >= 0) {
@@ -140,6 +141,14 @@ const VolumeCalculator = () => {
       }
       return item;
     }));
+  };
+
+  const handleUpdateItemDimensions = (itemId: string, dimensions: string) => {
+    setSelectedItems(prevItems => 
+      prevItems.map(item => 
+        item.id === itemId ? { ...item, dimensions } : item
+      )
+    );
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -196,6 +205,14 @@ const VolumeCalculator = () => {
       const totalVolume = calculateTotalVolume();
       const totalWeight = calculateTotalWeight();
 
+      // Préparer les dimensions pour la sauvegarde
+      const itemDimensions: { [key: string]: string } = {};
+      selectedItems.forEach(item => {
+        if (item.dimensions) {
+          itemDimensions[item.id] = item.dimensions;
+        }
+      });
+
       const inventoryData = {
         client_name: clientName,
         client_reference: clientReference,
@@ -223,6 +240,7 @@ const VolumeCalculator = () => {
         total_volume: totalVolume,
         total_weight: totalWeight,
         selected_items: selectedItems as any,
+        item_dimensions: itemDimensions, // Nouvelle colonne pour les dimensions
         created_by: user.id,
         // Ajout des champs de date
         moving_date: movingDate || null,
@@ -673,12 +691,12 @@ Validité de l'estimation : 30 jours
     
     yPosition += 10;
 
-    // Table content avec détails des options
-    pdf.setTextColor(...secondaryColor);
-    pdf.setFont('helvetica', 'normal');
+    // Utiliser la génération optimisée du PDF avec dimensions
+    yPosition = optimizePDFGeneration(pdf, selectedItems, margin, yPosition, primaryColor, secondaryColor);
     
-    let rowIndex = 0;
-    selectedItems.forEach((item) => {
+    // Ajouter la légende
+    yPosition = addOptionsLegend(pdf, margin, yPosition, secondaryColor);
+    // Ancien code de tableau supprimé - remplacé par optimizePDFGeneration
       // Check if we need a new page
       if (yPosition > pageHeight - 50) {
         pdf.addPage();
@@ -953,6 +971,7 @@ Validité de l'estimation : 30 jours
                   onAddItem={handleAddItem}
                   selectedItems={selectedItems}
                   onUpdateItemOptions={handleUpdateItemOptions}
+                  onUpdateItemDimensions={handleUpdateItemDimensions}
                 />
               </CardContent>
             </Card>

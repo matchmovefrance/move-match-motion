@@ -423,6 +423,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          dimensions: string | null
           icon: string | null
           id: string
           name: string
@@ -434,6 +435,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          dimensions?: string | null
           icon?: string | null
           id?: string
           name: string
@@ -445,6 +447,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          dimensions?: string | null
           icon?: string | null
           id?: string
           name?: string
@@ -522,6 +525,7 @@ export type Database = {
           flexible_dates: boolean | null
           formule: string | null
           id: string
+          item_dimensions: Json | null
           moving_date: string | null
           notes: string | null
           selected_items: Json
@@ -562,6 +566,7 @@ export type Database = {
           flexible_dates?: boolean | null
           formule?: string | null
           id?: string
+          item_dimensions?: Json | null
           moving_date?: string | null
           notes?: string | null
           selected_items: Json
@@ -602,6 +607,7 @@ export type Database = {
           flexible_dates?: boolean | null
           formule?: string | null
           id?: string
+          item_dimensions?: Json | null
           moving_date?: string | null
           notes?: string | null
           selected_items?: Json
