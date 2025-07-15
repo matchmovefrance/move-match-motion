@@ -566,30 +566,78 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                 </div>
               )}
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 pt-4 border-t mt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {currentPage} sur {totalPages} ({filteredInventories.length} résultats)
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+              {/* Pagination - Toujours visible */}
+              <div className="flex justify-between items-center pt-4 border-t mt-4">
+                <div className="text-sm text-muted-foreground">
+                  {filteredInventories.length} résultat{filteredInventories.length > 1 ? 's' : ''} au total
                 </div>
-              )}
+                
+                {totalPages > 1 ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                        // Afficher toutes les pages si <= 7, sinon version tronquée
+                        if (totalPages <= 7) {
+                          return (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCurrentPage(page)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {page}
+                            </Button>
+                          );
+                        } else {
+                          // Logique pour pagination avec ellipses
+                          if (page === 1 || page === totalPages || 
+                              (page >= currentPage - 1 && page <= currentPage + 1)) {
+                            return (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(page)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {page}
+                              </Button>
+                            );
+                          } else if (page === 2 && currentPage > 4) {
+                            return <span key={page} className="px-2">...</span>;
+                          } else if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                            return <span key={page} className="px-2">...</span>;
+                          }
+                          return null;
+                        }
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Page 1 sur 1
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
