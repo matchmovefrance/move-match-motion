@@ -71,7 +71,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [inventoryToDelete, setInventoryToDelete] = useState<Inventory | null>(null);
   const { toast } = useToast();
@@ -382,7 +382,8 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col animate-fade-in"
+                     style={{ transition: 'all 0.3s ease-in-out' }}>
         <DialogHeader>
           <DialogTitle>Historique des inventaires</DialogTitle>
           <DialogDescription>
@@ -482,16 +483,18 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                    <SelectTrigger className="w-20">
                      <SelectValue />
                    </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="50">50</SelectItem>
-                     <SelectItem value="100">100</SelectItem>
-                   </SelectContent>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
                  </Select>
                </div>
              </div>
 
-            {/* Résultats */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Résultats avec scroll fluide */}
+            <div className="flex-1 overflow-y-auto max-h-[calc(100vh-350px)] pr-2" style={{ scrollBehavior: 'smooth' }}>
               {filteredInventories.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {searchTerm || dateFrom || dateTo ? 'Aucun inventaire trouvé pour cette recherche' : 'Aucun inventaire trouvé'}
