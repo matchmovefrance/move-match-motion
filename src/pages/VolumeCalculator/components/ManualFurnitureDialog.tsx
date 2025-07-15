@@ -20,7 +20,10 @@ const ManualFurnitureDialog = ({ open, onOpenChange, onAddFurniture }: ManualFur
     category: 'Divers',
     volume: '',
     description: '',
-    quantity: 1
+    quantity: 1,
+    length_cm: '',
+    width_cm: '',
+    height_cm: ''
   });
 
   const categories = [
@@ -45,7 +48,12 @@ const ManualFurnitureDialog = ({ open, onOpenChange, onAddFurniture }: ManualFur
       category: formData.category,
       volume: parseFloat(formData.volume),
       description: formData.description.trim() || 'Meuble ajouté manuellement',
-      icon: '📦'
+      icon: '📦',
+      dimensions: {
+        length_cm: formData.length_cm ? parseInt(formData.length_cm) : undefined,
+        width_cm: formData.width_cm ? parseInt(formData.width_cm) : undefined,
+        height_cm: formData.height_cm ? parseInt(formData.height_cm) : undefined
+      }
     };
 
     onAddFurniture(furniture, formData.quantity);
@@ -56,7 +64,10 @@ const ManualFurnitureDialog = ({ open, onOpenChange, onAddFurniture }: ManualFur
       category: 'Divers',
       volume: '',
       description: '',
-      quantity: 1
+      quantity: 1,
+      length_cm: '',
+      width_cm: '',
+      height_cm: ''
     });
     
     onOpenChange(false);
@@ -138,6 +149,48 @@ const ManualFurnitureDialog = ({ open, onOpenChange, onAddFurniture }: ManualFur
               placeholder="Détails supplémentaires..."
               rows={2}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Dimensions (optionnel)</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label htmlFor="length_cm" className="text-xs text-gray-500">Longueur (cm)</Label>
+                <Input
+                  id="length_cm"
+                  type="number"
+                  min="1"
+                  value={formData.length_cm}
+                  onChange={(e) => updateFormData('length_cm', e.target.value)}
+                  placeholder="L"
+                  className="text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="width_cm" className="text-xs text-gray-500">Largeur (cm)</Label>
+                <Input
+                  id="width_cm"
+                  type="number"
+                  min="1"
+                  value={formData.width_cm}
+                  onChange={(e) => updateFormData('width_cm', e.target.value)}
+                  placeholder="l"
+                  className="text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="height_cm" className="text-xs text-gray-500">Hauteur (cm)</Label>
+                <Input
+                  id="height_cm"
+                  type="number"
+                  min="1"
+                  value={formData.height_cm}
+                  onChange={(e) => updateFormData('height_cm', e.target.value)}
+                  placeholder="H"
+                  className="text-sm"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">

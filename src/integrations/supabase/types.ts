@@ -424,11 +424,14 @@ export type Database = {
           created_by: string | null
           description: string | null
           dimensions: string | null
+          height_cm: number | null
           icon: string | null
           id: string
+          length_cm: number | null
           name: string
           updated_at: string
           volume: number
+          width_cm: number | null
         }
         Insert: {
           category: string
@@ -436,11 +439,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           dimensions?: string | null
+          height_cm?: number | null
           icon?: string | null
           id?: string
+          length_cm?: number | null
           name: string
           updated_at?: string
           volume: number
+          width_cm?: number | null
         }
         Update: {
           category?: string
@@ -448,11 +454,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           dimensions?: string | null
+          height_cm?: number | null
           icon?: string | null
           id?: string
+          length_cm?: number | null
           name?: string
           updated_at?: string
           volume?: number
+          width_cm?: number | null
         }
         Relationships: []
       }

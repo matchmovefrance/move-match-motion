@@ -6,6 +6,11 @@ export interface FurnitureItem {
   description: string;
   icon: string;
   category: string;
+  dimensions?: {
+    length_cm?: number;
+    width_cm?: number;
+    height_cm?: number;
+  };
 }
 
 export interface FurnitureSubcategory {

@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Plus, Minus, PlusCircle, Search, Edit, Trash2 } from 'lucide-react';
+import { Plus, Minus, PlusCircle, Search, Edit, Trash2, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { FurnitureItem, SelectedItem } from '../types';
 import { furnitureCategories } from '../data/furnitureData';
 import ManualFurnitureDialog from './ManualFurnitureDialog';
 import { EditVolumeDialog } from './EditVolumeDialog';
+import { EditDimensionsDialog } from './EditDimensionsDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -31,6 +32,7 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
   const [cartonOptions, setCartonOptions] = useState<{[key: string]: {packingCount: number, unpackingCount: number}}>({});
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [furnitureToDelete, setFurnitureToDelete] = useState<FurnitureItem | null>(null);
+  const [editingDimensions, setEditingDimensions] = useState<FurnitureItem | null>(null);
   const { toast } = useToast();
 
   // Charger les volumes personnalisés et meubles personnalisés depuis la base de données
@@ -65,7 +67,12 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
           category: item.category,
           volume: item.volume,
           description: item.description || '',
-          icon: item.icon || '📦'
+          icon: item.icon || '📦',
+          dimensions: {
+            length_cm: item.length_cm || undefined,
+            width_cm: item.width_cm || undefined,
+            height_cm: item.height_cm || undefined
+          }
         }));
         
         setManualFurniture(customItems);
@@ -185,6 +192,9 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
           volume: furniture.volume,
           description: furniture.description,
           icon: furniture.icon,
+          length_cm: furniture.dimensions?.length_cm || null,
+          width_cm: furniture.dimensions?.width_cm || null,
+          height_cm: furniture.dimensions?.height_cm || null,
           created_by: (await supabase.auth.getUser()).data.user?.id
         })
         .select()
@@ -259,6 +269,12 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
       setShowDeleteDialog(false);
       setFurnitureToDelete(null);
     }
+  };
+
+  const handleDimensionsUpdated = (itemId: string, newDimensions: { length_cm?: number; width_cm?: number; height_cm?: number }) => {
+    setManualFurniture(prev => prev.map(item => 
+      item.id === itemId ? { ...item, dimensions: newDimensions } : item
+    ));
   };
 
   const handleCartonOptionsChange = (itemId: string, packingCount: number, unpackingCount: number) => {
@@ -336,6 +352,14 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
               )}
             </div>
             <p className="text-sm text-gray-600 mb-1">{item.description}</p>
+            
+            {/* Affichage des dimensions pour les meubles personnalisés */}
+            {item.dimensions && (item.dimensions.length_cm || item.dimensions.width_cm || item.dimensions.height_cm) && (
+              <div className="text-xs text-gray-500 mb-1 bg-gray-50 px-2 py-1 rounded">
+                Dimensions: {item.dimensions.length_cm ? `${item.dimensions.length_cm}cm` : '-'} × {item.dimensions.width_cm ? `${item.dimensions.width_cm}cm` : '-'} × {item.dimensions.height_cm ? `${item.dimensions.height_cm}cm` : '-'}
+              </div>
+            )}
+            
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-blue-600">
                 {customVolumes[item.id] || item.volume} m³ {quantity > 1 && `(${((customVolumes[item.id] || item.volume) * quantity).toFixed(2)} m³ total)`}
@@ -349,17 +373,28 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
               >
                 <Edit className="h-3 w-3" />
               </Button>
-              {/* Bouton de suppression pour les meubles personnalisés */}
+              {/* Boutons pour les meubles personnalisés */}
               {manualFurniture.some(furniture => furniture.id === item.id) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteClick(item)}
-                  className="h-6 w-6 p-0 text-gray-500 hover:text-red-600"
-                  title="Supprimer le meuble personnalisé"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingDimensions(item)}
+                    className="h-6 w-6 p-0 text-gray-500 hover:text-green-600"
+                    title="Modifier les dimensions"
+                  >
+                    <Ruler className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteClick(item)}
+                    className="h-6 w-6 p-0 text-gray-500 hover:text-red-600"
+                    title="Supprimer le meuble personnalisé"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -497,48 +532,99 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
         </Button>
       </div>
 
-      <Tabs defaultValue={furnitureCategories[0]?.id} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 h-auto gap-1 p-1">
-          {furnitureCategories.map((category) => (
-            <TabsTrigger 
-              key={category.id} 
-              value={category.id}
-              className="flex items-center gap-2 p-2 text-xs"
-            >
-              <span className="text-lg">{category.icon}</span>
-              <span className="hidden sm:inline">{category.name}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {furnitureCategories.map((category) => (
-          <TabsContent key={category.id} value={category.id} className="mt-4">
-            <Accordion type="multiple" defaultValue={category.subcategories.map(sub => sub.id)}>
-              {category.subcategories.map((subcategory) => (
-                <AccordionItem key={subcategory.id} value={subcategory.id}>
-                  <AccordionTrigger className="text-left font-medium">
-                    {subcategory.name} ({subcategory.items.length} objets)
-                  </AccordionTrigger>
-                   <AccordionContent>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                       {filterItems(subcategory.items).map(renderFurnitureItem)}
-                     </div>
-                   </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </TabsContent>
-        ))}
-      </Tabs>
-
-      {/* Section pour les meubles manuels */}
-      {manualFurniture.length > 0 && (
-        <div className="mt-6 p-4 bg-green-50 rounded-lg">
-          <h3 className="font-medium text-green-800 mb-3">Meubles personnalisés</h3>
+      {/* Résultats de recherche globale */}
+      {searchTerm && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-bold text-gray-800 mb-3 text-lg">
+            Résultats de recherche pour "{searchTerm}"
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {manualFurniture.map(renderFurnitureItem)}
+            {/* Meubles des catégories */}
+            {furnitureCategories
+              .flatMap(cat => cat.subcategories)
+              .flatMap(subcat => subcat.items)
+              .filter(item => 
+                item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.description.toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map(renderFurnitureItem)}
+            
+            {/* Meubles personnalisés */}
+            {manualFurniture
+              .filter(item => 
+                item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.description.toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map(renderFurnitureItem)}
           </div>
+          
+          {/* Message si aucun résultat */}
+          {furnitureCategories
+            .flatMap(cat => cat.subcategories)
+            .flatMap(subcat => subcat.items)
+            .filter(item => 
+              item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              item.description.toLowerCase().includes(searchTerm.toLowerCase())
+            ).length === 0 && 
+            manualFurniture
+              .filter(item => 
+                item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.description.toLowerCase().includes(searchTerm.toLowerCase())
+              ).length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                Aucun meuble trouvé pour "{searchTerm}"
+              </div>
+            )}
         </div>
+      )}
+
+      {/* Catégories normales - cachées si recherche active */}
+      {!searchTerm && (
+        <>
+          <Tabs defaultValue={furnitureCategories[0]?.id} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 h-auto gap-2 p-2 bg-gray-100">
+              {furnitureCategories.map((category) => (
+                <TabsTrigger 
+                  key={category.id} 
+                  value={category.id}
+                  className="flex items-center gap-3 p-4 text-sm font-bold bg-white border-2 border-gray-200 rounded-lg hover:border-blue-300 data-[state=active]:border-blue-500 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all"
+                >
+                  <span className="text-2xl">{category.icon}</span>
+                  <span className="hidden sm:inline text-base font-bold">{category.name}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {furnitureCategories.map((category) => (
+              <TabsContent key={category.id} value={category.id} className="mt-4">
+                <Accordion type="multiple" defaultValue={category.subcategories.map(sub => sub.id)}>
+                  {category.subcategories.map((subcategory) => (
+                    <AccordionItem key={subcategory.id} value={subcategory.id}>
+                      <AccordionTrigger className="text-left font-medium">
+                        {subcategory.name} ({subcategory.items.length} objets)
+                      </AccordionTrigger>
+                       <AccordionContent>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                           {filterItems(subcategory.items).map(renderFurnitureItem)}
+                         </div>
+                       </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </TabsContent>
+            ))}
+          </Tabs>
+
+          {/* Section pour les meubles manuels */}
+          {manualFurniture.length > 0 && (
+            <div className="mt-6 p-4 bg-green-50 rounded-lg">
+              <h3 className="font-medium text-green-800 mb-3">Meubles personnalisés</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {manualFurniture.map(renderFurnitureItem)}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <ManualFurnitureDialog
@@ -567,6 +653,13 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
         description="Êtes-vous sûr de vouloir supprimer ce meuble personnalisé ?"
         confirmText="Supprimer"
         cancelText="Annuler"
+      />
+
+      <EditDimensionsDialog
+        item={editingDimensions}
+        isOpen={editingDimensions !== null}
+        onClose={() => setEditingDimensions(null)}
+        onDimensionsUpdated={handleDimensionsUpdated}
       />
     </div>
   );
