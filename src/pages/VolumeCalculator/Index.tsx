@@ -547,12 +547,12 @@ Validité de l'estimation : 30 jours
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     
-    // Informations client condensées
+    // Informations client - format exact demandé
     const clientInfo = [
       `Nom: ${clientName || 'Non renseigné'}`,
-      `Email: ${clientEmail || 'Non renseigné'}`,
+      `Date déménagement: ${movingDate ? new Date(movingDate).toLocaleDateString('fr-FR') : 'Non renseignée'}`,
       `Téléphone: ${clientPhone || 'Non renseigné'}`,
-      `Date: ${movingDate ? new Date(movingDate).toLocaleDateString('fr-FR') : 'Non renseignée'}`
+      `Email: ${clientEmail || 'Non renseigné'}`
     ];
 
     clientInfo.forEach((info, index) => {
@@ -582,33 +582,58 @@ Validité de l'estimation : 30 jours
     if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
       pdf.setFont('helvetica', 'bold');
       const distanceDisplay = calculatedDistanceText || (calculatedDistance ? `${calculatedDistance} km` : 'Calcul en cours');
-      pdf.text(`DISTANCE: ${distanceDisplay}`, margin + 5, yPosition);
+      pdf.text(`DISTANCE ESTIMÉE: ${distanceDisplay}`, margin + 5, yPosition);
       pdf.setFont('helvetica', 'normal');
       yPosition += 6;
     }
     
-    // Configuration condensée
+    // Configuration détaillée - format exact demandé
     const departureInfo = [
-      `DÉPART: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
-      `CP: ${extendedFormData?.departurePostalCode || 'N/A'} - ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
-      `Étage: ${extendedFormData?.departureFloor || 0} - Asc: ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}`
+      `LIEU DE DÉPART:`,
+      `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
+      `Code postal: ${extendedFormData?.departurePostalCode || 'Non spécifié'}`,
+      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
+      `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? extendedFormData?.departureFloor : 'Non spécifié'}`,
+      `Ascenseur: ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}`,
+      `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
+      `Distance portage: ${extendedFormData?.departureCarryingDistance || '0'}m`,
+      `Stationnement: ${extendedFormData?.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`,
+      `Formule: ${formule || 'standard'}`
     ];
     
     const arrivalInfo = [
-      `ARRIVÉE: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
-      `CP: ${extendedFormData?.arrivalPostalCode || 'N/A'} - ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
-      `Étage: ${extendedFormData?.arrivalFloor || 0} - Asc: ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}`
+      `LIEU D'ARRIVÉE:`,
+      `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
+      `Code postal: ${extendedFormData?.arrivalPostalCode || 'Non spécifié'}`,
+      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
+      `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? extendedFormData?.arrivalFloor : 'Non spécifié'}`,
+      `Ascenseur: ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}`,
+      `Monte-charge: ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
+      `Distance portage: ${extendedFormData?.arrivalCarryingDistance || '0'}m`,
+      `Stationnement: ${extendedFormData?.arrivalParkingNeeded ? 'Demandé' : 'Non demandé'}`
     ];
 
     departureInfo.forEach((info, index) => {
-      pdf.text(info, margin + 5, yPosition + (index * 3.5));
+      if (index === 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(info, margin + 5, yPosition + (index * 3.5));
+        pdf.setFont('helvetica', 'normal');
+      } else {
+        pdf.text(info, margin + 5, yPosition + (index * 3.5));
+      }
     });
 
     arrivalInfo.forEach((info, index) => {
-      pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 3.5));
+      if (index === 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 3.5));
+        pdf.setFont('helvetica', 'normal');
+      } else {
+        pdf.text(info, pageWidth / 2 + 10, yPosition + (index * 3.5));
+      }
     });
 
-    yPosition += 18;
+    yPosition += 38; // Ajusté pour accommoder plus de lignes d'informations
 
     // Résumé optimisé
     pdf.setFillColor(...lightGray);
