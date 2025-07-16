@@ -32,11 +32,12 @@ export const SaveInventoryDialog = ({
           <Button variant="outline" onClick={onCreateNew}>
             Créer un nouvel inventaire
           </Button>
-          {inventoryReference && (
-            <Button onClick={onUpdateExisting}>
-              Mettre à jour l'inventaire existant
-            </Button>
-          )}
+          <Button onClick={onUpdateExisting}>
+            {inventoryReference 
+              ? "Mettre à jour l'inventaire existant"
+              : "Sauvegarder et mettre à jour"
+            }
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
