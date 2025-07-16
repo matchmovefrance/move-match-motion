@@ -1,6 +1,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
+import { SessionProvider } from './contexts/SessionContext';
 import Header from './components/Header';
 import { Toaster } from '@/components/ui/toaster';
 import { Routes, Route } from 'react-router-dom';
@@ -20,7 +21,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
+        <SessionProvider>
+          <div className="min-h-screen bg-gray-50">
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/public-client/:token" element={<PublicClientForm />} />
@@ -80,7 +82,8 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Toaster />
-        </div>
+          </div>
+        </SessionProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

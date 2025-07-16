@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSession } from '@/contexts/SessionContext';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
@@ -17,15 +18,8 @@ interface MatchFiltersProps {
 }
 
 const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
+  const { getSessionData, setSessionData, isSessionReady } = useSession();
   const [filters, setFilters] = useState<MatchFilterOptions>(() => {
-    const saved = localStorage.getItem('matchFilters');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        // Fallback if JSON is corrupted
-      }
-    }
     return {
       pending: true,
       accepted: false,
@@ -34,10 +28,22 @@ const MatchFilters = ({ onFiltersChange }: MatchFiltersProps) => {
     };
   });
 
+  // Load filters from session storage on mount
   useEffect(() => {
-    localStorage.setItem('matchFilters', JSON.stringify(filters));
+    if (!isSessionReady) return;
+    
+    const saved = getSessionData<MatchFilterOptions>('matchFilters');
+    if (saved) {
+      setFilters(saved);
+    }
+  }, [isSessionReady, getSessionData]);
+
+  useEffect(() => {
+    if (isSessionReady) {
+      setSessionData('matchFilters', filters);
+    }
     onFiltersChange(filters);
-  }, [filters, onFiltersChange]);
+  }, [filters, onFiltersChange, isSessionReady, setSessionData]);
 
   const handleFilterChange = (filterKey: keyof MatchFilterOptions, checked: boolean) => {
     setFilters(prev => {

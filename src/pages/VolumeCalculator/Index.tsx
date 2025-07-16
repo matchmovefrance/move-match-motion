@@ -22,12 +22,14 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSession } from '@/contexts/SessionContext';
 import { useToast } from '@/hooks/use-toast';
 import { pricingEngine } from '@/pages/PricingTool/components/PricingEngine';
 import jsPDF from 'jspdf';
 
 const VolumeCalculator = () => {
   const { user } = useAuth();
+  const { setSessionData, getSessionData, isSessionReady } = useSession();
   const { toast } = useToast();
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [clientName, setClientName] = useState('');
@@ -871,7 +873,7 @@ Validité de l'estimation : 30 jours
       quantity: item.quantity
     }));
     
-    localStorage.setItem('volumeCalculatorData', JSON.stringify({
+    setSessionData('volumeCalculatorData', {
       furniture: furnitureData,
       clientName,
       clientReference,
@@ -880,7 +882,7 @@ Validité de l'estimation : 30 jours
       clientEmail,
       notes,
       totalVolume: calculateTotalVolume()
-    }));
+    });
     
     window.location.href = '/truck-optimizer';
   };

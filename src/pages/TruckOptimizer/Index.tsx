@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Package, Truck, RotateCcw, Save, Share } from 'lucide-react';
+import { useSession } from '@/contexts/SessionContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,7 @@ import OptimizationControls from './components/OptimizationControls';
 import { TruckModel, FurnitureItem, PlacedItem } from './types';
 
 const TruckOptimizer = () => {
+  const { getSessionData, setSessionData, clearSessionData, isSessionReady } = useSession();
   const [selectedTruck, setSelectedTruck] = useState<TruckModel | null>(null);
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [selectedFurniture, setSelectedFurniture] = useState<FurnitureItem[]>([]);
@@ -18,9 +20,14 @@ const TruckOptimizer = () => {
 
   // Import data from volume calculator on component mount
   useEffect(() => {
-    const importedData = localStorage.getItem('volumeCalculatorData');
-    if (importedData) {
-      const data = JSON.parse(importedData);
+    if (!isSessionReady) return;
+    
+    const data = getSessionData<{
+      furniture: Array<{id: string, name: string, category: string, volume: number, quantity: number}>;
+      clientName: string;
+      clientReference: string;
+    }>('volumeCalculatorData');
+    if (data) {
       console.log('📦 Données importées du calculateur de volume:', data);
       
       // Convert volume calculator data to truck optimizer format
@@ -48,9 +55,9 @@ const TruckOptimizer = () => {
       });
       
       // Clear imported data after use
-      localStorage.removeItem('volumeCalculatorData');
+      clearSessionData('volumeCalculatorData');
     }
-  }, []);
+  }, [isSessionReady, getSessionData, clearSessionData]);
 
   // Helper functions for data conversion
   const estimateDimensionsFromVolume = (volume: number) => {
@@ -137,10 +144,10 @@ const TruckOptimizer = () => {
       }
     };
 
-    // Save to localStorage
-    const existingPlans = JSON.parse(localStorage.getItem('savedTruckPlans') || '[]');
+    // Save to session storage
+    const existingPlans = getSessionData('savedTruckPlans', []);
     existingPlans.push(planData);
-    localStorage.setItem('savedTruckPlans', JSON.stringify(existingPlans));
+    setSessionData('savedTruckPlans', existingPlans);
 
     // Generate and download plan report
     const reportContent = generatePlanReport(planData);
