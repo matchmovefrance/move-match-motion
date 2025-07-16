@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { SelectedItem } from '../types';
 
 interface VolumeDisplayProps {
@@ -18,6 +20,10 @@ interface VolumeDisplayProps {
   distanceError?: string | null;
   departurePostalCode?: string;
   arrivalPostalCode?: string;
+  safetyMargin10: boolean;
+  safetyMargin15: boolean;
+  onSafetyMargin10Change: (checked: boolean) => void;
+  onSafetyMargin15Change: (checked: boolean) => void;
 }
 
 const VolumeDisplay = ({ 
@@ -30,7 +36,11 @@ const VolumeDisplay = ({
   isCalculatingDistance,
   distanceError,
   departurePostalCode,
-  arrivalPostalCode
+  arrivalPostalCode,
+  safetyMargin10,
+  safetyMargin15,
+  onSafetyMargin10Change,
+  onSafetyMargin15Change
 }: VolumeDisplayProps) => {
   const getVolumeCategory = (volume: number) => {
     if (volume < 10) return { text: "Petit déménagement", color: "bg-green-500", description: "Camionnette ou petit camion" };
@@ -40,6 +50,11 @@ const VolumeDisplay = ({
   };
 
   const volumeCategory = getVolumeCategory(totalVolume);
+  
+  // Calcul du volume avec marge de sécurité
+  let volumeWithMargin = totalVolume;
+  if (safetyMargin10) volumeWithMargin += totalVolume * 0.1;
+  if (safetyMargin15) volumeWithMargin += totalVolume * 0.15;
 
   return (
     <div className="space-y-4">
@@ -53,9 +68,17 @@ const VolumeDisplay = ({
         </CardHeader>
         <CardContent className="text-center">
           <div className="text-5xl font-bold text-blue-600 mb-2">
-            {totalVolume.toFixed(1)}
+            {volumeWithMargin.toFixed(1)}
             <span className="text-2xl ml-1">m³</span>
           </div>
+          
+          {(safetyMargin10 || safetyMargin15) && (
+            <div className="text-sm text-gray-600 mb-2">
+              Volume de base: {totalVolume.toFixed(1)} m³
+              {safetyMargin10 && <span className="block">+ 10% sécurité: {(totalVolume * 0.1).toFixed(1)} m³</span>}
+              {safetyMargin15 && <span className="block">+ 15% sécurité: {(totalVolume * 0.15).toFixed(1)} m³</span>}
+            </div>
+          )}
           
           <Badge className={`${volumeCategory.color} text-white mb-2`}>
             {volumeCategory.text}
@@ -64,6 +87,32 @@ const VolumeDisplay = ({
           <p className="text-sm text-gray-600">
             {volumeCategory.description}
           </p>
+          
+          {/* Cases à cocher pour marges de sécurité */}
+          {totalVolume > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-center space-x-2">
+                <Checkbox 
+                  id="margin10" 
+                  checked={safetyMargin10}
+                  onCheckedChange={onSafetyMargin10Change}
+                />
+                <Label htmlFor="margin10" className="text-sm">
+                  Ajouter 10% de marge de sécurité
+                </Label>
+              </div>
+              <div className="flex items-center justify-center space-x-2">
+                <Checkbox 
+                  id="margin15" 
+                  checked={safetyMargin15}
+                  onCheckedChange={onSafetyMargin15Change}
+                />
+                <Label htmlFor="margin15" className="text-sm">
+                  Ajouter 15% de marge de sécurité
+                </Label>
+              </div>
+            </div>
+          )}
           
           {totalVolume === 0 && (
             <p className="text-sm text-gray-400 mt-2">

@@ -57,6 +57,10 @@ const VolumeCalculator = () => {
   
   // Formule
   const [formule, setFormule] = useState('standard');
+  
+  // Marges de sécurité
+  const [safetyMargin10, setSafetyMargin10] = useState(false);
+  const [safetyMargin15, setSafetyMargin15] = useState(false);
 
   // Hook pour calculer la distance
   const { distance, distanceText, isLoading: isCalculatingDistance, error: distanceError } = useGoogleMapsDistance({
@@ -813,6 +817,11 @@ Validité de l'estimation : 30 jours
       rowIndex++;
     });
 
+    // Calcul du volume avec marge de sécurité
+    let volumeWithMargin = totalVolume;
+    if (safetyMargin10) volumeWithMargin += totalVolume * 0.1;
+    if (safetyMargin15) volumeWithMargin += totalVolume * 0.15;
+
     // Total optimisé
     yPosition += 3;
     pdf.setFillColor(...primaryColor);
@@ -821,8 +830,26 @@ Validité de l'estimation : 30 jours
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(9);
     pdf.text('TOTAL', margin + 5, yPosition + 6);
-    pdf.text(`${totalVolume.toFixed(2)} m³`, margin + 120, yPosition + 6);
+    pdf.text(`${volumeWithMargin.toFixed(2)} m³`, margin + 120, yPosition + 6);
     pdf.text(`${selectedItems.reduce((sum, item) => sum + item.quantity, 0)} obj`, margin + 145, yPosition + 6);
+
+    // Affichage des détails de marge si applicable
+    if (safetyMargin10 || safetyMargin15) {
+      yPosition += 12;
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(margin, yPosition, pageWidth - 2 * margin, 8, 'F');
+      pdf.setTextColor(...secondaryColor);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(`Volume de base: ${totalVolume.toFixed(2)} m³`, margin + 5, yPosition + 5);
+      if (safetyMargin10) {
+        pdf.text(`+ 10% sécurité: ${(totalVolume * 0.1).toFixed(2)} m³`, margin + 80, yPosition + 5);
+      }
+      if (safetyMargin15) {
+        pdf.text(`+ 15% sécurité: ${(totalVolume * 0.15).toFixed(2)} m³`, margin + 140, yPosition + 5);
+      }
+      yPosition += 5;
+    }
 
     yPosition += 15;
 
@@ -1026,6 +1053,10 @@ Validité de l'estimation : 30 jours
                     distanceError={distanceError}
                     departurePostalCode={extendedFormData.departurePostalCode}
                     arrivalPostalCode={extendedFormData.arrivalPostalCode}
+                    safetyMargin10={safetyMargin10}
+                    safetyMargin15={safetyMargin15}
+                    onSafetyMargin10Change={setSafetyMargin10}
+                    onSafetyMargin15Change={setSafetyMargin15}
                   />
 
 
