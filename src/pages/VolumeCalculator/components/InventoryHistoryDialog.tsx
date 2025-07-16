@@ -101,16 +101,23 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
       const inventoriesData = inventoriesResult.data || [];
       const profilesData = profilesResult.data || [];
 
+      console.log('Inventories:', inventoriesData);
+      console.log('Profiles:', profilesData);
+
       // Créer un map email par ID
       const emailMap: Record<string, string> = {};
       profilesData.forEach(profile => {
         emailMap[profile.id] = profile.email;
       });
 
+      console.log('Email map:', emailMap);
+
       // Enrichir chaque inventaire avec le nom du créateur (partie avant @)
       const enrichedInventories = inventoriesData.map(inventory => {
         const creatorEmail = emailMap[inventory.created_by];
         const creatorName = creatorEmail ? creatorEmail.split('@')[0] : 'Inconnu';
+        
+        console.log(`Inventory ${inventory.id}: created_by=${inventory.created_by}, email=${creatorEmail}, name=${creatorName}`);
         
         return {
           ...inventory,
