@@ -83,48 +83,59 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
     
     setIsLoading(true);
     try {
+      // Première requête : récupérer les inventaires
+      console.log('🔍 Chargement des inventaires...');
       const { data: inventoriesData, error } = await supabase
         .from('inventories')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      console.log('📦 Inventaires récupérés:', inventoriesData?.length);
 
-      // Récupérer les emails des créateurs
-      const creatorIds = [...new Set(inventoriesData?.map(inv => inv.created_by).filter(Boolean))];
-      let emailMap: Record<string, string> = {};
-      
-      if (creatorIds.length > 0) {
-        try {
-          const { data: profilesData, error: profilesError } = await supabase
-            .from('profiles')
-            .select('id, email')
-            .in('id', creatorIds);
-
-          if (profilesError) {
-            console.error('Error fetching profiles:', profilesError);
-          } else {
-            // Créer un map des emails
-            emailMap = profilesData?.reduce((acc, profile) => {
-              acc[profile.id] = profile.email;
-              return acc;
-            }, {} as Record<string, string>) || {};
-          }
-        } catch (profilesErr) {
-          console.error('Error in profiles query:', profilesErr);
-        }
+      if (!inventoriesData || inventoriesData.length === 0) {
+        setInventories([]);
+        setFilteredInventories([]);
+        return;
       }
+
+      // Deuxième requête : récupérer TOUS les profils
+      console.log('👥 Récupération de tous les profils...');
+      const { data: allProfilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email');
+
+      if (profilesError) {
+        console.error('❌ Erreur profiles:', profilesError);
+      }
+
+      console.log('✅ Profils récupérés:', allProfilesData?.length);
+
+      // Créer un map des emails
+      const emailMap: Record<string, string> = {};
+      if (allProfilesData) {
+        allProfilesData.forEach(profile => {
+          emailMap[profile.id] = profile.email;
+        });
+      }
+
+      console.log('🗺️ Map des emails:', emailMap);
       
       // Ajouter l'email du créateur à chaque inventaire
-      const inventoriesWithCreator = inventoriesData?.map(inventory => ({
-        ...inventory,
-        created_by_email: emailMap[inventory.created_by] || 'Inconnu'
-      })) || [];
+      const inventoriesWithCreator = inventoriesData.map(inventory => {
+        const creatorEmail = emailMap[inventory.created_by];
+        console.log(`📋 Inventaire ${inventory.id} créé par ${inventory.created_by} -> ${creatorEmail}`);
+        
+        return {
+          ...inventory,
+          created_by_email: creatorEmail || 'Inconnu'
+        };
+      });
       
       setInventories(inventoriesWithCreator);
       setFilteredInventories(inventoriesWithCreator);
     } catch (error) {
-      console.error('Error loading inventories:', error);
+      console.error('❌ Erreur loading inventories:', error);
       toast({
         title: "Erreur",
         description: "Impossible de charger l'historique",
