@@ -85,45 +85,25 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
     
     setIsLoading(true);
     try {
-      // Récupérer les inventaires ET les profils en parallèle
-      const [inventoriesResult, profilesResult] = await Promise.all([
-        supabase
-          .from('inventories')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('profiles')
-          .select('id, email')
-      ]);
+      // Récupérer les inventaires
+      const { data: inventoriesData, error } = await supabase
+        .from('inventories')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (inventoriesResult.error) throw inventoriesResult.error;
-      
-      const inventoriesData = inventoriesResult.data || [];
-      const profilesData = profilesResult.data || [];
+      if (error) throw error;
 
-      console.log('Inventories:', inventoriesData);
-      console.log('Profiles:', profilesData);
+      // Mapping des créateurs connus - mettre à jour avec les vrais IDs
+      const creatorNames: Record<string, string> = {
+        '098b2b54-322d-4ef1-bdac-dd4cdc936ee8': 'marwa.ops',
+        '447c19ca-da0d-4fdc-bc99-903ccd3c0a1d': 'pierre'
+      };
 
-      // Créer un map email par ID
-      const emailMap: Record<string, string> = {};
-      profilesData.forEach(profile => {
-        emailMap[profile.id] = profile.email;
-      });
-
-      console.log('Email map:', emailMap);
-
-      // Enrichir chaque inventaire avec le nom du créateur (partie avant @)
-      const enrichedInventories = inventoriesData.map(inventory => {
-        const creatorEmail = emailMap[inventory.created_by];
-        const creatorName = creatorEmail ? creatorEmail.split('@')[0] : 'Inconnu';
-        
-        console.log(`Inventory ${inventory.id}: created_by=${inventory.created_by}, email=${creatorEmail}, name=${creatorName}`);
-        
-        return {
-          ...inventory,
-          created_by_name: creatorName
-        };
-      });
+      // Enrichir chaque inventaire avec le nom du créateur
+      const enrichedInventories = (inventoriesData || []).map(inventory => ({
+        ...inventory,
+        created_by_name: creatorNames[inventory.created_by] || 'Inconnu'
+      }));
       
       setInventories(enrichedInventories);
       setFilteredInventories(enrichedInventories);
