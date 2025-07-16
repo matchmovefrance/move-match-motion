@@ -1192,7 +1192,7 @@ Validité de l'estimation : 30 jours
                     setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
                     formule={formule}
                     setFormule={setFormule}
-                    onSaveInventory={saveInventory}
+                    onSaveInventory={handleSaveClick}
                     selectedItemsCount={selectedItems.length}
                   />
                 </div>
