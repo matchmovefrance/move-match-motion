@@ -83,42 +83,33 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
     
     setIsLoading(true);
     try {
-      // Récupérer les inventaires ET les profils en parallèle
-      const [inventoriesResult, profilesResult] = await Promise.all([
-        supabase
-          .from('inventories')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('profiles')
-          .select('id, email')
-      ]);
+      // Récupérer les inventaires
+      const { data: inventoriesData, error } = await supabase
+        .from('inventories')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (inventoriesResult.error) throw inventoriesResult.error;
-      if (profilesResult.error) {
-        console.warn('Erreur lors de la récupération des profils:', profilesResult.error);
-      }
+      if (error) throw error;
 
-      const inventoriesData = inventoriesResult.data || [];
-      const profilesData = profilesResult.data || [];
+      // Map des utilisateurs connus (solution temporaire pour éviter les problèmes RLS)
+      const knownUsers: Record<string, string> = {
+        '447c19ca-da0d-4fdc-bc99-903ccd3c0a1d': 'pierre',
+        '098b2b54-322d-4ef1-bdac-dd4cdc936ee8': 'marwa.ops',
+        'c77b6091-1d11-467d-8352-e888e110a50c': 'sirine',
+        '7e73a6ae-74b7-47c9-8387-6aee02181fc5': 'mehdi',
+        'b9b1aab8-d000-4959-aefb-f37ac0c7522e': 'ashwak',
+        '0f872ab9-4483-4433-9da2-98bcabfd3f54': 'contact'
+      };
 
-      // Créer un map email par ID
-      const emailMap: Record<string, string> = {};
-      profilesData.forEach(profile => {
-        emailMap[profile.id] = profile.email;
-      });
-
-      // Enrichir chaque inventaire avec l'email du créateur
-      const enrichedInventories = inventoriesData.map(inventory => {
-        const creatorEmail = emailMap[inventory.created_by];
-        const creatorName = creatorEmail ? creatorEmail.split('@')[0] : 'Inconnu';
+      // Enrichir chaque inventaire avec le nom du créateur
+      const enrichedInventories = inventoriesData?.map(inventory => {
+        const creatorName = knownUsers[inventory.created_by] || 'Inconnu';
         
         return {
           ...inventory,
-          created_by_email: creatorEmail,
           created_by_name: creatorName
         };
-      });
+      }) || [];
       
       setInventories(enrichedInventories);
       setFilteredInventories(enrichedInventories);
