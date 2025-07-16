@@ -537,6 +537,7 @@ export type Database = {
           item_dimensions: Json | null
           moving_date: string | null
           notes: string | null
+          reference: string | null
           selected_items: Json
           total_volume: number
           total_weight: number | null
@@ -578,6 +579,7 @@ export type Database = {
           item_dimensions?: Json | null
           moving_date?: string | null
           notes?: string | null
+          reference?: string | null
           selected_items: Json
           total_volume: number
           total_weight?: number | null
@@ -619,6 +621,7 @@ export type Database = {
           item_dimensions?: Json | null
           moving_date?: string | null
           notes?: string | null
+          reference?: string | null
           selected_items?: Json
           total_volume?: number
           total_weight?: number | null
@@ -1242,6 +1245,10 @@ export type Database = {
       delete_user_and_data: {
         Args: { user_uuid: string }
         Returns: undefined
+      }
+      generate_inventory_reference: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       generate_public_link_token: {
         Args: Record<PropertyKey, never>

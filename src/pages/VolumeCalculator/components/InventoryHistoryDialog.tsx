@@ -39,6 +39,7 @@ const getLocationTypeDisplayName = (locationType: string) => {
 
 interface Inventory {
   id: string;
+  reference?: string;
   client_name: string;
   client_reference: string;
   client_email?: string;
@@ -68,6 +69,7 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<Inventory | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchBy, setSearchBy] = useState<'client' | 'reference'>('client');
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,13 +142,18 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(inventory => {
-        const clientName = inventory.client_name?.toLowerCase() || '';
-        const clientEmail = inventory.client_email?.toLowerCase() || '';
-        const clientReference = inventory.client_reference?.toLowerCase() || '';
-        
-        return clientName.includes(searchLower) || 
-               clientEmail.includes(searchLower) || 
-               clientReference.includes(searchLower);
+        if (searchBy === 'reference') {
+          const reference = inventory.reference?.toLowerCase() || '';
+          return reference.includes(searchLower);
+        } else {
+          const clientName = inventory.client_name?.toLowerCase() || '';
+          const clientEmail = inventory.client_email?.toLowerCase() || '';
+          const clientReference = inventory.client_reference?.toLowerCase() || '';
+          
+          return clientName.includes(searchLower) || 
+                 clientEmail.includes(searchLower) || 
+                 clientReference.includes(searchLower);
+        }
       });
     }
 
@@ -171,7 +178,7 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
 
   useEffect(() => {
     filterInventories();
-  }, [searchTerm, dateFrom, dateTo, inventories, showMyInventoriesOnly]);
+  }, [searchTerm, searchBy, dateFrom, dateTo, inventories, showMyInventoriesOnly]);
 
   const deleteInventory = async (id: string) => {
     try {
@@ -433,14 +440,25 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
             {/* Barre de recherche et contrôles - FIXE EN HAUT */}
             <div className="flex-none">
               <div className="flex flex-col lg:flex-row gap-4 border-b pb-4 mb-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Rechercher par nom, email ou référence..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex gap-2">
+                  <Select value={searchBy} onValueChange={(value: 'client' | 'reference') => setSearchBy(value)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client">Client</SelectItem>
+                      <SelectItem value="reference">Référence</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder={searchBy === 'reference' ? "Rechercher par référence..." : "Rechercher par nom, email ou référence..."}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
                 
                 {/* Filtres de date */}
@@ -553,25 +571,32 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-4">
-                          <div className="flex-1 min-w-0">
-                             <h4 className="font-medium text-sm truncate">
-                               {inventory.client_name || 'Sans nom'}
-                             </h4>
-                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                               <span className="flex items-center gap-1">
-                                 <CalendarIcon className="h-3 w-3" />
-                                 {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
-                               </span>
-                               <span className="flex items-center gap-1">
-                                 <MapPin className="h-3 w-3" />
-                                 {inventory.departure_postal_code} → {inventory.arrival_postal_code}
-                               </span>
-                               <span>{inventory.total_volume.toFixed(1)} m³</span>
-                               <span className="text-blue-600 font-medium">
-                                 Par: {(inventory as any).created_by_name || 'Inconnu'}
-                               </span>
-                             </div>
-                          </div>
+                           <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-sm truncate">
+                                  {inventory.client_name || 'Sans nom'}
+                                </h4>
+                                {inventory.reference && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {inventory.reference}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                                <span className="flex items-center gap-1">
+                                  <CalendarIcon className="h-3 w-3" />
+                                  {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {inventory.departure_postal_code} → {inventory.arrival_postal_code}
+                                </span>
+                                <span>{inventory.total_volume.toFixed(1)} m³</span>
+                                <span className="text-blue-600 font-medium">
+                                  Par: {(inventory as any).created_by_name || 'Inconnu'}
+                                </span>
+                              </div>
+                           </div>
                           <div className="flex items-center gap-6 text-xs">
                             <div className="text-center">
                               <div className="font-medium">{inventory.selected_items?.length || 0}</div>
