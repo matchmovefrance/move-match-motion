@@ -97,13 +97,13 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
       ]);
 
       if (inventoriesResult.error) throw inventoriesResult.error;
+      if (profilesResult.error) {
+        console.error('Error fetching profiles:', profilesResult.error);
+        // Continuer même si les profils ne peuvent pas être récupérés
+      }
       
       const inventoriesData = inventoriesResult.data || [];
       const profilesData = profilesResult.data || [];
-
-      console.log('Inventaries data:', inventoriesData);
-      console.log('Profiles data:', profilesData);
-      console.log('Profiles error:', profilesResult.error);
 
       // Créer un map email par ID
       const emailMap: Record<string, string> = {};
@@ -111,15 +111,12 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
         emailMap[profile.id] = profile.email;
       });
 
-      console.log('Email map:', emailMap);
-
       // Enrichir chaque inventaire avec l'email du créateur
       const enrichedInventories = inventoriesData.map(inventory => {
         const creatorEmail = emailMap[inventory.created_by];
-        console.log(`Inventory ${inventory.id}: created_by=${inventory.created_by}, email=${creatorEmail}`);
         return {
           ...inventory,
-          created_by_name: creatorEmail || 'Email inconnu'
+          created_by_name: creatorEmail || 'Email non trouvé'
         };
       });
       
