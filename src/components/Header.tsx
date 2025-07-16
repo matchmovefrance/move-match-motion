@@ -60,7 +60,7 @@ const Header = () => {
             className="h-12 w-auto"
           />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">MatchMove</h1>
+            <h1 className="text-xl font-bold text-gray-900">Matchmove.io</h1>
             <p className="text-sm text-gray-500">Gestion de Déménagements</p>
           </div>
         </div>
