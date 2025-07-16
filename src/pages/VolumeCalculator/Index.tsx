@@ -12,6 +12,7 @@ import VolumeDisplay from './components/VolumeDisplay';
 import { ClientFormDialog } from './components/ClientFormDialog';
 import { InventoryHistoryDialog } from './components/InventoryHistoryDialog';
 import { InventoryDisplayDialog } from './components/InventoryDisplayDialog';
+import { SaveInventoryDialog } from './components/SaveInventoryDialog';
 import { FurnitureItem, SelectedItem } from './types';
 import { furnitureCategories } from './data/furnitureData';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
@@ -42,6 +43,8 @@ const VolumeCalculator = () => {
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [showInventoryDialog, setShowInventoryDialog] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [currentInventoryId, setCurrentInventoryId] = useState<string | null>(null);
   const [isExtendedForm, setIsExtendedForm] = useState(false);
   const [extendedFormData, setExtendedFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -175,7 +178,7 @@ const VolumeCalculator = () => {
     setFormule('standard');
   };
 
-  const saveInventory = async () => {
+  const handleSaveClick = () => {
     if (!user) {
       toast({
         title: "Erreur",
@@ -194,6 +197,20 @@ const VolumeCalculator = () => {
       return;
     }
 
+    setShowSaveDialog(true);
+  };
+
+  const createNewInventory = async () => {
+    await saveInventory(false);
+    setShowSaveDialog(false);
+  };
+
+  const updateExistingInventory = async () => {
+    await saveInventory(true);
+    setShowSaveDialog(false);
+  };
+
+  const saveInventory = async (isUpdate: boolean = false) => {
     try {
       const totalVolume = calculateTotalVolume();
       const totalWeight = calculateTotalWeight();
@@ -226,7 +243,6 @@ const VolumeCalculator = () => {
         total_weight: totalWeight,
         selected_items: selectedItems as any,
         created_by: user.id,
-        // Ajout des champs de date
         moving_date: movingDate || null,
         flexible_dates: flexibleDates,
         date_range_start: dateRangeStart || null,
@@ -234,18 +250,29 @@ const VolumeCalculator = () => {
         formule: formule,
       };
 
-      const { error } = await supabase
-        .from('inventories')
-        .insert(inventoryData);
+      let error;
+      if (isUpdate && currentInventoryId) {
+        const { error: updateError } = await supabase
+          .from('inventories')
+          .update(inventoryData)
+          .eq('id', currentInventoryId);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('inventories')
+          .insert(inventoryData);
+        error = insertError;
+        // Reset l'ID si on crée un nouvel inventaire
+        setCurrentInventoryId(null);
+      }
 
       if (error) throw error;
 
-      // Vider automatiquement le cache après la sauvegarde pour plus de fluidité
       pricingEngine.clearDistanceCache();
 
       toast({
-        title: "Inventaire sauvegardé",
-        description: "L'inventaire a été sauvegardé avec succès",
+        title: isUpdate ? "Inventaire mis à jour" : "Inventaire sauvegardé",
+        description: isUpdate ? "L'inventaire a été mis à jour avec succès" : "L'inventaire a été sauvegardé avec succès",
       });
     } catch (error) {
       console.error('Error saving inventory:', error);
@@ -255,6 +282,45 @@ const VolumeCalculator = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const loadInventoryFromHistory = (inventory: any) => {
+    setSelectedItems(inventory.selected_items || []);
+    setClientName(inventory.client_name || '');
+    setClientReference(inventory.client_reference || '');
+    setClientPhone(inventory.client_phone || '');
+    setClientEmail(inventory.client_email || '');
+    setNotes(inventory.notes || '');
+    setMovingDate(inventory.moving_date || '');
+    setFlexibleDates(inventory.flexible_dates || false);
+    setDateRangeStart(inventory.date_range_start || '');
+    setDateRangeEnd(inventory.date_range_end || '');
+    setFormule(inventory.formule || 'standard');
+    setCurrentInventoryId(inventory.id);
+    
+    // Charger les données étendues
+    setExtendedFormData({
+      departureAddress: inventory.departure_address || '',
+      departurePostalCode: inventory.departure_postal_code || '',
+      arrivalAddress: inventory.arrival_address || '',
+      arrivalPostalCode: inventory.arrival_postal_code || '',
+      departureLocationType: inventory.departure_location_type || 'appartement',
+      departureFloor: inventory.departure_floor || '0',
+      departureHasElevator: inventory.departure_has_elevator || false,
+      departureElevatorSize: inventory.departure_elevator_size || '',
+      departureHasFreightElevator: inventory.departure_has_freight_elevator || false,
+      departureCarryingDistance: inventory.departure_carrying_distance || '0',
+      departureParkingNeeded: inventory.departure_parking_needed || false,
+      arrivalLocationType: inventory.arrival_location_type || 'appartement',
+      arrivalFloor: inventory.arrival_floor || '0',
+      arrivalHasElevator: inventory.arrival_has_elevator || false,
+      arrivalElevatorSize: inventory.arrival_elevator_size || '',
+      arrivalHasFreightElevator: inventory.arrival_has_freight_elevator || false,
+      arrivalCarryingDistance: inventory.arrival_carrying_distance || '0',
+      arrivalParkingNeeded: inventory.arrival_parking_needed || false,
+    });
+    
+    setShowHistoryDialog(false);
   };
 
   const loadCompanySettings = async () => {
@@ -1200,7 +1266,7 @@ Validité de l'estimation : 30 jours
                 </Button>
 
                 <Button
-                  onClick={saveInventory}
+                  onClick={handleSaveClick}
                   disabled={selectedItems.length === 0}
                   className="w-full bg-blue-600 hover:bg-blue-700"
                 >
@@ -1224,33 +1290,13 @@ Validité de l'estimation : 30 jours
       </div>
 
       <InventoryHistoryDialog
-        isOpen={showHistoryDialog}
-        onClose={() => setShowHistoryDialog(false)}
-        onLoadInventory={(inventory) => {
-          setClientName(inventory.clientName || '');
-          setClientReference(inventory.clientReference || '');
-          setClientPhone(inventory.clientPhone || '');
-          setClientEmail(inventory.clientEmail || '');
-          setNotes(inventory.notes || '');
-          setSelectedItems(inventory.selectedItems || []);
-          setFormule(inventory.formule || 'standard');
-          if (inventory.extendedFormData) {
-            setExtendedFormData(inventory.extendedFormData);
-          }
-          // Restaurer les dates de déménagement
-          setMovingDate(inventory.movingDate || '');
-          setFlexibleDates(inventory.flexibleDates || false);
-          setDateRangeStart(inventory.dateRangeStart || '');
-          setDateRangeEnd(inventory.dateRangeEnd || '');
-          toast({
-            title: "Inventaire chargé",
-            description: "L'inventaire complet a été chargé avec succès",
-          });
-        }}
+        open={showHistoryDialog}
+        onOpenChange={setShowHistoryDialog}
+        onLoadInventory={loadInventoryFromHistory}
       />
 
-      <InventoryDisplayDialog
-        isOpen={showInventoryDialog}
+      <InventoryDisplayDialog 
+        isOpen={showInventoryDialog} 
         onClose={() => setShowInventoryDialog(false)}
         selectedItems={selectedItems}
         clientData={{
@@ -1266,6 +1312,14 @@ Validité de l'estimation : 30 jours
         flexibleDates={flexibleDates}
         dateRangeStart={dateRangeStart}
         dateRangeEnd={dateRangeEnd}
+      />
+
+      <SaveInventoryDialog
+        open={showSaveDialog}
+        onOpenChange={setShowSaveDialog}
+        onCreateNew={createNewInventory}
+        onUpdateExisting={updateExistingInventory}
+        inventoryReference={currentInventoryId ? clientReference : undefined}
       />
     </div>
   );

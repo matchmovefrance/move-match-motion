@@ -57,12 +57,12 @@ interface Inventory {
 }
 
 interface InventoryHistoryDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onLoadInventory: (inventory: any) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onLoadInventory?: (inventory: any) => void;
 }
 
-export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: InventoryHistoryDialogProps) {
+export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: InventoryHistoryDialogProps) => {
   const [inventories, setInventories] = useState<Inventory[]>([]);
   const [filteredInventories, setFilteredInventories] = useState<Inventory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,14 +83,34 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
     
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: inventoriesData, error } = await supabase
         .from('inventories')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setInventories(data || []);
-      setFilteredInventories(data || []);
+
+      // Récupérer les emails des créateurs
+      const creatorIds = [...new Set(inventoriesData?.map(inv => inv.created_by).filter(Boolean))];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', creatorIds);
+
+      // Créer un map des emails
+      const emailMap = profilesData?.reduce((acc, profile) => {
+        acc[profile.id] = profile.email;
+        return acc;
+      }, {} as Record<string, string>) || {};
+      
+      // Ajouter l'email du créateur à chaque inventaire
+      const inventoriesWithCreator = inventoriesData?.map(inventory => ({
+        ...inventory,
+        created_by_email: emailMap[inventory.created_by] || 'Inconnu'
+      })) || [];
+      
+      setInventories(inventoriesWithCreator);
+      setFilteredInventories(inventoriesWithCreator);
     } catch (error) {
       console.error('Error loading inventories:', error);
       toast({
@@ -197,41 +217,43 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   };
 
   const handleLoadInventory = (inventory: Inventory) => {
-    onLoadInventory({
-      clientName: inventory.client_name,
-      clientReference: inventory.client_reference,
-      clientPhone: (inventory as any).client_phone,
-      clientEmail: (inventory as any).client_email,
-      notes: (inventory as any).notes,
-      selectedItems: inventory.selected_items,
-      formule: (inventory as any).formule || 'standard',
-      // Ajout des champs de date
-      movingDate: inventory.moving_date,
-      flexibleDates: inventory.flexible_dates,
-      dateRangeStart: inventory.date_range_start,
-      dateRangeEnd: inventory.date_range_end,
-      extendedFormData: {
-        departureAddress: (inventory as any).departure_address || '',
-        departurePostalCode: inventory.departure_postal_code || '',
-        arrivalAddress: (inventory as any).arrival_address || '',
-        arrivalPostalCode: inventory.arrival_postal_code || '',
-        departureLocationType: (inventory as any).departure_location_type || 'appartement',
-        departureFloor: (inventory as any).departure_floor || '0',
-        departureHasElevator: (inventory as any).departure_has_elevator || false,
-        departureElevatorSize: (inventory as any).departure_elevator_size || '',
-        departureHasFreightElevator: (inventory as any).departure_has_freight_elevator || false,
-        departureCarryingDistance: (inventory as any).departure_carrying_distance || '0',
-        departureParkingNeeded: (inventory as any).departure_parking_needed || false,
-        arrivalLocationType: (inventory as any).arrival_location_type || 'appartement',
-        arrivalFloor: (inventory as any).arrival_floor || '0',
-        arrivalHasElevator: (inventory as any).arrival_has_elevator || false,
-        arrivalElevatorSize: (inventory as any).arrival_elevator_size || '',
-        arrivalHasFreightElevator: (inventory as any).arrival_has_freight_elevator || false,
-        arrivalCarryingDistance: (inventory as any).arrival_carrying_distance || '0',
-        arrivalParkingNeeded: (inventory as any).arrival_parking_needed || false,
-      }
-    });
-    onClose();
+    if (onLoadInventory) {
+      onLoadInventory({
+        ...inventory,
+        clientName: inventory.client_name,
+        clientReference: inventory.client_reference,
+        clientPhone: (inventory as any).client_phone,
+        clientEmail: (inventory as any).client_email,
+        notes: (inventory as any).notes,
+        selectedItems: inventory.selected_items,
+        formule: (inventory as any).formule || 'standard',
+        movingDate: inventory.moving_date,
+        flexibleDates: inventory.flexible_dates,
+        dateRangeStart: inventory.date_range_start,
+        dateRangeEnd: inventory.date_range_end,
+        extendedFormData: {
+          departureAddress: (inventory as any).departure_address || '',
+          departurePostalCode: inventory.departure_postal_code || '',
+          arrivalAddress: (inventory as any).arrival_address || '',
+          arrivalPostalCode: inventory.arrival_postal_code || '',
+          departureLocationType: (inventory as any).departure_location_type || 'appartement',
+          departureFloor: (inventory as any).departure_floor || '0',
+          departureHasElevator: (inventory as any).departure_has_elevator || false,
+          departureElevatorSize: (inventory as any).departure_elevator_size || '',
+          departureHasFreightElevator: (inventory as any).departure_has_freight_elevator || false,
+          departureCarryingDistance: (inventory as any).departure_carrying_distance || '0',
+          departureParkingNeeded: (inventory as any).departure_parking_needed || false,
+          arrivalLocationType: (inventory as any).arrival_location_type || 'appartement',
+          arrivalFloor: (inventory as any).arrival_floor || '0',
+          arrivalHasElevator: (inventory as any).arrival_has_elevator || false,
+          arrivalElevatorSize: (inventory as any).arrival_elevator_size || '',
+          arrivalHasFreightElevator: (inventory as any).arrival_has_freight_elevator || false,
+          arrivalCarryingDistance: (inventory as any).arrival_carrying_distance || '0',
+          arrivalParkingNeeded: (inventory as any).arrival_parking_needed || false,
+        }
+      });
+    }
+    onOpenChange(false);
     toast({
       title: "Inventaire chargé",
       description: "L'inventaire complet a été chargé dans le calculateur",
@@ -245,15 +267,15 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   const currentInventories = filteredInventories.slice(startIndex, endIndex);
 
   useEffect(() => {
-    if (isOpen) {
+    if (open) {
       setSelectedInventory(null); // Toujours afficher la liste au début
       loadInventories();
     }
-  }, [isOpen, user]);
+  }, [open, user]);
 
   if (selectedInventory) {
     return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -389,7 +411,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-7xl w-[95vw] h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Historique des inventaires</DialogTitle>
@@ -530,20 +552,23 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-4">
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-sm truncate">
-                              {inventory.client_name || 'Sans nom'}
-                            </h4>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                              <span className="flex items-center gap-1">
-                                <CalendarIcon className="h-3 w-3" />
-                                {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {inventory.departure_postal_code} → {inventory.arrival_postal_code}
-                              </span>
-                              <span>{inventory.total_volume.toFixed(1)} m³</span>
-                            </div>
+                             <h4 className="font-medium text-sm truncate">
+                               {inventory.client_name || 'Sans nom'}
+                             </h4>
+                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                               <span className="flex items-center gap-1">
+                                 <CalendarIcon className="h-3 w-3" />
+                                 {new Date(inventory.created_at).toLocaleDateString('fr-FR')}
+                               </span>
+                               <span className="flex items-center gap-1">
+                                 <MapPin className="h-3 w-3" />
+                                 {inventory.departure_postal_code} → {inventory.arrival_postal_code}
+                               </span>
+                               <span>{inventory.total_volume.toFixed(1)} m³</span>
+                               <span className="text-blue-600 font-medium">
+                                 Par: {(inventory as any).created_by_email ? (inventory as any).created_by_email.split('@')[0] : 'Inconnu'}
+                               </span>
+                             </div>
                           </div>
                           <div className="flex items-center gap-6 text-xs">
                             <div className="text-center">
