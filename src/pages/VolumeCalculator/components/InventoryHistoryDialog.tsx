@@ -85,36 +85,41 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
     
     setIsLoading(true);
     try {
-      // Récupérer les inventaires
-      const { data: inventoriesData, error } = await supabase
-        .from('inventories')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Récupérer les inventaires ET les profils en parallèle
+      const [inventoriesResult, profilesResult] = await Promise.all([
+        supabase
+          .from('inventories')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('id, email')
+      ]);
 
-      if (error) throw error;
+      if (inventoriesResult.error) throw inventoriesResult.error;
+      if (profilesResult.error) {
+        console.warn('Erreur lors de la récupération des profils:', profilesResult.error);
+      }
 
-      // Map des utilisateurs connus basé sur la base de données profiles
-      const knownUsers: Record<string, string> = {
-        '447c19ca-da0d-4fdc-bc99-903ccd3c0a1d': 'pierre',
-        '098b2b54-322d-4ef1-bdac-dd4cdc936ee8': 'marwa.ops',
-        'c77b6091-1d11-467d-8352-e888e110a50c': 'sirine',
-        '7e73a6ae-74b7-47c9-8387-6aee02181fc5': 'mehdi',
-        'b9b1aab8-d000-4959-aefb-f37ac0c7522e': 'ashwak',
-        '0f872ab9-4483-4433-9da2-98bcabfd3f54': 'contact',
-        '72a51a5b-b948-4685-bec5-e624b88015a6': 'marwa.h',
-        '87bfb215-3b89-453d-a89c-96c0b4130aa3': 'marco',
-        '5f7eca24-0501-496b-be7b-eb9c0b7ddec1': 'imed'
-      };
+      const inventoriesData = inventoriesResult.data || [];
+      const profilesData = profilesResult.data || [];
 
-      // Enrichir chaque inventaire avec le nom du créateur
-      const enrichedInventories = inventoriesData?.map(inventory => {
-        const creatorName = knownUsers[inventory.created_by] || 'Inconnu';
+      // Créer un map email par ID
+      const emailMap: Record<string, string> = {};
+      profilesData.forEach(profile => {
+        emailMap[profile.id] = profile.email;
+      });
+
+      // Enrichir chaque inventaire avec le nom du créateur (partie avant @)
+      const enrichedInventories = inventoriesData.map(inventory => {
+        const creatorEmail = emailMap[inventory.created_by];
+        const creatorName = creatorEmail ? creatorEmail.split('@')[0] : 'Inconnu';
         
         return {
           ...inventory,
           created_by_name: creatorName
         };
-      }) || [];
+      });
       
       setInventories(enrichedInventories);
       setFilteredInventories(enrichedInventories);
