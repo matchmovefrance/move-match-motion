@@ -92,16 +92,28 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
 
       // Récupérer les emails des créateurs
       const creatorIds = [...new Set(inventoriesData?.map(inv => inv.created_by).filter(Boolean))];
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', creatorIds);
+      let emailMap: Record<string, string> = {};
+      
+      if (creatorIds.length > 0) {
+        try {
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', creatorIds);
 
-      // Créer un map des emails
-      const emailMap = profilesData?.reduce((acc, profile) => {
-        acc[profile.id] = profile.email;
-        return acc;
-      }, {} as Record<string, string>) || {};
+          if (profilesError) {
+            console.error('Error fetching profiles:', profilesError);
+          } else {
+            // Créer un map des emails
+            emailMap = profilesData?.reduce((acc, profile) => {
+              acc[profile.id] = profile.email;
+              return acc;
+            }, {} as Record<string, string>) || {};
+          }
+        } catch (profilesErr) {
+          console.error('Error in profiles query:', profilesErr);
+        }
+      }
       
       // Ajouter l'email du créateur à chaque inventaire
       const inventoriesWithCreator = inventoriesData?.map(inventory => ({
