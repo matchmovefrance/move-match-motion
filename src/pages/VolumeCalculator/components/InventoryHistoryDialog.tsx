@@ -93,14 +93,17 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
 
       if (error) throw error;
 
-      // Map des utilisateurs connus (solution temporaire pour éviter les problèmes RLS)
+      // Map des utilisateurs connus basé sur la base de données profiles
       const knownUsers: Record<string, string> = {
         '447c19ca-da0d-4fdc-bc99-903ccd3c0a1d': 'pierre',
         '098b2b54-322d-4ef1-bdac-dd4cdc936ee8': 'marwa.ops',
         'c77b6091-1d11-467d-8352-e888e110a50c': 'sirine',
         '7e73a6ae-74b7-47c9-8387-6aee02181fc5': 'mehdi',
         'b9b1aab8-d000-4959-aefb-f37ac0c7522e': 'ashwak',
-        '0f872ab9-4483-4433-9da2-98bcabfd3f54': 'contact'
+        '0f872ab9-4483-4433-9da2-98bcabfd3f54': 'contact',
+        '72a51a5b-b948-4685-bec5-e624b88015a6': 'marwa.h',
+        '87bfb215-3b89-453d-a89c-96c0b4130aa3': 'marco',
+        '5f7eca24-0501-496b-be7b-eb9c0b7ddec1': 'imed'
       };
 
       // Enrichir chaque inventaire avec le nom du créateur
