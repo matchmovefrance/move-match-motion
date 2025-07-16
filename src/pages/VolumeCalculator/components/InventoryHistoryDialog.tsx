@@ -74,6 +74,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [inventoryToDelete, setInventoryToDelete] = useState<Inventory | null>(null);
+  const [showMyInventoriesOnly, setShowMyInventoriesOnly] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -105,6 +106,13 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
   // Fonction de filtrage
   const filterInventories = () => {
     let filtered = inventories;
+
+    // Filtrage par utilisateur connecté si demandé
+    if (showMyInventoriesOnly && user) {
+      filtered = filtered.filter(inventory => 
+        (inventory as any).created_by === user.id
+      );
+    }
 
     // Filtrage par texte
     if (searchTerm) {
@@ -141,7 +149,7 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
 
   useEffect(() => {
     filterInventories();
-  }, [searchTerm, dateFrom, dateTo, inventories]);
+  }, [searchTerm, dateFrom, dateTo, inventories, showMyInventoriesOnly]);
 
   const deleteInventory = async (id: string) => {
     try {
@@ -470,6 +478,18 @@ export function InventoryHistoryDialog({ isOpen, onClose, onLoadInventory }: Inv
                     className="px-3"
                   >
                     Effacer
+                  </Button>
+                </div>
+                
+                {/* Bouton mes inventaires */}
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant={showMyInventoriesOnly ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowMyInventoriesOnly(!showMyInventoriesOnly)}
+                    className="px-3"
+                  >
+                    {showMyInventoriesOnly ? "Voir tous" : "Mes inventaires"}
                   </Button>
                 </div>
                 
