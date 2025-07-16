@@ -197,6 +197,7 @@ const VolumeCalculator = () => {
       return;
     }
 
+    // Toujours montrer le dialogue pour choisir entre créer nouveau ou mettre à jour
     setShowSaveDialog(true);
   };
 
@@ -1319,7 +1320,7 @@ Validité de l'estimation : 30 jours
         onOpenChange={setShowSaveDialog}
         onCreateNew={createNewInventory}
         onUpdateExisting={updateExistingInventory}
-        inventoryReference={currentInventoryId ? clientReference : undefined}
+        inventoryReference={currentInventoryId ? (clientReference || currentInventoryId) : undefined}
       />
     </div>
   );
