@@ -20,9 +20,10 @@ interface FurnitureSelectorProps {
   onAddItem: (item: FurnitureItem & { disassemblyOptions?: boolean[]; packingOptions?: boolean[]; unpackingOptions?: boolean[] }, quantity: number) => void;
   selectedItems: SelectedItem[];
   onUpdateItemOptions: (itemId: string, index: number, optionType: 'disassembly' | 'packing' | 'unpacking', value: boolean) => void;
+  onCustomFurnitureCountChange?: (count: number) => void;
 }
 
-const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: FurnitureSelectorProps) => {
+const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions, onCustomFurnitureCountChange }: FurnitureSelectorProps) => {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [manualFurniture, setManualFurniture] = useState<FurnitureItem[]>([]);
@@ -76,6 +77,7 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
         }));
         
         setManualFurniture(customItems);
+        onCustomFurnitureCountChange?.(customItems.length);
       } catch (error) {
         console.error('Error loading data:', error);
       }
@@ -208,7 +210,11 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
         id: data.id
       };
 
-      setManualFurniture(prev => [...prev, savedFurniture]);
+      setManualFurniture(prev => {
+        const newList = [...prev, savedFurniture];
+        onCustomFurnitureCountChange?.(newList.length);
+        return newList;
+      });
       onAddItem(savedFurniture, quantity);
       
       toast({
@@ -235,7 +241,11 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
       if (error) throw error;
 
       // Supprimer de l'état local
-      setManualFurniture(prev => prev.filter(item => item.id !== furniture.id));
+      setManualFurniture(prev => {
+        const newList = prev.filter(item => item.id !== furniture.id);
+        onCustomFurnitureCountChange?.(newList.length);
+        return newList;
+      });
       
       // Supprimer des quantités sélectionnées
       setQuantities(prev => {
@@ -615,13 +625,21 @@ const FurnitureSelector = ({ onAddItem, selectedItems, onUpdateItemOptions }: Fu
             ))}
           </Tabs>
 
-          {/* Section pour les meubles manuels */}
+          {/* Section pour les meubles manuels avec accordéon */}
           {manualFurniture.length > 0 && (
-            <div className="mt-6 p-4 bg-green-50 rounded-lg">
-              <h3 className="font-medium text-green-800 mb-3">Meubles personnalisés</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {manualFurniture.map(renderFurnitureItem)}
-              </div>
+            <div className="mt-6">
+              <Accordion type="multiple" defaultValue={["custom-furniture"]}>
+                <AccordionItem value="custom-furniture">
+                  <AccordionTrigger className="text-left font-medium bg-green-50 px-4 py-2 rounded-t-lg text-green-800">
+                    Meubles personnalisés ({manualFurniture.length} objets)
+                  </AccordionTrigger>
+                  <AccordionContent className="bg-green-50 px-4 pb-4 rounded-b-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      {manualFurniture.map(renderFurnitureItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
           )}
         </>

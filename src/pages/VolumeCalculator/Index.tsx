@@ -981,12 +981,32 @@ Validité de l'estimation : 30 jours
     window.location.href = '/truck-optimizer';
   };
 
-  // Calculate total items by flattening subcategories
+  // Calculate total items by flattening subcategories and custom furniture
+  const [customFurnitureCount, setCustomFurnitureCount] = useState(0);
+  
   const totalItems = furnitureCategories.reduce((total, category) => {
     return total + category.subcategories.reduce((subTotal, subcategory) => {
       return subTotal + subcategory.items.length;
     }, 0);
-  }, 0);
+  }, 0) + customFurnitureCount;
+
+  // Load custom furniture count
+  useEffect(() => {
+    const loadCustomFurnitureCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('custom_furniture')
+          .select('*', { count: 'exact', head: true });
+        
+        if (error) throw error;
+        setCustomFurnitureCount(count || 0);
+      } catch (error) {
+        console.error('Error loading custom furniture count:', error);
+      }
+    };
+
+    loadCustomFurnitureCount();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1032,10 +1052,11 @@ Validité de l'estimation : 30 jours
               </CardHeader>
               <CardContent>
                 <FurnitureSelector
-                  onAddItem={handleAddItem}
-                  selectedItems={selectedItems}
-                  onUpdateItemOptions={handleUpdateItemOptions}
-                />
+            onAddItem={handleAddItem}
+            selectedItems={selectedItems}
+            onUpdateItemOptions={handleUpdateItemOptions}
+            onCustomFurnitureCountChange={setCustomFurnitureCount}
+          />
               </CardContent>
             </Card>
           </div>
