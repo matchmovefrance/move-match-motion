@@ -579,16 +579,21 @@ export const InventoryHistoryDialog = ({ open, onOpenChange, onLoadInventory }: 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-4">
                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-medium text-sm truncate">
-                                  {inventory.client_name || 'Sans nom'}
-                                </h4>
-                                {inventory.reference && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {inventory.reference}
-                                  </Badge>
-                                )}
-                              </div>
+                               <div className="flex items-center gap-2">
+                                 <h4 className="font-medium text-sm truncate">
+                                   {inventory.client_name || 'Sans nom'}
+                                 </h4>
+                                 {inventory.reference && (
+                                   <div className="flex flex-col">
+                                     <Badge variant="secondary" className="text-xs">
+                                       {inventory.reference}
+                                     </Badge>
+                                     <span className="text-xs text-muted-foreground mt-1">
+                                       {format(new Date(inventory.created_at), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                                     </span>
+                                   </div>
+                                 )}
+                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                                 <span className="flex items-center gap-1">
                                   <CalendarIcon className="h-3 w-3" />
