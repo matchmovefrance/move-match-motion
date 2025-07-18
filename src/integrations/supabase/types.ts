@@ -534,6 +534,8 @@ export type Database = {
           flexible_dates: boolean | null
           formule: string | null
           id: string
+          international_data: Json | null
+          is_international: boolean | null
           item_dimensions: Json | null
           moving_date: string | null
           notes: string | null
@@ -576,6 +578,8 @@ export type Database = {
           flexible_dates?: boolean | null
           formule?: string | null
           id?: string
+          international_data?: Json | null
+          is_international?: boolean | null
           item_dimensions?: Json | null
           moving_date?: string | null
           notes?: string | null
@@ -618,6 +622,8 @@ export type Database = {
           flexible_dates?: boolean | null
           formule?: string | null
           id?: string
+          international_data?: Json | null
+          is_international?: boolean | null
           item_dimensions?: Json | null
           moving_date?: string | null
           notes?: string | null
