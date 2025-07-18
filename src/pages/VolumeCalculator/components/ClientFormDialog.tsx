@@ -22,10 +22,14 @@ interface ClientFormDialogProps {
   setDepartureAddress: (value: string) => void;
   departurePostalCode: string;
   setDeparturePostalCode: (value: string) => void;
+  departureCity: string;
+  setDepartureCity: (value: string) => void;
   arrivalAddress: string;
   setArrivalAddress: (value: string) => void;
   arrivalPostalCode: string;
   setArrivalPostalCode: (value: string) => void;
+  arrivalCity: string;
+  setArrivalCity: (value: string) => void;
   
   // Configuration des lieux de départ
   departureLocationType: string;

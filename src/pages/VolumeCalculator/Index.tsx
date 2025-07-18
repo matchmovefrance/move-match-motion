@@ -49,6 +49,10 @@ const VolumeCalculator = () => {
   const [extendedFormData, setExtendedFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
   
+  // États pour les villes
+  const [departureCity, setDepartureCity] = useState('');
+  const [arrivalCity, setArrivalCity] = useState('');
+  
   // Déménagement international
   const [isInternational, setIsInternational] = useState(false);
   const [internationalData, setInternationalData] = useState({
@@ -248,8 +252,10 @@ const VolumeCalculator = () => {
         notes: notes,
         departure_address: extendedFormData.departureAddress || '',
         departure_postal_code: extendedFormData.departurePostalCode || '',
+        departure_city: extendedFormData.departureCity || '',
         arrival_address: extendedFormData.arrivalAddress || '',
         arrival_postal_code: extendedFormData.arrivalPostalCode || '',
+        arrival_city: extendedFormData.arrivalCity || '',
         departure_location_type: extendedFormData.departureLocationType || 'appartement',
         departure_floor: extendedFormData.departureFloor || '0',
         departure_has_elevator: extendedFormData.departureHasElevator || false,
@@ -338,8 +344,10 @@ const VolumeCalculator = () => {
     setExtendedFormData({
       departureAddress: inventory.departure_address || '',
       departurePostalCode: inventory.departure_postal_code || '',
+      departureCity: inventory.departure_city || '',
       arrivalAddress: inventory.arrival_address || '',
       arrivalPostalCode: inventory.arrival_postal_code || '',
+      arrivalCity: inventory.arrival_city || '',
       departureLocationType: inventory.departure_location_type || 'appartement',
       departureFloor: inventory.departure_floor || '0',
       departureHasElevator: inventory.departure_has_elevator || false,
@@ -460,6 +468,8 @@ Types différents     : ${selectedItems.length}
 Distance estimée     : Déménagement à l'international - distance non disponible
 Notes particulières  : ${notes || 'Aucune'}` :
 `Type de déménagement : National
+Ville de départ      : ${extendedFormData?.departureCity || 'Non renseignée'}
+Code postal départ   : ${extendedFormData?.departurePostalCode || 'Non renseigné'}
 Adresse de départ    : ${extendedFormData?.departureAddress || 'Non renseignée'}
 Type lieu départ     : ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}
 Étage départ         : ${extendedFormData?.departureFloor || '0'}
@@ -470,6 +480,8 @@ Distance portage     : ${extendedFormData?.departureCarryingDistance || '0'} mè
 Stationnement        : ${extendedFormData?.departureParkingNeeded ? 'Nécessaire' : 'Non nécessaire'}
 Formule              : ${formule || 'standard'}
 
+Ville d'arrivée      : ${extendedFormData?.arrivalCity || 'Non renseignée'}
+Code postal arrivée  : ${extendedFormData?.arrivalPostalCode || 'Non renseigné'}
 Adresse d'arrivée    : ${extendedFormData?.arrivalAddress || 'Non renseignée'}
 Type lieu arrivée    : ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}
 Étage arrivée        : ${extendedFormData?.arrivalFloor || '0'}
@@ -732,6 +744,8 @@ Validité de l'estimation : 30 jours
     } else {
       departureInfo = [
         `LIEU DE DÉPART:`,
+        `Ville: ${extendedFormData?.departureCity || 'Non spécifiée'}`,
+        `Code postal: ${extendedFormData?.departurePostalCode || 'Non spécifié'}`,
         `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
         `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
         `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? extendedFormData?.departureFloor : 'Non spécifié'}`,
@@ -744,6 +758,8 @@ Validité de l'estimation : 30 jours
       
       arrivalInfo = [
         `LIEU D'ARRIVÉE:`,
+        `Ville: ${extendedFormData?.arrivalCity || 'Non spécifiée'}`,
+        `Code postal: ${extendedFormData?.arrivalPostalCode || 'Non spécifié'}`,
         `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
         `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
         `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? extendedFormData?.arrivalFloor : 'Non spécifié'}`,
@@ -1278,10 +1294,14 @@ Validité de l'estimation : 30 jours
                     setDepartureAddress={(value) => setExtendedFormData(prev => ({ ...prev, departureAddress: value }))}
                     departurePostalCode={extendedFormData.departurePostalCode || ''}
                     setDeparturePostalCode={(value) => setExtendedFormData(prev => ({ ...prev, departurePostalCode: value }))}
+                    departureCity={extendedFormData.departureCity || ''}
+                    setDepartureCity={(value) => setExtendedFormData(prev => ({ ...prev, departureCity: value }))}
                     arrivalAddress={extendedFormData.arrivalAddress || ''}
                     setArrivalAddress={(value) => setExtendedFormData(prev => ({ ...prev, arrivalAddress: value }))}
                     arrivalPostalCode={extendedFormData.arrivalPostalCode || ''}
                     setArrivalPostalCode={(value) => setExtendedFormData(prev => ({ ...prev, arrivalPostalCode: value }))}
+                    arrivalCity={extendedFormData.arrivalCity || ''}
+                    setArrivalCity={(value) => setExtendedFormData(prev => ({ ...prev, arrivalCity: value }))}
                     departureLocationType={extendedFormData.departureLocationType || 'appartement'}
                     setDepartureLocationType={(value) => setExtendedFormData(prev => ({ ...prev, departureLocationType: value }))}
                     departureFloor={extendedFormData.departureFloor || '0'}

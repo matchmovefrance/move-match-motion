@@ -29,10 +29,14 @@ interface ExtendedClientFormProps {
   setDepartureAddress: (value: string) => void;
   departurePostalCode: string;
   setDeparturePostalCode: (value: string) => void;
+  departureCity: string;
+  setDepartureCity: (value: string) => void;
   arrivalAddress: string;
   setArrivalAddress: (value: string) => void;
   arrivalPostalCode: string;
   setArrivalPostalCode: (value: string) => void;
+  arrivalCity: string;
+  setArrivalCity: (value: string) => void;
   
   // Configuration des lieux de départ
   departureLocationType: string;
@@ -85,8 +89,6 @@ interface ExtendedClientFormProps {
 }
 
 export function ExtendedClientForm(props: ExtendedClientFormProps) {
-  const [departureCity, setDepartureCity] = useState('');
-  const [arrivalCity, setArrivalCity] = useState('');
   const [departurePostalCodeError, setDeparturePostalCodeError] = useState('');
   const [arrivalPostalCodeError, setArrivalPostalCodeError] = useState('');
   
@@ -111,11 +113,11 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
       // Valider que le code postal fasse exactement 5 chiffres
       if (numericValue.length > 0 && numericValue.length < 5) {
         setDeparturePostalCodeError('Le code postal doit contenir exactement 5 chiffres');
-        setDepartureCity('');
+        props.setDepartureCity('');
       } else {
         setDeparturePostalCodeError('');
         if (numericValue.length !== 5) {
-          setDepartureCity('');
+          props.setDepartureCity('');
         }
       }
     } else {
@@ -124,11 +126,11 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
       // Valider que le code postal fasse exactement 5 chiffres
       if (numericValue.length > 0 && numericValue.length < 5) {
         setArrivalPostalCodeError('Le code postal doit contenir exactement 5 chiffres');
-        setArrivalCity('');
+        props.setArrivalCity('');
       } else {
         setArrivalPostalCodeError('');
         if (numericValue.length !== 5) {
-          setArrivalCity('');
+          props.setArrivalCity('');
         }
       }
     }
@@ -318,8 +320,8 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
                 <div>
                   <CityAutocomplete
                     postalCode={props.departurePostalCode}
-                    selectedCity={departureCity}
-                    onCitySelect={setDepartureCity}
+                    selectedCity={props.departureCity}
+                    onCitySelect={props.setDepartureCity}
                     label="Ville de départ"
                     placeholder="Sélectionnez une ville"
                   />
@@ -354,8 +356,8 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
                 <div>
                   <CityAutocomplete
                     postalCode={props.arrivalPostalCode}
-                    selectedCity={arrivalCity}
-                    onCitySelect={setArrivalCity}
+                    selectedCity={props.arrivalCity}
+                    onCitySelect={props.setArrivalCity}
                     label="Ville d'arrivée"
                     placeholder="Sélectionnez une ville"
                   />
