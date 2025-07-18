@@ -505,6 +505,7 @@ export type Database = {
         Row: {
           arrival_address: string | null
           arrival_carrying_distance: number | null
+          arrival_city: string | null
           arrival_elevator_size: string | null
           arrival_floor: number | null
           arrival_has_elevator: boolean | null
@@ -522,6 +523,7 @@ export type Database = {
           date_range_start: string | null
           departure_address: string | null
           departure_carrying_distance: number | null
+          departure_city: string | null
           departure_elevator_size: string | null
           departure_floor: number | null
           departure_has_elevator: boolean | null
@@ -549,6 +551,7 @@ export type Database = {
         Insert: {
           arrival_address?: string | null
           arrival_carrying_distance?: number | null
+          arrival_city?: string | null
           arrival_elevator_size?: string | null
           arrival_floor?: number | null
           arrival_has_elevator?: boolean | null
@@ -566,6 +569,7 @@ export type Database = {
           date_range_start?: string | null
           departure_address?: string | null
           departure_carrying_distance?: number | null
+          departure_city?: string | null
           departure_elevator_size?: string | null
           departure_floor?: number | null
           departure_has_elevator?: boolean | null
@@ -593,6 +597,7 @@ export type Database = {
         Update: {
           arrival_address?: string | null
           arrival_carrying_distance?: number | null
+          arrival_city?: string | null
           arrival_elevator_size?: string | null
           arrival_floor?: number | null
           arrival_has_elevator?: boolean | null
@@ -610,6 +615,7 @@ export type Database = {
           date_range_start?: string | null
           departure_address?: string | null
           departure_carrying_distance?: number | null
+          departure_city?: string | null
           departure_elevator_size?: string | null
           departure_floor?: number | null
           departure_has_elevator?: boolean | null
