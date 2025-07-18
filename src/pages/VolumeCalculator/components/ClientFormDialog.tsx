@@ -63,6 +63,19 @@ interface ClientFormDialogProps {
   formule: string;
   setFormule: (value: string) => void;
   
+  // Déménagement international
+  isInternational?: boolean;
+  setIsInternational?: (value: boolean) => void;
+  internationalData?: {
+    departureAddress: string;
+    arrivalAddress: string;
+    departureCountry: string;
+    arrivalCountry: string;
+    departureCity: string;
+    arrivalCity: string;
+  };
+  setInternationalData?: (data: any) => void;
+  
   // Actions
   onSaveInventory?: () => void;
   selectedItemsCount?: number;

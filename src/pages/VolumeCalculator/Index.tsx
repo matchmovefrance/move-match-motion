@@ -49,6 +49,17 @@ const VolumeCalculator = () => {
   const [extendedFormData, setExtendedFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Déménagement international
+  const [isInternational, setIsInternational] = useState(false);
+  const [internationalData, setInternationalData] = useState({
+    departureAddress: '',
+    arrivalAddress: '',
+    departureCountry: '',
+    arrivalCountry: '',
+    departureCity: '',
+    arrivalCity: ''
+  });
+  
   // Ajout des champs de date de déménagement
   const [movingDate, setMovingDate] = useState('');
   const [flexibleDates, setFlexibleDates] = useState(false);
@@ -66,7 +77,7 @@ const VolumeCalculator = () => {
   const { distance, distanceText, isLoading: isCalculatingDistance, error: distanceError } = useGoogleMapsDistance({
     departurePostalCode: extendedFormData.departurePostalCode,
     arrivalPostalCode: extendedFormData.arrivalPostalCode,
-    enabled: !!(extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode)
+    enabled: !!(extendedFormData.departurePostalCode && extendedFormData.arrivalPostalCode && !isInternational)
   });
 
   const getLocationTypeDisplayName = (locationType: string) => {
@@ -180,6 +191,15 @@ const VolumeCalculator = () => {
     setDateRangeStart('');
     setDateRangeEnd('');
     setFormule('standard');
+    setIsInternational(false);
+    setInternationalData({
+      departureAddress: '',
+      arrivalAddress: '',
+      departureCountry: '',
+      arrivalCountry: '',
+      departureCity: '',
+      arrivalCity: ''
+    });
   };
 
   const handleSaveClick = () => {
@@ -253,6 +273,8 @@ const VolumeCalculator = () => {
         date_range_start: dateRangeStart || null,
         date_range_end: dateRangeEnd || null,
         formule: formule,
+        is_international: isInternational || false,
+        international_data: isInternational ? internationalData : null,
       };
 
       let error;
@@ -301,6 +323,15 @@ const VolumeCalculator = () => {
     setDateRangeStart(inventory.date_range_start || '');
     setDateRangeEnd(inventory.date_range_end || '');
     setFormule(inventory.formule || 'standard');
+    setIsInternational(inventory.is_international || false);
+    setInternationalData(inventory.international_data || {
+      departureAddress: '',
+      arrivalAddress: '',
+      departureCountry: '',
+      arrivalCountry: '',
+      departureCity: '',
+      arrivalCity: ''
+    });
     setCurrentInventoryId(inventory.id);
     
     // Charger les données étendues
@@ -378,13 +409,15 @@ const VolumeCalculator = () => {
       flexibleDates,
       dateRangeStart,
       dateRangeEnd,
-      extendedFormData
+      extendedFormData,
+      isInternational,
+      internationalData
     };
   };
 
   const generateProfessionalInventoryTXT = async () => {
     const data = await generateProfessionalInventoryContent(distance, distanceText);
-    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance, distanceText: calculatedDistanceText } = data;
+    const { settings, totalVolume, totalWeight, currentDate, documentDate, truck, movingDate, flexibleDates, dateRangeStart, dateRangeEnd, extendedFormData, calculatedDistance, distanceText: calculatedDistanceText, isInternational, internationalData } = data;
     
     // En-tête professionnel avec nouvelles informations
     const header = `═══════════════════════════════════════════════════════
@@ -411,8 +444,23 @@ ${flexibleDates ? `Dates flexibles      : du ${dateRangeStart ? new Date(dateRan
 
 DÉTAILS DU DÉMÉNAGEMENT
 ──────────────────────────────────────────────────────
+${isInternational ? 
+`Type de déménagement : International
+Adresse de départ    : ${internationalData?.departureAddress || 'Non renseignée'}
+Pays de départ       : ${internationalData?.departureCountry || 'Non renseigné'}
+Adresse d'arrivée    : ${internationalData?.arrivalAddress || 'Non renseignée'}
+Pays d'arrivée       : ${internationalData?.arrivalCountry || 'Non renseigné'}
+Formule              : ${formule || 'standard'}
+
+RÉSUMÉ TECHNIQUE
+──────────────────────────────────────────────────────
+Volume total estimé  : ${totalVolume.toFixed(2)} m³
+Nombre d'objets      : ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
+Types différents     : ${selectedItems.length}
+Distance estimée     : Déménagement à l'international - distance non disponible
+Notes particulières  : ${notes || 'Aucune'}` :
+`Type de déménagement : National
 Adresse de départ    : ${extendedFormData?.departureAddress || 'Non renseignée'}
-Code postal départ   : ${extendedFormData?.departurePostalCode || 'Non renseigné'}
 Type lieu départ     : ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}
 Étage départ         : ${extendedFormData?.departureFloor || '0'}
 Ascenseur départ     : ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}
@@ -423,7 +471,6 @@ Stationnement        : ${extendedFormData?.departureParkingNeeded ? 'Nécessaire
 Formule              : ${formule || 'standard'}
 
 Adresse d'arrivée    : ${extendedFormData?.arrivalAddress || 'Non renseignée'}
-Code postal arrivée  : ${extendedFormData?.arrivalPostalCode || 'Non renseigné'}
 Type lieu arrivée    : ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}
 Étage arrivée        : ${extendedFormData?.arrivalFloor || '0'}
 Ascenseur arrivée    : ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}
@@ -438,7 +485,7 @@ Volume total estimé  : ${totalVolume.toFixed(2)} m³
 Nombre d'objets      : ${selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
 Types différents     : ${selectedItems.length}
 ${extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode && calculatedDistance ? `Distance estimée    : ${calculatedDistanceText || calculatedDistance + 'km'}` : ''}
-Notes particulières  : ${notes || 'Aucune'}
+Notes particulières  : ${notes || 'Aucune'}`}
 
 RECOMMANDATION VÉHICULE
 ──────────────────────────────────────────────────────
@@ -652,7 +699,12 @@ Validité de l'estimation : 30 jours
     pdf.setFontSize(8);
     
     // Distance si disponible
-    if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
+    if (isInternational) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`DISTANCE ESTIMÉE: Déménagement à l'international - distance non disponible`, margin + 5, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      yPosition += 6;
+    } else if (extendedFormData?.departurePostalCode && extendedFormData?.arrivalPostalCode) {
       pdf.setFont('helvetica', 'bold');
       const distanceDisplay = calculatedDistanceText || (calculatedDistance ? `${calculatedDistance} km` : 'Calcul en cours');
       pdf.text(`DISTANCE ESTIMÉE: ${distanceDisplay}`, margin + 5, yPosition);
@@ -660,31 +712,47 @@ Validité de l'estimation : 30 jours
       yPosition += 6;
     }
     
-    // Configuration détaillée - format exact demandé
-    const departureInfo = [
-      `LIEU DE DÉPART:`,
-      `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
-      `Code postal: ${extendedFormData?.departurePostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
-      `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? extendedFormData?.departureFloor : 'Non spécifié'}`,
-      `Ascenseur: ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}`,
-      `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
-      `Distance portage: ${extendedFormData?.departureCarryingDistance || '0'}m`,
-      `Stationnement: ${extendedFormData?.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`,
-      `Formule: ${formule || 'standard'}`
-    ];
+    // Configuration détaillée selon le type de déménagement
+    let departureInfo: string[] = [];
+    let arrivalInfo: string[] = [];
     
-    const arrivalInfo = [
-      `LIEU D'ARRIVÉE:`,
-      `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
-      `Code postal: ${extendedFormData?.arrivalPostalCode || 'Non spécifié'}`,
-      `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
-      `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? extendedFormData?.arrivalFloor : 'Non spécifié'}`,
-      `Ascenseur: ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}`,
-      `Monte-charge: ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
-      `Distance portage: ${extendedFormData?.arrivalCarryingDistance || '0'}m`,
-      `Stationnement: ${extendedFormData?.arrivalParkingNeeded ? 'Demandé' : 'Non demandé'}`
-    ];
+    if (isInternational) {
+      departureInfo = [
+        `LIEU DE DÉPART:`,
+        `Adresse: ${internationalData?.departureAddress || 'Non spécifiée'}`,
+        `Pays: ${internationalData?.departureCountry || 'Non spécifié'}`,
+        `Formule: ${formule || 'standard'}`
+      ];
+      
+      arrivalInfo = [
+        `LIEU D'ARRIVÉE:`,
+        `Adresse: ${internationalData?.arrivalAddress || 'Non spécifiée'}`,
+        `Pays: ${internationalData?.arrivalCountry || 'Non spécifié'}`
+      ];
+    } else {
+      departureInfo = [
+        `LIEU DE DÉPART:`,
+        `Adresse: ${extendedFormData?.departureAddress || 'Non spécifiée'}`,
+        `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.departureLocationType || 'appartement')}`,
+        `Étage: ${extendedFormData?.departureFloor || extendedFormData?.departureFloor === 0 ? extendedFormData?.departureFloor : 'Non spécifié'}`,
+        `Ascenseur: ${extendedFormData?.departureHasElevator ? 'Oui' : 'Non'}`,
+        `Monte-charge: ${extendedFormData?.departureHasFreightElevator ? 'Oui' : 'Non'}`,
+        `Distance portage: ${extendedFormData?.departureCarryingDistance || '0'}m`,
+        `Stationnement: ${extendedFormData?.departureParkingNeeded ? 'Demandé' : 'Non demandé'}`,
+        `Formule: ${formule || 'standard'}`
+      ];
+      
+      arrivalInfo = [
+        `LIEU D'ARRIVÉE:`,
+        `Adresse: ${extendedFormData?.arrivalAddress || 'Non spécifiée'}`,
+        `Type de lieu: ${getLocationTypeDisplayName(extendedFormData?.arrivalLocationType || 'appartement')}`,
+        `Étage: ${extendedFormData?.arrivalFloor || extendedFormData?.arrivalFloor === 0 ? extendedFormData?.arrivalFloor : 'Non spécifié'}`,
+        `Ascenseur: ${extendedFormData?.arrivalHasElevator ? 'Oui' : 'Non'}`,
+        `Monte-charge: ${extendedFormData?.arrivalHasFreightElevator ? 'Oui' : 'Non'}`,
+        `Distance portage: ${extendedFormData?.arrivalCarryingDistance || '0'}m`,
+        `Stationnement: ${extendedFormData?.arrivalParkingNeeded ? 'Demandé' : 'Non demandé'}`
+      ];
+    }
 
     departureInfo.forEach((info, index) => {
       if (index === 0) {
@@ -1244,6 +1312,10 @@ Validité de l'estimation : 30 jours
                     setArrivalParkingNeeded={(value) => setExtendedFormData(prev => ({ ...prev, arrivalParkingNeeded: value }))}
                     formule={formule}
                     setFormule={setFormule}
+                    isInternational={isInternational}
+                    setIsInternational={setIsInternational}
+                    internationalData={internationalData}
+                    setInternationalData={setInternationalData}
                     onSaveInventory={handleSaveClick}
                     selectedItemsCount={selectedItems.length}
                   />

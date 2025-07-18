@@ -5,8 +5,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { MapPin, Building, ArrowUp, Car, User, Home } from 'lucide-react';
+import { MapPin, Building, ArrowUp, Car, User, Home, Globe } from 'lucide-react';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
+import { CountrySelect } from '@/components/CountrySelect';
+import { useState } from 'react';
 
 interface ExtendedClientFormProps {
   // Informations de base
@@ -66,9 +69,25 @@ interface ExtendedClientFormProps {
   // Formule
   formule: string;
   setFormule: (value: string) => void;
+  
+  // Déménagement international
+  isInternational?: boolean;
+  setIsInternational?: (value: boolean) => void;
+  internationalData?: {
+    departureAddress: string;
+    arrivalAddress: string;
+    departureCountry: string;
+    arrivalCountry: string;
+    departureCity: string;
+    arrivalCity: string;
+  };
+  setInternationalData?: (data: any) => void;
 }
 
 export function ExtendedClientForm(props: ExtendedClientFormProps) {
+  const [departureCity, setDepartureCity] = useState('');
+  const [arrivalCity, setArrivalCity] = useState('');
+  
   const {
     distance,
     duration,
@@ -77,8 +96,25 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
   } = useGoogleMapsDistance({
     departurePostalCode: props.departurePostalCode,
     arrivalPostalCode: props.arrivalPostalCode,
-    enabled: !!(props.departurePostalCode && props.arrivalPostalCode)
+    enabled: !!(props.departurePostalCode && props.arrivalPostalCode && !props.isInternational)
   });
+
+  const handlePostalCodeChange = (field: 'departure' | 'arrival', value: string) => {
+    // Limiter à 5 caractères numériques
+    const numericValue = value.replace(/\D/g, '').slice(0, 5);
+    
+    if (field === 'departure') {
+      props.setDeparturePostalCode(numericValue);
+      if (numericValue.length !== 5) {
+        setDepartureCity('');
+      }
+    } else {
+      props.setArrivalPostalCode(numericValue);
+      if (numericValue.length !== 5) {
+        setArrivalCity('');
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -140,6 +176,21 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
               rows={3}
             />
           </div>
+          
+          {/* Case à cocher déménagement international */}
+          {props.setIsInternational && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isInternational"
+                checked={props.isInternational || false}
+                onCheckedChange={props.setIsInternational}
+              />
+              <Label htmlFor="isInternational" className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Déménagement à l'international
+              </Label>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -148,67 +199,161 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-green-600" />
-            Adresses de déménagement
+            {props.isInternational ? 'Adresses internationales' : 'Adresses de déménagement'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="departureAddress">Adresse de départ</Label>
-              <Input
-                id="departureAddress"
-                value={props.departureAddress}
-                onChange={(e) => props.setDepartureAddress(e.target.value)}
-                placeholder="Adresse complète de départ"
-              />
-            </div>
-            <div>
-              <Label htmlFor="departurePostalCode">Code postal de départ *</Label>
-              <Input
-                id="departurePostalCode"
-                value={props.departurePostalCode}
-                onChange={(e) => props.setDeparturePostalCode(e.target.value)}
-                placeholder="Ex: 75001"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="arrivalAddress">Adresse d'arrivée</Label>
-              <Input
-                id="arrivalAddress"
-                value={props.arrivalAddress}
-                onChange={(e) => props.setArrivalAddress(e.target.value)}
-                placeholder="Adresse complète d'arrivée"
-              />
-            </div>
-            <div>
-              <Label htmlFor="arrivalPostalCode">Code postal d'arrivée *</Label>
-              <Input
-                id="arrivalPostalCode"
-                value={props.arrivalPostalCode}
-                onChange={(e) => props.setArrivalPostalCode(e.target.value)}
-                placeholder="Ex: 69001"
-                required
-              />
-            </div>
-          </div>
-          
-          {/* Affichage de la distance calculée */}
-          {(props.departurePostalCode && props.arrivalPostalCode) && (
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <div className="flex items-center gap-2 text-blue-700">
-                <MapPin className="h-4 w-4" />
-                <span className="font-medium">Distance calculée</span>
-              </div>
-              {distanceLoading ? (
-                <p className="text-sm text-blue-600 mt-1">Calcul en cours...</p>
-              ) : distanceError ? (
-                <p className="text-sm text-red-600 mt-1">Erreur de calcul: {distanceError}</p>
-              ) : distance ? (
-                <div className="text-sm text-blue-600 mt-1">
-                  <p>{distance} km</p>
+          {props.isInternational ? (
+            /* Formulaire international */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="intDepartureAddress">Adresse de départ complète *</Label>
+                  <Input
+                    id="intDepartureAddress"
+                    value={props.internationalData?.departureAddress || ''}
+                    onChange={(e) => props.setInternationalData?.({ 
+                      ...props.internationalData, 
+                      departureAddress: e.target.value 
+                    })}
+                    placeholder="Adresse complète de départ"
+                    required
+                  />
                 </div>
-              ) : null}
+                <div>
+                  <CountrySelect
+                    value={props.internationalData?.departureCountry || ''}
+                    onValueChange={(value) => props.setInternationalData?.({ 
+                      ...props.internationalData, 
+                      departureCountry: value 
+                    })}
+                    label="Pays de départ"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="intArrivalAddress">Adresse d'arrivée complète *</Label>
+                  <Input
+                    id="intArrivalAddress"
+                    value={props.internationalData?.arrivalAddress || ''}
+                    onChange={(e) => props.setInternationalData?.({ 
+                      ...props.internationalData, 
+                      arrivalAddress: e.target.value 
+                    })}
+                    placeholder="Adresse complète d'arrivée"
+                    required
+                  />
+                </div>
+                <div>
+                  <CountrySelect
+                    value={props.internationalData?.arrivalCountry || ''}
+                    onValueChange={(value) => props.setInternationalData?.({ 
+                      ...props.internationalData, 
+                      arrivalCountry: value 
+                    })}
+                    label="Pays d'arrivée"
+                    required
+                  />
+                </div>
+              </div>
+              
+              {/* Affichage pour international */}
+              <div className="p-3 bg-amber-50 rounded-lg">
+                <div className="flex items-center gap-2 text-amber-700">
+                  <Globe className="h-4 w-4" />
+                  <span className="font-medium">Déménagement international</span>
+                </div>
+                <p className="text-sm text-amber-600 mt-1">Distance non disponible pour les déménagements internationaux</p>
+              </div>
+            </div>
+          ) : (
+            /* Formulaire national */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="departureAddress">Adresse de départ</Label>
+                  <Input
+                    id="departureAddress"
+                    value={props.departureAddress}
+                    onChange={(e) => props.setDepartureAddress(e.target.value)}
+                    placeholder="Adresse complète de départ"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="departurePostalCode">Code postal de départ *</Label>
+                  <Input
+                    id="departurePostalCode"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{5}"
+                    maxLength={5}
+                    value={props.departurePostalCode}
+                    onChange={(e) => handlePostalCodeChange('departure', e.target.value)}
+                    placeholder="Ex: 75001"
+                    required
+                  />
+                </div>
+                <div>
+                  <CityAutocomplete
+                    postalCode={props.departurePostalCode}
+                    selectedCity={departureCity}
+                    onCitySelect={setDepartureCity}
+                    label="Ville de départ"
+                    placeholder="Sélectionnez une ville"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="arrivalAddress">Adresse d'arrivée</Label>
+                  <Input
+                    id="arrivalAddress"
+                    value={props.arrivalAddress}
+                    onChange={(e) => props.setArrivalAddress(e.target.value)}
+                    placeholder="Adresse complète d'arrivée"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="arrivalPostalCode">Code postal d'arrivée *</Label>
+                  <Input
+                    id="arrivalPostalCode"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{5}"
+                    maxLength={5}
+                    value={props.arrivalPostalCode}
+                    onChange={(e) => handlePostalCodeChange('arrival', e.target.value)}
+                    placeholder="Ex: 69001"
+                    required
+                  />
+                </div>
+                <div>
+                  <CityAutocomplete
+                    postalCode={props.arrivalPostalCode}
+                    selectedCity={arrivalCity}
+                    onCitySelect={setArrivalCity}
+                    label="Ville d'arrivée"
+                    placeholder="Sélectionnez une ville"
+                  />
+                </div>
+              </div>
+              
+              {/* Affichage de la distance calculée */}
+              {(props.departurePostalCode && props.arrivalPostalCode) && (
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-700">
+                    <MapPin className="h-4 w-4" />
+                    <span className="font-medium">Distance calculée</span>
+                  </div>
+                  {distanceLoading ? (
+                    <p className="text-sm text-blue-600 mt-1">Calcul en cours...</p>
+                  ) : distanceError ? (
+                    <p className="text-sm text-red-600 mt-1">Erreur de calcul: {distanceError}</p>
+                  ) : distance ? (
+                    <div className="text-sm text-blue-600 mt-1">
+                      <p>{distance} km</p>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
