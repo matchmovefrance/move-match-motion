@@ -87,6 +87,8 @@ interface ExtendedClientFormProps {
 export function ExtendedClientForm(props: ExtendedClientFormProps) {
   const [departureCity, setDepartureCity] = useState('');
   const [arrivalCity, setArrivalCity] = useState('');
+  const [departurePostalCodeError, setDeparturePostalCodeError] = useState('');
+  const [arrivalPostalCodeError, setArrivalPostalCodeError] = useState('');
   
   const {
     distance,
@@ -105,13 +107,29 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
     
     if (field === 'departure') {
       props.setDeparturePostalCode(numericValue);
-      if (numericValue.length !== 5) {
+      
+      // Valider que le code postal fasse exactement 5 chiffres
+      if (numericValue.length > 0 && numericValue.length < 5) {
+        setDeparturePostalCodeError('Le code postal doit contenir exactement 5 chiffres');
         setDepartureCity('');
+      } else {
+        setDeparturePostalCodeError('');
+        if (numericValue.length !== 5) {
+          setDepartureCity('');
+        }
       }
     } else {
       props.setArrivalPostalCode(numericValue);
-      if (numericValue.length !== 5) {
+      
+      // Valider que le code postal fasse exactement 5 chiffres
+      if (numericValue.length > 0 && numericValue.length < 5) {
+        setArrivalPostalCodeError('Le code postal doit contenir exactement 5 chiffres');
         setArrivalCity('');
+      } else {
+        setArrivalPostalCodeError('');
+        if (numericValue.length !== 5) {
+          setArrivalCity('');
+        }
       }
     }
   };
@@ -291,7 +309,11 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
                     onChange={(e) => handlePostalCodeChange('departure', e.target.value)}
                     placeholder="Ex: 75001"
                     required
+                    className={departurePostalCodeError ? 'border-red-500' : ''}
                   />
+                  {departurePostalCodeError && (
+                    <p className="text-sm text-red-600 mt-1">{departurePostalCodeError}</p>
+                  )}
                 </div>
                 <div>
                   <CityAutocomplete
@@ -323,7 +345,11 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
                     onChange={(e) => handlePostalCodeChange('arrival', e.target.value)}
                     placeholder="Ex: 69001"
                     required
+                    className={arrivalPostalCodeError ? 'border-red-500' : ''}
                   />
+                  {arrivalPostalCodeError && (
+                    <p className="text-sm text-red-600 mt-1">{arrivalPostalCodeError}</p>
+                  )}
                 </div>
                 <div>
                   <CityAutocomplete
