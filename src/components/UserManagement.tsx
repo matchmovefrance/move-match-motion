@@ -57,8 +57,8 @@ const UserManagement = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  // Seuls les admins complets (emails hardcodés) peuvent gérer les utilisateurs
-  const isFullAdmin = loggedInUser?.email === 'contact@matchmove.fr' || loggedInUser?.email === 'pierre@matchmove.fr';
+  // Seuls les admins peuvent gérer les utilisateurs
+  const isFullAdmin = profile?.role === 'admin';
 
   useEffect(() => {
     if (isFullAdmin) {

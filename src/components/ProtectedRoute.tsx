@@ -33,8 +33,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/auth" replace />;
   }
 
-  // Admin users (contact@matchmove.fr et pierre@matchmove.fr) ont toujours accès
-  if (user.email === 'contact@matchmove.fr' || user.email === 'pierre@matchmove.fr') {
+  // Admin users have always access
+  if (profile && profile.role === 'admin') {
     console.log('👑 Admin user detected, allowing access');
     return <>{children}</>;
   }

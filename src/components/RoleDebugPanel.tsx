@@ -7,8 +7,8 @@ const RoleDebugPanel = () => {
   const { user, profile } = useAuth();
 
   const getRoleDisplay = (role: string, email: string) => {
-    if (email === 'contact@matchmove.fr' || email === 'pierre@matchmove.fr') {
-      return 'Administrateur (Hardcodé)';
+    if (role === 'admin') {
+      return 'Administrateur';
     }
     
     const roleMap: { [key: string]: string } = {
@@ -22,7 +22,7 @@ const RoleDebugPanel = () => {
     return roleMap[role] || role;
   };
 
-  const isAdmin = profile?.role === 'admin' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr';
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <Card className="mb-6 border-blue-200">

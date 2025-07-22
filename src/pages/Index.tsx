@@ -65,15 +65,15 @@ const Index = () => {
       case 'management': 
         return (
           <div className="space-y-8">
-            {/* Seuls les admins (emails hardcodés) voient la gestion des utilisateurs */}
-            {(user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr') && (
+            {/* Seuls les admins voient la gestion des utilisateurs */}
+            {(profile?.role === 'admin') && (
               <div>
                 <h2 className="text-2xl font-bold mb-6">Gestion des Utilisateurs</h2>
                 <UserManagement />
               </div>
             )}
             {/* Admins et agents voient les liens publics */}
-            {(profile?.role === 'admin' || profile?.role === 'agent' || user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr') && (
+            {(profile?.role === 'admin' || profile?.role === 'agent') && (
               <div>
                 <h2 className="text-2xl font-bold mb-6">Liens Publics</h2>
                 <PublicLinkManager />
@@ -86,8 +86,8 @@ const Index = () => {
   };
 
   const getTabs = () => {
-    // Admins complets (emails hardcodés uniquement)
-    const isFullAdmin = user?.email === 'contact@matchmove.fr' || user?.email === 'pierre@matchmove.fr';
+    // Admins complets 
+    const isFullAdmin = profile?.role === 'admin';
     
     if (profile?.role === 'demenageur') {
       // Déménageur users only see the calendar

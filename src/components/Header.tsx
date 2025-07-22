@@ -29,8 +29,8 @@ const Header = () => {
   };
 
   const getRoleDisplay = (role: string, email: string) => {
-    // Emails admin hardcodés
-    if (email === 'contact@matchmove.fr' || email === 'pierre@matchmove.fr') {
+    // Vérification du rôle admin
+    if (role === 'admin') {
       return 'Administrateur';
     }
     
