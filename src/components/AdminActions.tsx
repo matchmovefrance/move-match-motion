@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RotateCcw, AlertTriangle, Building, Database } from 'lucide-react';
+import { RotateCcw, AlertTriangle, Building, Database, HardDrive } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import CompanySettings from './CompanySettings';
@@ -54,6 +54,10 @@ const AdminActions = () => {
     }
   };
 
+  const openBackupManager = () => {
+    window.open('/backup-manager', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="counters" className="w-full">
@@ -95,6 +99,21 @@ const AdminActions = () => {
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   {loading ? 'Remise à zéro...' : 'Remettre à zéro les compteurs'}
+                </Button>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-800 mb-2">Gestionnaire de Backups</h4>
+                <p className="text-sm text-blue-700 mb-4">
+                  Accédez au gestionnaire de backups pour créer, restaurer et gérer les sauvegardes de votre base de données.
+                </p>
+                <Button
+                  onClick={openBackupManager}
+                  variant="outline"
+                  className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                >
+                  <HardDrive className="h-4 w-4 mr-2" />
+                  Ouvrir le Gestionnaire de Backups
                 </Button>
               </div>
             </CardContent>

@@ -12,6 +12,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PricingTool from './pages/PricingTool/Index';
 import VolumeCalculator from './pages/VolumeCalculator/Index';
 import TruckOptimizer from './pages/TruckOptimizer/Index';
+import BackupManager from './pages/BackupManager/Index';
 import PublicClientForm from './pages/PublicClientForm';
 import PublicMoverForm from './pages/PublicMoverForm';
 
@@ -76,6 +77,14 @@ function App() {
                       <TruckOptimizer />
                     </main>
                   </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/backup-manager"
+              element={
+                <ProtectedRoute>
+                  <BackupManager />
                 </ProtectedRoute>
               }
             />
