@@ -78,15 +78,26 @@ const DataManagement = () => {
       // Combine and format data
       const combinedData = [
         ...(volumesResponse.data || []).map(item => ({
-          ...item,
+          furniture_id: item.furniture_id,
+          furniture_name: item.furniture_name,
+          category: item.category,
+          volume: item.custom_volume || item.default_volume,
           type: 'standard',
-          volume: item.custom_volume || item.default_volume
+          length_cm: null,
+          width_cm: null,
+          height_cm: null,
+          description: null
         })),
         ...(customResponse.data || []).map(item => ({
-          ...item,
           furniture_id: item.id,
           furniture_name: item.name,
-          type: 'custom'
+          category: item.category,
+          volume: item.volume,
+          type: 'custom',
+          length_cm: item.length_cm,
+          width_cm: item.width_cm,
+          height_cm: item.height_cm,
+          description: item.description
         }))
       ];
 
@@ -309,7 +320,10 @@ const DataManagement = () => {
   };
 
   const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    // Add UTF-8 BOM for proper encoding
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + content;
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename;
