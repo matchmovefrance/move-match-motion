@@ -64,11 +64,6 @@ const VolumeCalculator = () => {
     arrivalCity: ''
   });
   
-  // Ajout des champs de date de déménagement
-  const [movingDate, setMovingDate] = useState('');
-  const [flexibleDates, setFlexibleDates] = useState(false);
-  const [dateRangeStart, setDateRangeStart] = useState('');
-  const [dateRangeEnd, setDateRangeEnd] = useState('');
   
   // Formule
   const [formule, setFormule] = useState('standard');
@@ -190,10 +185,6 @@ const VolumeCalculator = () => {
     setClientEmail('');
     setNotes('');
     setExtendedFormData({});
-    setMovingDate('');
-    setFlexibleDates(false);
-    setDateRangeStart('');
-    setDateRangeEnd('');
     setFormule('standard');
     setIsInternational(false);
     setInternationalData({
@@ -274,10 +265,10 @@ const VolumeCalculator = () => {
         total_weight: totalWeight,
         selected_items: selectedItems as any,
         created_by: user.id,
-        moving_date: movingDate || null,
-        flexible_dates: flexibleDates,
-        date_range_start: dateRangeStart || null,
-        date_range_end: dateRangeEnd || null,
+        moving_date: extendedFormData.movingDate || null,
+        flexible_dates: extendedFormData.flexibleDates || false,
+        date_range_start: extendedFormData.dateRangeStart || null,
+        date_range_end: extendedFormData.dateRangeEnd || null,
         formule: formule,
         is_international: isInternational || false,
         international_data: isInternational ? internationalData : null,
@@ -324,10 +315,6 @@ const VolumeCalculator = () => {
     setClientPhone(inventory.client_phone || '');
     setClientEmail(inventory.client_email || '');
     setNotes(inventory.notes || '');
-    setMovingDate(inventory.moving_date || '');
-    setFlexibleDates(inventory.flexible_dates || false);
-    setDateRangeStart(inventory.date_range_start || '');
-    setDateRangeEnd(inventory.date_range_end || '');
     setFormule(inventory.formule || 'standard');
     setIsInternational(inventory.is_international || false);
     setInternationalData(inventory.international_data || {
@@ -413,10 +400,10 @@ const VolumeCalculator = () => {
       calculatedDistance,
       distanceText,
       selectedItems,
-      movingDate,
-      flexibleDates,
-      dateRangeStart,
-      dateRangeEnd,
+      movingDate: extendedFormData.movingDate || '',
+      flexibleDates: extendedFormData.flexibleDates || false,
+      dateRangeStart: extendedFormData.dateRangeStart || '',
+      dateRangeEnd: extendedFormData.dateRangeEnd || '',
       extendedFormData,
       isInternational,
       internationalData
@@ -1164,96 +1151,6 @@ Validité de l'estimation : 30 jours
                     onSafetyMargin15Change={setSafetyMargin15}
                   />
 
-
-            {/* Dates de déménagement */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Date de déménagement
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="movingDate">Date souhaitée *</Label>
-                    <Input
-                      id="movingDate"
-                      type="date"
-                      value={movingDate}
-                      onChange={(e) => {
-                        setMovingDate(e.target.value);
-                        // Recalculer les dates flexibles si activées
-                        if (flexibleDates && e.target.value) {
-                          const desiredDate = new Date(e.target.value);
-                          const startDate = new Date(desiredDate);
-                          startDate.setDate(desiredDate.getDate() - 15);
-                          const endDate = new Date(desiredDate);
-                          endDate.setDate(desiredDate.getDate() + 15);
-                          
-                          setDateRangeStart(startDate.toISOString().split('T')[0]);
-                          setDateRangeEnd(endDate.toISOString().split('T')[0]);
-                        }
-                      }}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="flexibleDates"
-                      checked={flexibleDates}
-                      onCheckedChange={(checked) => {
-                        setFlexibleDates(!!checked);
-                        
-                        if (checked && movingDate) {
-                          // Calculer automatiquement ±15 jours autour de la date souhaitée
-                          const desiredDate = new Date(movingDate);
-                          const startDate = new Date(desiredDate);
-                          startDate.setDate(desiredDate.getDate() - 15);
-                          const endDate = new Date(desiredDate);
-                          endDate.setDate(desiredDate.getDate() + 15);
-                          
-                          setDateRangeStart(startDate.toISOString().split('T')[0]);
-                          setDateRangeEnd(endDate.toISOString().split('T')[0]);
-                        } else if (!checked) {
-                          // Effacer les dates de plage si désactivé
-                          setDateRangeStart('');
-                          setDateRangeEnd('');
-                        }
-                      }}
-                    />
-                    <Label htmlFor="flexibleDates" className="text-sm font-medium">
-                      Dates flexibles (±15 jours autour de la date souhaitée)
-                    </Label>
-                  </div>
-
-                  {flexibleDates && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label htmlFor="dateRangeStart">Date la plus tôt</Label>
-                        <Input
-                          id="dateRangeStart"
-                          type="date"
-                          value={dateRangeStart}
-                          onChange={(e) => setDateRangeStart(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="dateRangeEnd">Date la plus tard</Label>
-                        <Input
-                          id="dateRangeEnd"
-                          type="date"
-                          value={dateRangeEnd}
-                          onChange={(e) => setDateRangeEnd(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Information client - Popup Dialog */}
             <Card>
               <CardHeader>
@@ -1336,14 +1233,14 @@ Validité de l'estimation : 30 jours
                     setIsInternational={setIsInternational}
                     internationalData={internationalData}
                     setInternationalData={setInternationalData}
-                    movingDate={movingDate}
-                    setMovingDate={setMovingDate}
-                    flexibleDates={flexibleDates}
-                    setFlexibleDates={setFlexibleDates}
-                    dateRangeStart={dateRangeStart}
-                    setDateRangeStart={setDateRangeStart}
-                    dateRangeEnd={dateRangeEnd}
-                    setDateRangeEnd={setDateRangeEnd}
+                    movingDate={extendedFormData.movingDate || ''}
+                    setMovingDate={(value) => setExtendedFormData(prev => ({ ...prev, movingDate: value }))}
+                    flexibleDates={extendedFormData.flexibleDates || false}
+                    setFlexibleDates={(value) => setExtendedFormData(prev => ({ ...prev, flexibleDates: value }))}
+                    dateRangeStart={extendedFormData.dateRangeStart || ''}
+                    setDateRangeStart={(value) => setExtendedFormData(prev => ({ ...prev, dateRangeStart: value }))}
+                    dateRangeEnd={extendedFormData.dateRangeEnd || ''}
+                    setDateRangeEnd={(value) => setExtendedFormData(prev => ({ ...prev, dateRangeEnd: value }))}
                     onSaveInventory={handleSaveClick}
                     selectedItemsCount={selectedItems.length}
                   />
@@ -1461,10 +1358,6 @@ Validité de l'estimation : 30 jours
           notes: notes
         }}
         extendedFormData={extendedFormData}
-        movingDate={movingDate}
-        flexibleDates={flexibleDates}
-        dateRangeStart={dateRangeStart}
-        dateRangeEnd={dateRangeEnd}
       />
 
       <SaveInventoryDialog
