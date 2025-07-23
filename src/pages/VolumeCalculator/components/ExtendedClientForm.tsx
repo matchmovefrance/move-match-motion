@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { MapPin, Building, ArrowUp, Car, User, Home, Globe } from 'lucide-react';
+import { MapPin, Building, ArrowUp, Car, User, Home, Globe, Calendar } from 'lucide-react';
 import { useGoogleMapsDistance } from '@/hooks/useGoogleMapsDistance';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { CountrySelect } from '@/components/CountrySelect';
@@ -37,6 +37,16 @@ interface ExtendedClientFormProps {
   setArrivalPostalCode: (value: string) => void;
   arrivalCity: string;
   setArrivalCity: (value: string) => void;
+  
+  // Dates de déménagement
+  movingDate: string;
+  setMovingDate: (value: string) => void;
+  flexibleDates: boolean;
+  setFlexibleDates: (value: boolean) => void;
+  dateRangeStart: string;
+  setDateRangeStart: (value: string) => void;
+  dateRangeEnd: string;
+  setDateRangeEnd: (value: string) => void;
   
   // Configuration des lieux de départ
   departureLocationType: string;
@@ -209,6 +219,67 @@ export function ExtendedClientForm(props: ExtendedClientFormProps) {
                 <Globe className="h-4 w-4" />
                 Déménagement à l'international
               </Label>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dates de déménagement */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-purple-600" />
+            Dates de déménagement
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="movingDate">Date souhaitée *</Label>
+              <Input
+                id="movingDate"
+                type="date"
+                value={props.movingDate}
+                onChange={(e) => props.setMovingDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex items-center space-x-2 pt-6">
+              <Checkbox
+                id="flexibleDates"
+                checked={props.flexibleDates}
+                onCheckedChange={(checked) => {
+                  props.setFlexibleDates(checked as boolean);
+                  if (!checked) {
+                    props.setDateRangeStart('');
+                    props.setDateRangeEnd('');
+                  }
+                }}
+              />
+              <Label htmlFor="flexibleDates">Dates flexibles</Label>
+            </div>
+          </div>
+          
+          {props.flexibleDates && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <Label htmlFor="dateRangeStart">Date de début de période</Label>
+                <Input
+                  id="dateRangeStart"
+                  type="date"
+                  value={props.dateRangeStart}
+                  onChange={(e) => props.setDateRangeStart(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="dateRangeEnd">Date de fin de période</Label>
+                <Input
+                  id="dateRangeEnd"
+                  type="date"
+                  value={props.dateRangeEnd}
+                  onChange={(e) => props.setDateRangeEnd(e.target.value)}
+                />
+              </div>
             </div>
           )}
         </CardContent>

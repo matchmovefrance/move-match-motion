@@ -31,6 +31,16 @@ interface ClientFormDialogProps {
   arrivalCity: string;
   setArrivalCity: (value: string) => void;
   
+  // Dates de déménagement
+  movingDate: string;
+  setMovingDate: (value: string) => void;
+  flexibleDates: boolean;
+  setFlexibleDates: (value: boolean) => void;
+  dateRangeStart: string;
+  setDateRangeStart: (value: string) => void;
+  dateRangeEnd: string;
+  setDateRangeEnd: (value: string) => void;
+  
   // Configuration des lieux de départ
   departureLocationType: string;
   setDepartureLocationType: (value: string) => void;

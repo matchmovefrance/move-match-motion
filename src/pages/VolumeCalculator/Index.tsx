@@ -1336,6 +1336,14 @@ Validité de l'estimation : 30 jours
                     setIsInternational={setIsInternational}
                     internationalData={internationalData}
                     setInternationalData={setInternationalData}
+                    movingDate={movingDate}
+                    setMovingDate={setMovingDate}
+                    flexibleDates={flexibleDates}
+                    setFlexibleDates={setFlexibleDates}
+                    dateRangeStart={dateRangeStart}
+                    setDateRangeStart={setDateRangeStart}
+                    dateRangeEnd={dateRangeEnd}
+                    setDateRangeEnd={setDateRangeEnd}
                     onSaveInventory={handleSaveClick}
                     selectedItemsCount={selectedItems.length}
                   />
