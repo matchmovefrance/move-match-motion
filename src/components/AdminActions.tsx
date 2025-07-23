@@ -3,10 +3,11 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RotateCcw, AlertTriangle, Building } from 'lucide-react';
+import { RotateCcw, AlertTriangle, Building, Database } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import CompanySettings from './CompanySettings';
+import DataManagement from './DataManagement';
 
 const AdminActions = () => {
   const [loading, setLoading] = useState(false);
@@ -56,10 +57,14 @@ const AdminActions = () => {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="counters" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="counters" className="flex items-center space-x-2">
             <AlertTriangle className="h-4 w-4" />
             <span>Actions système</span>
+          </TabsTrigger>
+          <TabsTrigger value="data" className="flex items-center space-x-2">
+            <Database className="h-4 w-4" />
+            <span>Gestion données</span>
           </TabsTrigger>
           <TabsTrigger value="company" className="flex items-center space-x-2">
             <Building className="h-4 w-4" />
@@ -94,6 +99,10 @@ const AdminActions = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="data" className="space-y-4">
+          <DataManagement />
         </TabsContent>
 
         <TabsContent value="company" className="space-y-4">
