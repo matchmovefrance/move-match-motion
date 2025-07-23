@@ -358,6 +358,91 @@ const DataManagement = () => {
     });
   };
 
+  const downloadTemplate = (type: string) => {
+    let csvContent = '';
+    let filename = '';
+
+    switch (type) {
+      case 'clients':
+        csvContent = convertToCSV([
+          {
+            name: 'Jean Dupont',
+            email: 'jean.dupont@email.com',
+            phone: '0123456789',
+            client_reference: 'CLI001',
+            departure_city: 'Paris',
+            departure_postal_code: '75001',
+            arrival_city: 'Lyon',
+            arrival_postal_code: '69001',
+            desired_date: '2024-12-01',
+            estimated_volume: '25.5',
+            budget_min: '1000',
+            budget_max: '1500',
+            status: 'pending'
+          }
+        ], [
+          'name', 'email', 'phone', 'client_reference', 'departure_city', 
+          'departure_postal_code', 'arrival_city', 'arrival_postal_code', 
+          'desired_date', 'estimated_volume', 'budget_min', 'budget_max', 'status'
+        ]);
+        filename = 'modele_clients.csv';
+        break;
+      
+      case 'providers':
+        csvContent = convertToCSV([
+          {
+            name: 'Pierre Martin',
+            company_name: 'Transport Martin',
+            email: 'contact@transport-martin.fr',
+            phone: '0123456789',
+            address: '123 Rue de la République',
+            city: 'Paris',
+            postal_code: '75001',
+            coordinates: '48.8566,2.3522'
+          }
+        ], [
+          'name', 'company_name', 'email', 'phone', 'address', 
+          'city', 'postal_code', 'coordinates'
+        ]);
+        filename = 'modele_prestataires.csv';
+        break;
+      
+      case 'furniture':
+        csvContent = convertToCSV([
+          {
+            furniture_id: 'FUR001',
+            furniture_name: 'Canapé 3 places',
+            category: 'Salon',
+            volume: '2.5',
+            type: 'standard',
+            length_cm: '',
+            width_cm: '',
+            height_cm: '',
+            description: ''
+          },
+          {
+            furniture_id: '',
+            furniture_name: 'Meuble personnalisé',
+            category: 'Cuisine',
+            volume: '3.2',
+            type: 'custom',
+            length_cm: '120',
+            width_cm: '60',
+            height_cm: '180',
+            description: 'Meuble sur mesure'
+          }
+        ], [
+          'furniture_id', 'furniture_name', 'category', 'volume', 'type', 
+          'length_cm', 'width_cm', 'height_cm', 'description'
+        ]);
+        filename = 'modele_meubles.csv';
+        break;
+    }
+
+    downloadCSV(csvContent, filename);
+    toast({ title: "Modèle téléchargé", description: `Modèle ${type} téléchargé avec succès` });
+  };
+
   const handleFileUpload = (type: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -429,7 +514,7 @@ const DataManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Import Section */}
+          {/* Import Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
@@ -438,6 +523,36 @@ const DataManagement = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Download Templates Section */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h4 className="font-medium mb-3">Télécharger les modèles CSV</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadTemplate('clients')}
+                className="h-10"
+              >
+                Modèle Clients
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadTemplate('providers')}
+                className="h-10"
+              >
+                Modèle Prestataires
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadTemplate('furniture')}
+                className="h-10"
+              >
+                Modèle Meubles
+              </Button>
+            </div>
+          </div>
           {/* Clients Import */}
           <div className="border rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-2">
