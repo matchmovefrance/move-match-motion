@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 const ADMIN_EMAIL = 'elmourabitazeddine@gmail.com';
+const ADMIN_PASSWORD = 'Azzyouman@90';
 
 const SecurityDashboard: React.FC = () => {
   const { user, signIn, signOut } = useAuth();
@@ -70,6 +71,33 @@ const SecurityDashboard: React.FC = () => {
     }
   };
 
+  const createAdminAccount = async () => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+        options: {
+          emailRedirectTo: `${window.location.origin}/security`
+        }
+      });
+      
+      if (error && error.message !== 'User already registered') {
+        throw error;
+      }
+      
+      // Try to sign in immediately after signup
+      const { error: signInError } = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+      if (signInError) {
+        toast({
+          title: "Compte créé",
+          description: "Compte admin créé. Veuillez vous connecter.",
+        });
+      }
+    } catch (error) {
+      console.error('Error creating admin account:', error);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -86,11 +114,16 @@ const SecurityDashboard: React.FC = () => {
     try {
       const { error } = await signIn(email, password);
       if (error) {
-        toast({
-          title: "Erreur d'authentification",
-          description: error.message,
-          variant: "destructive"
-        });
+        // If login fails, try to create the admin account
+        if (error.message === 'Invalid login credentials') {
+          await createAdminAccount();
+        } else {
+          toast({
+            title: "Erreur d'authentification",
+            description: error.message,
+            variant: "destructive"
+          });
+        }
       }
     } catch (error) {
       toast({
