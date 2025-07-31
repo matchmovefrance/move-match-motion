@@ -13,6 +13,7 @@ import PricingTool from './pages/PricingTool/Index';
 import VolumeCalculator from './pages/VolumeCalculator/Index';
 import TruckOptimizer from './pages/TruckOptimizer/Index';
 import BackupManager from './pages/BackupManager/Index';
+import SecurityDashboard from './pages/Security/Index';
 import PublicClientForm from './pages/PublicClientForm';
 import PublicMoverForm from './pages/PublicMoverForm';
 
@@ -88,6 +89,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/security" element={<SecurityDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Toaster />
