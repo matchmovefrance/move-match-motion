@@ -14,6 +14,7 @@ import VolumeCalculator from './pages/VolumeCalculator/Index';
 import TruckOptimizer from './pages/TruckOptimizer/Index';
 import BackupManager from './pages/BackupManager/Index';
 import SecurityDashboard from './pages/Security/Index';
+import SystemCheck from './components/SystemCheck';
 import PublicClientForm from './pages/PublicClientForm';
 import PublicMoverForm from './pages/PublicMoverForm';
 
@@ -33,12 +34,14 @@ function App() {
               path="/"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Header />
-                    <main className="pt-2">
-                      <Index />
-                    </main>
-                  </>
+                  <SystemCheck>
+                    <>
+                      <Header />
+                      <main className="pt-2">
+                        <Index />
+                      </main>
+                    </>
+                  </SystemCheck>
                 </ProtectedRoute>
               }
             />
@@ -46,12 +49,14 @@ function App() {
               path="/pricing-tool"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Header />
-                    <main className="pt-2">
-                      <PricingTool />
-                    </main>
-                  </>
+                  <SystemCheck>
+                    <>
+                      <Header />
+                      <main className="pt-2">
+                        <PricingTool />
+                      </main>
+                    </>
+                  </SystemCheck>
                 </ProtectedRoute>
               }
             />
@@ -59,12 +64,14 @@ function App() {
               path="/volume-calculator"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Header />
-                    <main className="pt-2">
-                      <VolumeCalculator />
-                    </main>
-                  </>
+                  <SystemCheck>
+                    <>
+                      <Header />
+                      <main className="pt-2">
+                        <VolumeCalculator />
+                      </main>
+                    </>
+                  </SystemCheck>
                 </ProtectedRoute>
               }
             />
@@ -72,12 +79,14 @@ function App() {
               path="/truck-optimizer"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Header />
-                    <main className="pt-2">
-                      <TruckOptimizer />
-                    </main>
-                  </>
+                  <SystemCheck>
+                    <>
+                      <Header />
+                      <main className="pt-2">
+                        <TruckOptimizer />
+                      </main>
+                    </>
+                  </SystemCheck>
                 </ProtectedRoute>
               }
             />
@@ -85,7 +94,9 @@ function App() {
               path="/backup-manager"
               element={
                 <ProtectedRoute>
-                  <BackupManager />
+                  <SystemCheck>
+                    <BackupManager />
+                  </SystemCheck>
                 </ProtectedRoute>
               }
             />

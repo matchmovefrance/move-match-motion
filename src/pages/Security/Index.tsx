@@ -21,8 +21,12 @@ import {
   Activity,
   AlertTriangle,
   Key,
-  Server
+  Server,
+  RefreshCw,
+  Power,
+  Settings
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 const ADMIN_EMAIL = 'elmourabitazeddine@gmail.com';
 const ADMIN_PASSWORD = 'Azzyouman@90';
@@ -36,38 +40,60 @@ const SecurityDashboard: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [systemStatus, setSystemStatus] = useState({
-    databaseHealth: 'healthy',
-    activeUsers: 0,
-    totalTables: 0,
-    backupCount: 0
+  const [systemState, setSystemState] = useState({
+    maintenance_mode: false,
+    kill_switch_active: false,
+    encryption_enabled: false
   });
+  const [systemLogs, setSystemLogs] = useState([]);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [encryptionPassword, setEncryptionPassword] = useState('');
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is the authorized admin
     if (user?.email === ADMIN_EMAIL) {
       setIsAuthenticated(true);
-      loadSystemStatus();
+      loadSystemState();
+      loadSystemLogs();
     } else if (user) {
-      // Redirect unauthorized users
       navigate('/');
     }
   }, [user, navigate]);
 
-  const loadSystemStatus = async () => {
+  const callSecurityFunction = async (action: string, additionalData = {}) => {
     try {
-      // Get basic system metrics
-      const { data: profiles } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
-      const { data: clients } = await supabase.from('clients').select('id', { count: 'exact', head: true });
-      
-      setSystemStatus({
-        databaseHealth: 'healthy',
-        activeUsers: profiles?.length || 0,
-        totalTables: 15, // Approximate table count
-        backupCount: 0
+      const { data, error } = await supabase.functions.invoke('security-control', {
+        body: { action, ...additionalData }
       });
+
+      if (error) throw error;
+      return data;
     } catch (error) {
-      console.error('Error loading system status:', error);
+      console.error(`Security function error (${action}):`, error);
+      throw error;
+    }
+  };
+
+  const loadSystemState = async () => {
+    try {
+      const result = await callSecurityFunction('get_status');
+      if (result.success) {
+        setSystemState(result.data);
+      }
+    } catch (error) {
+      console.error('Error loading system state:', error);
+    }
+  };
+
+  const loadSystemLogs = async () => {
+    try {
+      const result = await callSecurityFunction('get_logs');
+      if (result.success) {
+        setSystemLogs(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading system logs:', error);
     }
   };
 
@@ -85,7 +111,6 @@ const SecurityDashboard: React.FC = () => {
         throw error;
       }
       
-      // Try to sign in immediately after signup
       const { error: signInError } = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
       if (signInError) {
         toast({
@@ -114,7 +139,6 @@ const SecurityDashboard: React.FC = () => {
     try {
       const { error } = await signIn(email, password);
       if (error) {
-        // If login fails, try to create the admin account
         if (error.message === 'Invalid login credentials') {
           await createAdminAccount();
         } else {
@@ -136,8 +160,67 @@ const SecurityDashboard: React.FC = () => {
     }
   };
 
+  const executeSecurityAction = async (action: string, requiresPassword = false) => {
+    if (requiresPassword && !confirmPassword) {
+      setPendingAction(action);
+      setShowPasswordDialog(true);
+      return;
+    }
+
+    try {
+      const actionData: any = {};
+      if (action.includes('encrypt') || action.includes('decrypt')) {
+        if (!encryptionPassword) {
+          toast({
+            title: "Erreur",
+            description: "Mot de passe de chiffrement requis",
+            variant: "destructive"
+          });
+          return;
+        }
+        actionData.password = encryptionPassword;
+      }
+
+      const result = await callSecurityFunction(action, actionData);
+      
+      if (result.success) {
+        toast({
+          title: "Succès",
+          description: result.message,
+        });
+        loadSystemState();
+        loadSystemLogs();
+      } else {
+        throw new Error(result.error || 'Action échouée');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setShowPasswordDialog(false);
+      setPendingAction(null);
+      setConfirmPassword('');
+      setEncryptionPassword('');
+    }
+  };
+
+  const confirmAction = () => {
+    if (confirmPassword === ADMIN_PASSWORD && pendingAction) {
+      executeSecurityAction(pendingAction, false);
+    } else {
+      toast({
+        title: "Erreur",
+        description: "Mot de passe incorrect",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleWipeData = async (tableName: 'clients' | 'movers' | 'confirmed_moves' | 'profiles') => {
-    if (!confirm(`Êtes-vous sûr de vouloir vider la table ${tableName} ?`)) return;
+    if (!confirm(`⚠️ DANGER: Vider définitivement la table ${tableName} ?\n\nCette action est IRRÉVERSIBLE !`)) return;
     
     try {
       const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -147,33 +230,10 @@ const SecurityDashboard: React.FC = () => {
         title: "Succès",
         description: `Table ${tableName} vidée avec succès`,
       });
-      loadSystemStatus();
     } catch (error) {
       toast({
         title: "Erreur",
         description: `Erreur lors du vidage de ${tableName}`,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleCreateBackup = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('backup-manager', {
-        body: { action: 'create', name: `security-backup-${Date.now()}` }
-      });
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Succès",
-        description: "Backup sécurisé créé avec succès",
-      });
-      loadSystemStatus();
-    } catch (error) {
-      toast({
-        title: "Erreur",
-        description: "Erreur lors de la création du backup",
         variant: "destructive"
       });
     }
@@ -219,24 +279,20 @@ const SecurityDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Input
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Mot de passe"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+              <Input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <Input
+                type="password"
+                placeholder="Mot de passe"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Connexion...' : 'Se connecter'}
               </Button>
@@ -263,6 +319,10 @@ const SecurityDashboard: React.FC = () => {
               <Activity className="w-4 h-4 mr-1" />
               Système actif
             </Badge>
+            <Button variant="outline" onClick={loadSystemState}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Actualiser
+            </Button>
             <Button variant="outline" onClick={() => signOut()}>
               <Lock className="w-4 h-4 mr-2" />
               Déconnexion
@@ -270,7 +330,35 @@ const SecurityDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* System Status Cards */}
+        {/* État du système - Alertes */}
+        {systemState.kill_switch_active && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-red-800">
+              <strong>KILL SWITCH ACTIVÉ:</strong> L'application est en arrêt d'urgence !
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {systemState.maintenance_mode && (
+          <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+            <Settings className="h-4 w-4" />
+            <AlertDescription className="text-yellow-800">
+              <strong>MODE MAINTENANCE:</strong> L'application est en maintenance.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {systemState.encryption_enabled && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50">
+            <Key className="h-4 w-4" />
+            <AlertDescription className="text-blue-800">
+              <strong>CHIFFREMENT ACTIVÉ:</strong> Les données sont chiffrées.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Cartes de statut */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardContent className="p-6">
@@ -278,7 +366,9 @@ const SecurityDashboard: React.FC = () => {
                 <Database className="w-8 h-8 text-blue-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">État DB</p>
-                  <p className="text-2xl font-bold text-gray-900">Sain</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {systemState.kill_switch_active ? 'Arrêt' : 'Actif'}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -287,10 +377,12 @@ const SecurityDashboard: React.FC = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <Users className="w-8 h-8 text-green-600" />
+                <Settings className="w-8 h-8 text-yellow-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Utilisateurs</p>
-                  <p className="text-2xl font-bold text-gray-900">{systemStatus.activeUsers}</p>
+                  <p className="text-sm font-medium text-gray-600">Maintenance</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {systemState.maintenance_mode ? 'ON' : 'OFF'}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -299,10 +391,12 @@ const SecurityDashboard: React.FC = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <Server className="w-8 h-8 text-purple-600" />
+                <Key className="w-8 h-8 text-green-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tables</p>
-                  <p className="text-2xl font-bold text-gray-900">{systemStatus.totalTables}</p>
+                  <p className="text-sm font-medium text-gray-600">Chiffrement</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {systemState.encryption_enabled ? 'ON' : 'OFF'}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -311,23 +405,102 @@ const SecurityDashboard: React.FC = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <Shield className="w-8 h-8 text-red-600" />
+                <Power className="w-8 h-8 text-red-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Backups</p>
-                  <p className="text-2xl font-bold text-gray-900">{systemStatus.backupCount}</p>
+                  <p className="text-sm font-medium text-gray-600">Kill Switch</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {systemState.kill_switch_active ? 'ON' : 'OFF'}
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="database" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="database">Gestion Base de Données</TabsTrigger>
-            <TabsTrigger value="backup">Backups Sécurisés</TabsTrigger>
-            <TabsTrigger value="system">Contrôle Système</TabsTrigger>
+        <Tabs defaultValue="control" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="control">Contrôles Critiques</TabsTrigger>
+            <TabsTrigger value="database">Base de Données</TabsTrigger>
+            <TabsTrigger value="logs">Logs Système</TabsTrigger>
+            <TabsTrigger value="encryption">Chiffrement</TabsTrigger>
           </TabsList>
 
+          {/* Contrôles Système Critiques */}
+          <TabsContent value="control" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="w-5 h-5" />
+                  Contrôles d'Urgence
+                </CardTitle>
+                <CardDescription>
+                  ⚠️ Ces actions affectent immédiatement l'application entière
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                
+                {/* Kill Switch */}
+                <div className="p-4 border-2 border-red-200 rounded-lg bg-red-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-red-900">KILL SWITCH</h3>
+                      <p className="text-sm text-red-700">
+                        Arrêt d'urgence complet de l'application. Seul ce dashboard restera accessible.
+                      </p>
+                    </div>
+                    <Button
+                      variant={systemState.kill_switch_active ? "outline" : "destructive"}
+                      onClick={() => executeSecurityAction('toggle_kill_switch', true)}
+                    >
+                      <Power className="w-4 h-4 mr-2" />
+                      {systemState.kill_switch_active ? 'DÉSACTIVER' : 'ACTIVER'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Mode Maintenance */}
+                <div className="p-4 border-2 border-yellow-200 rounded-lg bg-yellow-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-yellow-900">MODE MAINTENANCE</h3>
+                      <p className="text-sm text-yellow-700">
+                        Bloque l'accès pour tous les utilisateurs sauf les administrateurs.
+                      </p>
+                    </div>
+                    <Button
+                      variant={systemState.maintenance_mode ? "outline" : "default"}
+                      onClick={() => executeSecurityAction('toggle_maintenance', true)}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      {systemState.maintenance_mode ? 'DÉSACTIVER' : 'ACTIVER'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Reset d'urgence */}
+                <div className="p-4 border-2 border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900">RESET D'URGENCE</h3>
+                      <p className="text-sm text-gray-700">
+                        Désactive tous les systèmes de sécurité et remet l'application en état normal.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => executeSecurityAction('emergency_reset', true)}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      RESET COMPLET
+                    </Button>
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Gestion Base de Données */}
           <TabsContent value="database" className="space-y-6">
             <Card>
               <CardHeader>
@@ -336,14 +509,14 @@ const SecurityDashboard: React.FC = () => {
                   Opérations Base de Données
                 </CardTitle>
                 <CardDescription>
-                  Opérations critiques sur la base de données
+                  Opérations critiques sur la base de données - Actions irréversibles
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    Attention: Ces opérations sont irréversibles
+                    ⚠️ ATTENTION: Ces opérations sont définitives et irréversibles !
                   </AlertDescription>
                 </Alert>
                 
@@ -376,74 +549,134 @@ const SecurityDashboard: React.FC = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="backup" className="space-y-6">
+          {/* Logs Système */}
+          <TabsContent value="logs" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5" />
-                  Backups Sécurisés
+                  <Activity className="w-5 h-5" />
+                  Logs Système
                 </CardTitle>
                 <CardDescription>
-                  Système de sauvegarde chiffré
+                  Historique des actions administratives
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <Button onClick={handleCreateBackup} className="w-full">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Créer un Backup Sécurisé
-                </Button>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium">Backups Disponibles</h4>
-                  <div className="text-sm text-gray-600">
-                    Aucun backup sécurisé trouvé
-                  </div>
+              <CardContent>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {systemLogs.length === 0 ? (
+                    <p className="text-gray-500">Aucun log disponible</p>
+                  ) : (
+                    systemLogs.map((log: any) => (
+                      <div key={log.id} className="p-3 border rounded text-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-medium">{log.action}</span>
+                            <p className="text-gray-600">{log.user_email}</p>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(log.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        {log.details && (
+                          <pre className="mt-2 text-xs bg-gray-100 p-2 rounded">
+                            {JSON.stringify(log.details, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="system" className="space-y-6">
+          {/* Chiffrement */}
+          <TabsContent value="encryption" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  Contrôle Système
+                  <Key className="w-5 h-5" />
+                  Système de Chiffrement
                 </CardTitle>
                 <CardDescription>
-                  Fonctions de sécurité avancées
+                  Chiffrement AES-256 de la base de données avec mot de passe
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Alert>
-                  <AlertTriangle className="h-4 w-4" />
+                  <Key className="h-4 w-4" />
                   <AlertDescription>
-                    Fonctions de sécurité critiques - Utiliser avec précaution
+                    Le chiffrement protège vos données mais peut ralentir les performances. 
+                    Conservez précieusement votre mot de passe de chiffrement !
                   </AlertDescription>
                 </Alert>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button variant="outline" className="h-20 flex-col">
-                    <Unlock className="w-6 h-6 mb-2" />
-                    Mode Maintenance
-                  </Button>
-                  <Button variant="outline" className="h-20 flex-col">
-                    <Activity className="w-6 h-6 mb-2" />
-                    Logs Système
-                  </Button>
-                  <Button variant="destructive" className="h-20 flex-col">
-                    <AlertTriangle className="w-6 h-6 mb-2" />
-                    Kill Switch
-                  </Button>
-                  <Button variant="outline" className="h-20 flex-col">
-                    <Key className="w-6 h-6 mb-2" />
-                    Chiffrement
-                  </Button>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Mot de passe de chiffrement:
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Mot de passe sécurisé"
+                      value={encryptionPassword}
+                      onChange={(e) => setEncryptionPassword(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex gap-4">
+                    <Button
+                      onClick={() => executeSecurityAction('encrypt_database')}
+                      disabled={systemState.encryption_enabled || !encryptionPassword}
+                      className="flex-1"
+                    >
+                      <Lock className="w-4 h-4 mr-2" />
+                      Chiffrer la Base de Données
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => executeSecurityAction('decrypt_database')}
+                      disabled={!systemState.encryption_enabled || !encryptionPassword}
+                      className="flex-1"
+                    >
+                      <Unlock className="w-4 h-4 mr-2" />
+                      Déchiffrer la Base de Données
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Dialog de confirmation par mot de passe */}
+        <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmation Sécurisée</DialogTitle>
+              <DialogDescription>
+                Cette action est critique. Veuillez confirmer avec votre mot de passe administrateur.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input
+                type="password"
+                placeholder="Mot de passe administrateur"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>
+                Annuler
+              </Button>
+              <Button onClick={confirmAction} variant="destructive">
+                Confirmer l'Action
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

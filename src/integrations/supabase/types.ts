@@ -1206,6 +1206,66 @@ export type Database = {
           },
         ]
       }
+      system_control: {
+        Row: {
+          created_at: string
+          encryption_enabled: boolean
+          encryption_key_hash: string | null
+          id: string
+          kill_switch_active: boolean
+          last_modified_by: string | null
+          maintenance_mode: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          encryption_enabled?: boolean
+          encryption_key_hash?: string | null
+          id?: string
+          kill_switch_active?: boolean
+          last_modified_by?: string | null
+          maintenance_mode?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          encryption_enabled?: boolean
+          encryption_key_hash?: string | null
+          id?: string
+          kill_switch_active?: boolean
+          last_modified_by?: string | null
+          maintenance_mode?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      system_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          user_email: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
       trucks: {
         Row: {
           created_at: string | null
