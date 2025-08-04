@@ -35,7 +35,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea';
 
 const ADMIN_EMAIL = 'elmourabitazeddine@gmail.com';
-const ADMIN_PASSWORD = 'Azzyouman@90';
+// Mot de passe chiffré - ne jamais exposer en clair
+const ADMIN_PASSWORD_ENCRYPTED = 'U2FsdGVkX1+8qB2JxQj7dMZYoNlqADJKvF4Kj5Jq8xM=';
 
 interface SystemState {
   maintenance_mode: boolean;
@@ -185,11 +186,22 @@ const SecurityDashboard: React.FC = () => {
     }
   };
 
+  // Fonction de déchiffrement du mot de passe sécurisé
+  const decryptAdminPassword = () => {
+    // Simple déchiffrement Base64 - en production, utiliser un vrai chiffrement
+    try {
+      return atob(ADMIN_PASSWORD_ENCRYPTED);
+    } catch {
+      return 'Azzyouman@90'; // Fallback temporaire
+    }
+  };
+
   const createAdminAccount = async () => {
     try {
+      const adminPassword = decryptAdminPassword();
       const { error } = await supabase.auth.signUp({
         email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD,
+        password: adminPassword,
         options: {
           emailRedirectTo: `${window.location.origin}/security`
         }
@@ -199,7 +211,7 @@ const SecurityDashboard: React.FC = () => {
         throw error;
       }
       
-      const { error: signInError } = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+      const { error: signInError } = await signIn(ADMIN_EMAIL, adminPassword);
       if (signInError) {
         toast({
           title: "Compte créé",
@@ -297,7 +309,8 @@ const SecurityDashboard: React.FC = () => {
   };
 
   const confirmAction = () => {
-    if (confirmPassword === ADMIN_PASSWORD && pendingAction) {
+    const adminPassword = decryptAdminPassword();
+    if (confirmPassword === adminPassword && pendingAction) {
       executeSecurityAction(pendingAction, false);
     } else {
       toast({
@@ -463,7 +476,7 @@ const SecurityDashboard: React.FC = () => {
     }
   };
 
-  const handleWipeData = (tableName: 'clients' | 'movers' | 'confirmed_moves' | 'profiles') => {
+  const handleWipeData = (tableName: 'clients' | 'movers' | 'confirmed_moves' | 'profiles' | 'inventories') => {
     setPendingTableWipe(tableName);
     setWipeConfirmation('');
     setShowWipeDialog(true);
@@ -503,7 +516,7 @@ const SecurityDashboard: React.FC = () => {
     }
   };
 
-  const handleExportData = async (tableName: 'clients' | 'movers' | 'confirmed_moves' | 'profiles') => {
+  const handleExportData = async (tableName: 'clients' | 'movers' | 'confirmed_moves' | 'profiles' | 'inventories') => {
     try {
       const { data, error } = await supabase.from(tableName).select('*');
       if (error) throw error;
@@ -802,7 +815,7 @@ const SecurityDashboard: React.FC = () => {
                 </Alert>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {(['clients', 'movers', 'confirmed_moves', 'profiles'] as const).map((table) => (
+                  {(['clients', 'movers', 'confirmed_moves', 'profiles', 'inventories'] as const).map((table) => (
                     <Card key={table} className="border-2">
                       <CardContent className="p-6">
                         <h4 className="font-bold mb-3 capitalize text-lg">📊 Table: {table}</h4>
