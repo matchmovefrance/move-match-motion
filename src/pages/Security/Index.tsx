@@ -70,6 +70,7 @@ const SecurityDashboard: React.FC = () => {
     encryption_enabled: false
   });
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
+  const [backups, setBackups] = useState<any[]>([]);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [encryptionPassword, setEncryptionPassword] = useState('');
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -92,11 +93,13 @@ const SecurityDashboard: React.FC = () => {
       loadSystemState();
       loadSystemLogs();
       loadSystemMetrics();
+      loadBackups();
       
       // Auto-refresh every 30 seconds
       const interval = setInterval(() => {
         loadSystemState();
         loadSystemMetrics();
+        loadBackups();
       }, 30000);
       
       return () => clearInterval(interval);
@@ -310,6 +313,27 @@ const SecurityDashboard: React.FC = () => {
     setShowBackupDialog(true);
   };
 
+  const loadBackups = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('backup-manager', {
+        body: { action: 'list' }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.backups) {
+        setBackups(data.backups);
+      }
+    } catch (error) {
+      console.error('Error loading backups:', error);
+      toast({
+        title: "❌ Erreur",
+        description: "Impossible de charger les backups",
+        variant: "destructive"
+      });
+    }
+  };
+
   const confirmCreateBackup = async () => {
     if (!backupName.trim()) {
       toast({
@@ -321,27 +345,119 @@ const SecurityDashboard: React.FC = () => {
     }
 
     try {
-      const result = await callSecurityFunction('create_backup', { 
-        name: backupName,
-        encrypted: true 
+      const { data, error } = await supabase.functions.invoke('backup-manager', {
+        body: { action: 'create' }
       });
       
-      if (result.success) {
+      if (error) throw error;
+      
+      if (data?.backup) {
         toast({
           title: "✅ Backup créé",
           description: `Backup "${backupName}" créé avec succès`,
         });
         setShowBackupDialog(false);
         setBackupName('');
+        loadBackups();
         loadSystemLogs();
         loadSystemMetrics();
       } else {
-        throw new Error(result.error || 'Erreur lors de la création du backup');
+        throw new Error('Erreur lors de la création du backup');
       }
     } catch (error: any) {
       toast({
         title: "❌ Erreur",
         description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDownloadBackup = async (backupId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('backup-manager', {
+        body: { action: 'download', backup_id: backupId }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.sql_content) {
+        const blob = new Blob([data.sql_content], { type: 'application/sql' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup-${backupId}-${new Date().toISOString().split('T')[0]}.sql`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "✅ Backup téléchargé",
+          description: "Le fichier de backup a été téléchargé",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: `Erreur lors du téléchargement: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRestoreBackup = async (backupId: string) => {
+    if (!confirm('⚠️ ATTENTION: Cette opération va restaurer la base de données. Êtes-vous sûr?')) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('backup-manager', {
+        body: { action: 'restore', backup_id: backupId }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast({
+          title: "✅ Backup restauré",
+          description: "La base de données a été restaurée avec succès",
+        });
+        loadSystemLogs();
+        loadSystemMetrics();
+      }
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: `Erreur lors de la restauration: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteBackup = async (backupId: string) => {
+    if (!confirm('⚠️ ATTENTION: Cette opération va supprimer définitivement ce backup. Êtes-vous sûr?')) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('backup-manager', {
+        body: { action: 'delete', backup_id: backupId }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast({
+          title: "✅ Backup supprimé",
+          description: "Le backup a été supprimé avec succès",
+        });
+        loadBackups();
+      }
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: `Erreur lors de la suppression: ${error.message}`,
         variant: "destructive"
       });
     }
@@ -744,23 +860,68 @@ const SecurityDashboard: React.FC = () => {
                 </Button>
                 
                 <div className="space-y-3">
-                  <h4 className="font-bold">📋 Backups Récents</h4>
+                  <h4 className="font-bold">📋 Backups Disponibles</h4>
                   <div className="space-y-2">
-                    {systemLogs.filter(log => log.action.includes('BACKUP')).slice(0, 5).map((log) => (
-                      <div key={log.id} className="p-3 border rounded bg-gray-50">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <span className="font-medium">🗄️ {log.action}</span>
-                            <p className="text-sm text-gray-600">Par: {log.user_email}</p>
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            📅 {new Date(log.created_at).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                    {systemLogs.filter(log => log.action.includes('BACKUP')).length === 0 && (
+                    {backups.length === 0 ? (
                       <p className="text-gray-500 text-center py-4">📭 Aucun backup trouvé</p>
+                    ) : (
+                      backups.map((backup) => (
+                        <div key={backup.id} className="p-4 border rounded-lg bg-gray-50">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-bold">🗄️ {backup.name}</span>
+                                <Badge 
+                                  variant={backup.status === 'completed' ? 'default' : 'destructive'}
+                                  className="text-xs"
+                                >
+                                  {backup.status}
+                                </Badge>
+                                <Badge 
+                                  variant={backup.health_status === 'healthy' ? 'default' : 'secondary'}
+                                  className="text-xs"
+                                >
+                                  {backup.health_status === 'healthy' ? '✅' : '⚠️'} {backup.health_status}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2">
+                                📅 {new Date(backup.created_at).toLocaleString()} | 
+                                📦 {(backup.size / 1024 / 1024).toFixed(2)} MB | 
+                                📊 {backup.metadata.tables_count} tables, {backup.metadata.rows_count} lignes
+                              </p>
+                              <div className="flex gap-2 mt-3">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDownloadBackup(backup.id)}
+                                  className="text-xs"
+                                >
+                                  <Download className="w-3 h-3 mr-1" />
+                                  📥 Télécharger
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRestoreBackup(backup.id)}
+                                  className="text-xs"
+                                >
+                                  <RefreshCw className="w-3 h-3 mr-1" />
+                                  🔄 Restaurer
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteBackup(backup.id)}
+                                  className="text-xs"
+                                >
+                                  <Trash2 className="w-3 h-3 mr-1" />
+                                  🗑️ Supprimer
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>
