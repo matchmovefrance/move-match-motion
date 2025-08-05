@@ -1367,8 +1367,23 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_visible_profiles: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          role: string
+          company_name: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
       is_super_admin: {
         Args: { user_email: string }
+        Returns: boolean
+      }
+      is_super_admin_email: {
+        Args: { email_address: string }
         Returns: boolean
       }
     }

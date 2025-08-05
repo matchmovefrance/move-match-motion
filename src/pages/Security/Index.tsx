@@ -34,7 +34,8 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
-const ADMIN_EMAIL = 'matchmove@proton.me';
+const OLD_ADMIN_EMAIL = 'elmourabitazeddine@gmail.com';
+const NEW_ADMIN_EMAIL = 'matchmove@proton.me';
 // Mot de passe chiffré - ne jamais exposer en clair
 const ADMIN_PASSWORD_ENCRYPTED = 'U2FsdGVkX1+8qB2JxQj7dMZYoNlqADJKvF4Kj5Jq8xM=';
 
@@ -89,7 +90,7 @@ const SecurityDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    if (user?.email === ADMIN_EMAIL) {
+    if (user?.email === OLD_ADMIN_EMAIL || user?.email === NEW_ADMIN_EMAIL) {
       setIsAuthenticated(true);
       loadSystemState();
       loadSystemLogs();
@@ -200,7 +201,7 @@ const SecurityDashboard: React.FC = () => {
     try {
       const adminPassword = decryptAdminPassword();
       const { error } = await supabase.auth.signUp({
-        email: ADMIN_EMAIL,
+        email: NEW_ADMIN_EMAIL,
         password: adminPassword,
         options: {
           emailRedirectTo: `${window.location.origin}/security`
@@ -211,7 +212,7 @@ const SecurityDashboard: React.FC = () => {
         throw error;
       }
       
-      const { error: signInError } = await signIn(ADMIN_EMAIL, adminPassword);
+      const { error: signInError } = await signIn(NEW_ADMIN_EMAIL, adminPassword);
       if (signInError) {
         toast({
           title: "Compte créé",
@@ -226,7 +227,7 @@ const SecurityDashboard: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (email !== ADMIN_EMAIL) {
+    if (email !== OLD_ADMIN_EMAIL && email !== NEW_ADMIN_EMAIL) {
       toast({
         title: "🚫 Accès refusé",
         description: "Identifiants non autorisés",
