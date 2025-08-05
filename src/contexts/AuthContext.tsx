@@ -216,8 +216,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🔐 Attempting sign in for:', email);
     setLoading(true);
     
+    // Map real admin emails to system emails for authentication
+    let authEmail = email;
+    if (email === 'elmourabitazeddine@gmail.com') {
+      authEmail = 'sys-admin-001@matchmove.internal';
+      console.log('🔄 Mapping real admin email to system email');
+    } else if (email === 'matchmove@proton.me') {
+      authEmail = 'sys-admin-002@matchmove.internal';
+      console.log('🔄 Mapping real admin email to system email');
+    }
+    
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: authEmail,
       password,
     });
 

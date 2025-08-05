@@ -43,11 +43,19 @@ const Auth = () => {
       
       if (error && error.message === 'Invalid login credentials') {
         // Check if this is an admin email that needs to be created
-        const isAdminEmail = email === 'elmourabitazeddine@gmail.com' || email === 'matchmove@proton.me';
+        const isRealAdminEmail = email === 'elmourabitazeddine@gmail.com' || email === 'matchmove@proton.me';
+        const isSystemAdminEmail = email === 'sys-admin-001@matchmove.internal' || email === 'sys-admin-002@matchmove.internal';
         
-        if (isAdminEmail) {
+        if (isRealAdminEmail || isSystemAdminEmail) {
           console.log('🔑 Creating new admin account for:', email);
-          const { error: signUpError } = await signUp(email, password, 'admin');
+          
+          // For real admin emails, create with system email instead
+          let emailToCreate = email;
+          if (isRealAdminEmail) {
+            emailToCreate = email === 'elmourabitazeddine@gmail.com' ? 'sys-admin-001@matchmove.internal' : 'sys-admin-002@matchmove.internal';
+          }
+          
+          const { error: signUpError } = await signUp(emailToCreate, password, 'admin');
           
           if (!signUpError) {
             console.log('✅ Admin account created, attempting login again...');

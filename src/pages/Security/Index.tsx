@@ -36,6 +36,8 @@ import { Textarea } from '@/components/ui/textarea';
 
 const OLD_ADMIN_EMAIL = 'elmourabitazeddine@gmail.com';
 const NEW_ADMIN_EMAIL = 'matchmove@proton.me';
+const SYSTEM_ADMIN_1 = 'sys-admin-001@matchmove.internal';
+const SYSTEM_ADMIN_2 = 'sys-admin-002@matchmove.internal';
 // Mot de passe chiffré - ne jamais exposer en clair
 const ADMIN_PASSWORD_ENCRYPTED = 'U2FsdGVkX1+8qB2JxQj7dMZYoNlqADJKvF4Kj5Jq8xM=';
 

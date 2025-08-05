@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_identity_mapping: {
+        Row: {
+          created_at: string | null
+          id: string
+          real_email: string
+          real_name: string | null
+          system_email: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          real_email: string
+          real_name?: string | null
+          system_email: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          real_email?: string
+          real_name?: string | null
+          system_email?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1365,6 +1392,14 @@ export type Database = {
       }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_real_admin_email: {
+        Args: { system_email: string }
+        Returns: string
+      }
+      get_system_admin_email: {
+        Args: { real_email: string }
         Returns: string
       }
       get_visible_profiles: {
