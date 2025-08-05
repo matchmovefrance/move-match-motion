@@ -12,7 +12,7 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, user, profile, loading: authLoading } = useAuth();
+  const { signIn, signUp, user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Show loading spinner while auth is initializing
@@ -40,7 +40,28 @@ const Auth = () => {
     try {
       console.log('🔐 Attempting login for:', email);
       const { error } = await signIn(email, password);
-      if (!error) {
+      
+      if (error && error.message === 'Invalid login credentials') {
+        // Check if this is an admin email that needs to be created
+        const isAdminEmail = email === 'elmourabitazeddine@gmail.com' || email === 'matchmove@proton.me';
+        
+        if (isAdminEmail) {
+          console.log('🔑 Creating new admin account for:', email);
+          const { error: signUpError } = await signUp(email, password, 'admin');
+          
+          if (!signUpError) {
+            console.log('✅ Admin account created, attempting login again...');
+            const { error: retryError } = await signIn(email, password);
+            if (!retryError) {
+              console.log('✅ Login successful after account creation');
+              navigate('/', { replace: true });
+              return;
+            }
+          } else {
+            console.error('❌ Failed to create admin account:', signUpError);
+          }
+        }
+      } else if (!error) {
         console.log('✅ Login successful, navigating to main dashboard');
         navigate('/', { replace: true });
       }
