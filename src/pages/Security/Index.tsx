@@ -34,7 +34,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
-const ADMIN_EMAIL = 'elmourabitazeddine@gmail.com';
+const ADMIN_EMAIL = 'matchmove@proton.me';
 // Mot de passe chiffré - ne jamais exposer en clair
 const ADMIN_PASSWORD_ENCRYPTED = 'U2FsdGVkX1+8qB2JxQj7dMZYoNlqADJKvF4Kj5Jq8xM=';
 
